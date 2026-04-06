@@ -1,0 +1,610 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		05900CE23CDB487BBA1CFF91 /* OvenApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3728663A3D8D44DBB45CFB39 /* OvenApp.swift */; };
+		0710E86F4880421F7A082349 /* BuildingBlockDetailPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC017322702C80197B5AB428 /* BuildingBlockDetailPane.swift */; };
+		07D7BE71A1A84285A28FCA30 /* wallpaper-ventura.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 4480C4474BAC4BC781DE1831 /* wallpaper-ventura.jpg */; };
+		150BA21AC538496989BF9EB6 /* TagChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F11466DB2E74106B4FA2992 /* TagChip.swift */; };
+		16B7EA75358743BCB2E35770 /* VMListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B605AD8CB894481CA4152C12 /* VMListViewModel.swift */; };
+		17FA307EDDB4424C8719B4A5 /* IntegrationsPrefsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A48BCA5004344B659461399F /* IntegrationsPrefsTab.swift */; };
+		1BE5BAB3501343A79B6E6C33 /* VMEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 762A2D3AF1264A06AB0F863E /* VMEditSheet.swift */; };
+		1D8FC871ABAC420F8C4D5815 /* BaseVMView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58A4CB788DF4483853B4BF8 /* BaseVMView.swift */; };
+		1DE30F1412084C618E30E457 /* BuildPrefsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = D159BAC45A624561AA7D5473 /* BuildPrefsTab.swift */; };
+		1F8390C6C5694FD18B4EB3D7 /* NewVMSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1EC22205AB415CA710630A /* NewVMSheet.swift */; };
+		2F44781222644152BD02BF7F /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7152AABA91042BBB43617E2 /* AppState.swift */; };
+		2F9BC3605FE441F9AB5BFB0B /* IPSWService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75F5248C443B43BDB968B56D /* IPSWService.swift */; };
+		31E567C2DEEA476F96BABFDE /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFCB8E50F004441182E9A71B /* PreferencesView.swift */; };
+		31EFAC40E69947489E42DF23 /* LaunchModeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2C9829214CF4A57B8A60F00 /* LaunchModeSheet.swift */; };
+		3245D697DD9E40D7B815104C /* MDMServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69B97A9DF99E4EED99FCED17 /* MDMServer.swift */; };
+		33A88016FDFCA1505226CD55 /* BuildingBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30651F3F5B753D7D75669A7E /* BuildingBlock.swift */; };
+		35019327E94D46B48C0B3721 /* wallpaper-sequoia.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 73D20CCFE5854F85AE3EC2F9 /* wallpaper-sequoia.jpg */; };
+		3B0AC036841A488882339733 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5941035FD84540C199255E2F /* AppLogger.swift */; };
+		4099E881D0A14D4E800362A1 /* MDMServersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B136032C71C41DF8BF12D0F /* MDMServersView.swift */; };
+		43CBAFEB428D4276994B436F /* NotificationPrefsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D7CC6B8851E454A81E5D6C7 /* NotificationPrefsTab.swift */; };
+		4643B10B3B364CC2A34AE103 /* CloneVMSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E1BC9BB8234124A332E6FA /* CloneVMSheet.swift */; };
+		4D0FCA38B8D74F2ABAD31CFD /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2776315DE2B144E597C5281F /* KeychainService.swift */; };
+		4E609391533F4F59A312D26B /* TagStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11223344556677889900AA /* TagStore.swift */; };
+		4F5AE2957A23433FABAE7233 /* GeneralPrefsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA2A44AC35F44C3B148332B /* GeneralPrefsTab.swift */; };
+		50ACC8882A244C0CA52598C0 /* BuildLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63883F142B084732896F41DB /* BuildLogView.swift */; };
+		51A38B8AFD8C4536A8EC2C55 /* TartService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038B00DC3027437E8A11A2F9 /* TartService.swift */; };
+		542CCC4E31BEF50B1A871918 /* Services/PackerTemplateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02BCD21BC2FF6DA5508A215 /* Services/PackerTemplateStore.swift */; };
+		56FBE82476DC4C36A23E5110 /* StreamConsumer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 196EF7D5163C44038DE700CA /* StreamConsumer.swift */; };
+		5D0F61CE6EA16CADB02D8C92 /* PackerTemplateMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 078C278F85DB044634D24B41 /* PackerTemplateMetadata.swift */; };
+		5F2F7F6234A74AF5A8517B49 /* StoragePrefsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9254A1862FF54F48B711F92F /* StoragePrefsTab.swift */; };
+		6084DCE449FE47D39296CB5C /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC941E211914B829C3AD816 /* NotificationService.swift */; };
+		65B477599B59464FB5E5C380 /* LiveBuildLogPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D62F23CD05DD45D1A68B44A5 /* LiveBuildLogPanel.swift */; };
+		67B908241F12695FECC8CA0C /* BuildingBlockStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F5B1500F01F3EE398E6063 /* BuildingBlockStore.swift */; };
+		6BD2AFE8F9784129A4BA4380 /* PreflightCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090BC1C80D204AE6BB983F65 /* PreflightCheck.swift */; };
+		73054575B317430EBFA56649 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37F00D5340524103BE80E362 /* ContentView.swift */; };
+		73A7179818F144EAB63ADCC8 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0099363BD2F349B5A8DD4E45 /* AppTheme.swift */; };
+		77B09001EC3B4AF380070C2D /* VMCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33398081AC9A43628033879D /* VMCard.swift */; };
+		788E2C888D194CFD896B87C7 /* PushToRegistrySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12E1FEC4AC884CDBAF8045A9 /* PushToRegistrySheet.swift */; };
+		7A8E5E70450B4D78B28BC128 /* NewBaseVMSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 919695014D01453AA43FE234 /* NewBaseVMSheet.swift */; };
+		7B23F5DD1EE24C788EBAEC5B /* CirrusLabsCatalogueRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9FD5DCF622846F4B6B67581 /* CirrusLabsCatalogueRow.swift */; };
+		7C35CBA641854707ABDC0925 /* Dependency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35B0ADA56AD34F0CA89DE256 /* Dependency.swift */; };
+		7C5758A01C8F4AFA8D09C21D /* BaseVMViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8242771449DF49E5A9F2564B /* BaseVMViewModel.swift */; };
+		7C98E251A01F4BBDBD88C4B7 /* TagsPrefsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82AFD002D57A425686F97AF7 /* TagsPrefsTab.swift */; };
+		80969823F20249C08B1638DB /* BuildMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38825C95E581402895DB96C3 /* BuildMonitor.swift */; };
+		8A76F26E9669B5589A03E929 /* VarsFileDetailPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34FBF4CE2F4C87F7C7DE5901 /* VarsFileDetailPane.swift */; };
+		913E77B9C7234987A66EEB69 /* wallpaper-sonoma.jpg in Resources */ = {isa = PBXBuildFile; fileRef = D3313F3FCC4442BA9BA11F2F /* wallpaper-sonoma.jpg */; };
+		91FDA52DE23F4C6E98429156 /* VMDetailPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B2E2C823C90407BA57A9B8D /* VMDetailPane.swift */; };
+		934B04FDA9784EBDADB0378F /* VMViewHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = D07DE4DDCDB04F639133EEE2 /* VMViewHelpers.swift */; };
+		93636E15E6E847419710A257 /* MDMProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C8AB4946FD4DF48587C72F /* MDMProfileView.swift */; };
+		956EFBA268334D67BB2C88C9 /* BuildSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04DC37E723CA4E01A1D2AF7F /* BuildSessionManager.swift */; };
+		95C70AF01F304C9AAB6DDD3C /* BaseVMRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 307C3835BF934401833B9115 /* BaseVMRow.swift */; };
+		96EC6A01B9BD4129869AB92B /* RegistryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E22A8EF924A4E6AA6AE3FC5 /* RegistryService.swift */; };
+		9BA5FF9559FA4B3C9F2FEFE8 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5BBC0F7F4C5493E8F19BD8B /* AppSettings.swift */; };
+		9DDA46FCB2B94A9801B36C2B /* PackerTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87381C56C3B57F827194C459 /* PackerTemplate.swift */; };
+		A15EBB8EDDCD4E8F9C9918F3 /* VMStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3407A9972E4871AB9375EB /* VMStore.swift */; };
+		A1AA6C9C58C480F05F0988F2 /* TemplateDetailPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B45FAE9421A56C9B9C35336 /* TemplateDetailPane.swift */; };
+		AAC69E7A339449BD9EAB580E /* RegistryCredential.swift in Sources */ = {isa = PBXBuildFile; fileRef = 732D124B57634F13BF633500 /* RegistryCredential.swift */; };
+		AB10C071951741DE9B85D648 /* AppDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8FF7ADBF798437882E835B2 /* AppDatabase.swift */; };
+		B39FD500255442D793F5D6E4 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD60437C2E2242CDB8636D9F /* EmptyStateView.swift */; };
+		B6539E2F3DF443149F26FB2D /* VMListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B14F8A8C198458999D688B4 /* VMListView.swift */; };
+		B7F2353406F74DA29BC32C98 /* wallpaper-tahoe.jpeg in Resources */ = {isa = PBXBuildFile; fileRef = 67C9D25062A74F2FAB110AC8 /* wallpaper-tahoe.jpeg */; };
+		B9ADE8C02F7DE64D00B30458 /* SOFAService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9ADE8BF2F7DE64D00B30458 /* SOFAService.swift */; };
+		B9C8AE33CA8A401BBB4E7A90 /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DE3071761A4538AE953FA4 /* ProcessRunner.swift */; };
+		BD83F46D40364D3683D9FF41 /* InstallerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78338E0B4F0D412AA2F4C5AE /* InstallerView.swift */; };
+		BFB8A48BC686468691CA5658 /* RegistryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F760E74E7D9435396495133 /* RegistryView.swift */; };
+		BFC50767AAAC47B981D5F1DA /* VirtualMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB765F10A5F2414F9124B081 /* VirtualMachine.swift */; };
+		C0463FF8C7C44D91AE30213E /* JamfService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54FC456F7F38464BB4CA4BF1 /* JamfService.swift */; };
+		C2374D01732841E6838CCC53 /* RegistryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71C3D520548C43B387838E19 /* RegistryViewModel.swift */; };
+		C3D8415537B744118F8E6C2C /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0400F6E76364FCEAAF77384 /* SetupView.swift */; };
+		C50AFE686F2C42E9916951F2 /* MDMProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = B79EFA2071E14B4F9BAA4878 /* MDMProfile.swift */; };
+		D106B83FBF5548850499ACB6 /* NewPackerObjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08FF7DB125291D00AAAEF0ED /* NewPackerObjectSheet.swift */; };
+		D457657148CA47B3BB9E84EF /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A481348E372E4E76A0C3C1A0 /* LogView.swift */; };
+		D47681E4C31446C29C356850 /* BaseVMEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0912D55CE46348ED9BD264E4 /* BaseVMEditSheet.swift */; };
+		D52FB5DDC895499D911FA20A /* CirrusCatalogueSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8B127936D1F4DD7AF1E24E8 /* CirrusCatalogueSheet.swift */; };
+		E0394ED035C447DC8F00D77A /* BaseVMStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3540F44515C4D7194D7AF9A /* BaseVMStore.swift */; };
+		E19CD75D7F6C42A9AF80D234 /* BaseVMDetailPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDA72681BA6432EA975A6F2 /* BaseVMDetailPane.swift */; };
+		E33F3AEED31240E3A3B7C81B /* PackerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C78BA20892E40C1B9DA4E8E /* PackerService.swift */; };
+		E5C7AEBBC9D04EA59DDC1D5E /* wallpaper-monterey.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 8AE12D36356F4D559F8633FB /* wallpaper-monterey.jpg */; };
+		EA6F4FE3BD644AC686E0F328 /* RegistryImageRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1DA9832E91A42EF968F15CA /* RegistryImageRow.swift */; };
+		EEB9AF3D07DA3DD2B2EFB725 /* RecipesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC1130E4B53CC12770CA0085 /* RecipesViewModel.swift */; };
+		F8813317A2EA47C492C824B1 /* PullDestinationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9232A1E52E4E48588ED88223 /* PullDestinationSheet.swift */; };
+		F991657C3B6A417FA9F35F32 /* DependencyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 501BACC3564E4714954B1CB6 /* DependencyManager.swift */; };
+		F99A0C6113F643E4BF9C4BA8 /* InputLockedOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87361791C26C4F599DE39C5E /* InputLockedOverlay.swift */; };
+		FD31881B18A20CE7D501B422 /* HCLEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2772108AB68029B7DAC37CD9 /* HCLEditor.swift */; };
+		FD553859E6C84FE2ABD46F7F /* RecipesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53DAEAD53B9B4D45B2C23929 /* RecipesView.swift */; };
+		FDBA5DD58B5F4903A09CC048 /* MistService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AF0A6F3427D423A9C61A8FF /* MistService.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0099363BD2F349B5A8DD4E45 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
+		038B00DC3027437E8A11A2F9 /* TartService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TartService.swift; sourceTree = "<group>"; };
+		04DC37E723CA4E01A1D2AF7F /* BuildSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildSessionManager.swift; sourceTree = "<group>"; };
+		078C278F85DB044634D24B41 /* PackerTemplateMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackerTemplateMetadata.swift; sourceTree = "<group>"; };
+		08FF7DB125291D00AAAEF0ED /* NewPackerObjectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewPackerObjectSheet.swift; sourceTree = "<group>"; };
+		090BC1C80D204AE6BB983F65 /* PreflightCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreflightCheck.swift; sourceTree = "<group>"; };
+		0912D55CE46348ED9BD264E4 /* BaseVMEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseVMEditSheet.swift; sourceTree = "<group>"; };
+		12E1FEC4AC884CDBAF8045A9 /* PushToRegistrySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushToRegistrySheet.swift; sourceTree = "<group>"; };
+		196EF7D5163C44038DE700CA /* StreamConsumer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamConsumer.swift; sourceTree = "<group>"; };
+		273C6C18293D2A76C91A9DB1 /* SOFAService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SOFAService.swift; sourceTree = "<group>"; };
+		2772108AB68029B7DAC37CD9 /* HCLEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HCLEditor.swift; sourceTree = "<group>"; };
+		2776315DE2B144E597C5281F /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
+		2AF0A6F3427D423A9C61A8FF /* MistService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MistService.swift; sourceTree = "<group>"; };
+		2B14F8A8C198458999D688B4 /* VMListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMListView.swift; sourceTree = "<group>"; };
+		2B45FAE9421A56C9B9C35336 /* TemplateDetailPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateDetailPane.swift; sourceTree = "<group>"; };
+		2C78BA20892E40C1B9DA4E8E /* PackerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackerService.swift; sourceTree = "<group>"; };
+		30651F3F5B753D7D75669A7E /* BuildingBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingBlock.swift; sourceTree = "<group>"; };
+		307C3835BF934401833B9115 /* BaseVMRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseVMRow.swift; sourceTree = "<group>"; };
+		33398081AC9A43628033879D /* VMCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMCard.swift; sourceTree = "<group>"; };
+		34FBF4CE2F4C87F7C7DE5901 /* VarsFileDetailPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VarsFileDetailPane.swift; sourceTree = "<group>"; };
+		35B0ADA56AD34F0CA89DE256 /* Dependency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dependency.swift; sourceTree = "<group>"; };
+		3728663A3D8D44DBB45CFB39 /* OvenApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OvenApp.swift; sourceTree = "<group>"; };
+		37F00D5340524103BE80E362 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		38825C95E581402895DB96C3 /* BuildMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildMonitor.swift; sourceTree = "<group>"; };
+		3BC941E211914B829C3AD816 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		4480C4474BAC4BC781DE1831 /* wallpaper-ventura.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "wallpaper-ventura.jpg"; sourceTree = "<group>"; };
+		4F11466DB2E74106B4FA2992 /* TagChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagChip.swift; sourceTree = "<group>"; };
+		501BACC3564E4714954B1CB6 /* DependencyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependencyManager.swift; sourceTree = "<group>"; };
+		53DAEAD53B9B4D45B2C23929 /* RecipesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipesView.swift; sourceTree = "<group>"; };
+		5427CDAA002D4233B481E546 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		54FC456F7F38464BB4CA4BF1 /* JamfService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JamfService.swift; sourceTree = "<group>"; };
+		5941035FD84540C199255E2F /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
+		5F760E74E7D9435396495133 /* RegistryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistryView.swift; sourceTree = "<group>"; };
+		63883F142B084732896F41DB /* BuildLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildLogView.swift; sourceTree = "<group>"; };
+		67C9D25062A74F2FAB110AC8 /* wallpaper-tahoe.jpeg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "wallpaper-tahoe.jpeg"; sourceTree = "<group>"; };
+		69B97A9DF99E4EED99FCED17 /* MDMServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMServer.swift; sourceTree = "<group>"; };
+		6B136032C71C41DF8BF12D0F /* MDMServersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMServersView.swift; sourceTree = "<group>"; };
+		71C3D520548C43B387838E19 /* RegistryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistryViewModel.swift; sourceTree = "<group>"; };
+		71F5B1500F01F3EE398E6063 /* BuildingBlockStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingBlockStore.swift; sourceTree = "<group>"; };
+		732D124B57634F13BF633500 /* RegistryCredential.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistryCredential.swift; sourceTree = "<group>"; };
+		73D20CCFE5854F85AE3EC2F9 /* wallpaper-sequoia.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "wallpaper-sequoia.jpg"; sourceTree = "<group>"; };
+		75F5248C443B43BDB968B56D /* IPSWService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPSWService.swift; sourceTree = "<group>"; };
+		762A2D3AF1264A06AB0F863E /* VMEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMEditSheet.swift; sourceTree = "<group>"; };
+		78338E0B4F0D412AA2F4C5AE /* InstallerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallerView.swift; sourceTree = "<group>"; };
+		7B2E2C823C90407BA57A9B8D /* VMDetailPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMDetailPane.swift; sourceTree = "<group>"; };
+		7EA45C60E26A450B868B730C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		8242771449DF49E5A9F2564B /* BaseVMViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseVMViewModel.swift; sourceTree = "<group>"; };
+		82AFD002D57A425686F97AF7 /* TagsPrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagsPrefsTab.swift; sourceTree = "<group>"; };
+		87361791C26C4F599DE39C5E /* InputLockedOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputLockedOverlay.swift; sourceTree = "<group>"; };
+		87381C56C3B57F827194C459 /* PackerTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackerTemplate.swift; sourceTree = "<group>"; };
+		887EF5DDE833479AA713EA33 /* Oven.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Oven.entitlements; sourceTree = "<group>"; };
+		8AE12D36356F4D559F8633FB /* wallpaper-monterey.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "wallpaper-monterey.jpg"; sourceTree = "<group>"; };
+		8D7CC6B8851E454A81E5D6C7 /* NotificationPrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPrefsTab.swift; sourceTree = "<group>"; };
+		8E22A8EF924A4E6AA6AE3FC5 /* RegistryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistryService.swift; sourceTree = "<group>"; };
+		919695014D01453AA43FE234 /* NewBaseVMSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewBaseVMSheet.swift; sourceTree = "<group>"; };
+		9232A1E52E4E48588ED88223 /* PullDestinationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullDestinationSheet.swift; sourceTree = "<group>"; };
+		9254A1862FF54F48B711F92F /* StoragePrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoragePrefsTab.swift; sourceTree = "<group>"; };
+		A0400F6E76364FCEAAF77384 /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
+		A1DA9832E91A42EF968F15CA /* RegistryImageRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistryImageRow.swift; sourceTree = "<group>"; };
+		A481348E372E4E76A0C3C1A0 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
+		A48BCA5004344B659461399F /* IntegrationsPrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationsPrefsTab.swift; sourceTree = "<group>"; };
+		A8E1BC9BB8234124A332E6FA /* CloneVMSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloneVMSheet.swift; sourceTree = "<group>"; };
+		AA3407A9972E4871AB9375EB /* VMStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMStore.swift; sourceTree = "<group>"; };
+		AD60437C2E2242CDB8636D9F /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
+		AE2F1FA309634143A0C27A18 /* Oven.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Oven.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B02BCD21BC2FF6DA5508A215 /* Services/PackerTemplateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/PackerTemplateStore.swift; sourceTree = SOURCE_ROOT; };
+		B605AD8CB894481CA4152C12 /* VMListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMListViewModel.swift; sourceTree = "<group>"; };
+		B79EFA2071E14B4F9BAA4878 /* MDMProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMProfile.swift; sourceTree = "<group>"; };
+		B9ADE8BF2F7DE64D00B30458 /* SOFAService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SOFAService.swift; sourceTree = "<group>"; };
+		BE1EC22205AB415CA710630A /* NewVMSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewVMSheet.swift; sourceTree = "<group>"; };
+		BFA2A44AC35F44C3B148332B /* GeneralPrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralPrefsTab.swift; sourceTree = "<group>"; };
+		C3540F44515C4D7194D7AF9A /* BaseVMStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseVMStore.swift; sourceTree = "<group>"; };
+		C5BBC0F7F4C5493E8F19BD8B /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		C8B127936D1F4DD7AF1E24E8 /* CirrusCatalogueSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirrusCatalogueSheet.swift; sourceTree = "<group>"; };
+		CB765F10A5F2414F9124B081 /* VirtualMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualMachine.swift; sourceTree = "<group>"; };
+		CC11223344556677889900AA /* TagStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagStore.swift; sourceTree = "<group>"; };
+		D07DE4DDCDB04F639133EEE2 /* VMViewHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMViewHelpers.swift; sourceTree = "<group>"; };
+		D159BAC45A624561AA7D5473 /* BuildPrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildPrefsTab.swift; sourceTree = "<group>"; };
+		D3313F3FCC4442BA9BA11F2F /* wallpaper-sonoma.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "wallpaper-sonoma.jpg"; sourceTree = "<group>"; };
+		D62F23CD05DD45D1A68B44A5 /* LiveBuildLogPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveBuildLogPanel.swift; sourceTree = "<group>"; };
+		D8FF7ADBF798437882E835B2 /* AppDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabase.swift; sourceTree = "<group>"; };
+		DDDA72681BA6432EA975A6F2 /* BaseVMDetailPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseVMDetailPane.swift; sourceTree = "<group>"; };
+		DFCB8E50F004441182E9A71B /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
+		E2C9829214CF4A57B8A60F00 /* LaunchModeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchModeSheet.swift; sourceTree = "<group>"; };
+		E58A4CB788DF4483853B4BF8 /* BaseVMView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseVMView.swift; sourceTree = "<group>"; };
+		E8DE3071761A4538AE953FA4 /* ProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunner.swift; sourceTree = "<group>"; };
+		EC017322702C80197B5AB428 /* BuildingBlockDetailPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingBlockDetailPane.swift; sourceTree = "<group>"; };
+		EC1130E4B53CC12770CA0085 /* RecipesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipesViewModel.swift; sourceTree = "<group>"; };
+		F1C8AB4946FD4DF48587C72F /* MDMProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMProfileView.swift; sourceTree = "<group>"; };
+		F7152AABA91042BBB43617E2 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		F9FD5DCF622846F4B6B67581 /* CirrusLabsCatalogueRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirrusLabsCatalogueRow.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		DA9D72F99AA54BB1A3384D3D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1FFEAC249D3B4496A7FAA1E8 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				4480C4474BAC4BC781DE1831 /* wallpaper-ventura.jpg */,
+				67C9D25062A74F2FAB110AC8 /* wallpaper-tahoe.jpeg */,
+				D3313F3FCC4442BA9BA11F2F /* wallpaper-sonoma.jpg */,
+				73D20CCFE5854F85AE3EC2F9 /* wallpaper-sequoia.jpg */,
+				8AE12D36356F4D559F8633FB /* wallpaper-monterey.jpg */,
+				5427CDAA002D4233B481E546 /* Assets.xcassets */,
+				7EA45C60E26A450B868B730C /* Info.plist */,
+				887EF5DDE833479AA713EA33 /* Oven.entitlements */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		72E53890534946409C963267 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				5941035FD84540C199255E2F /* AppLogger.swift */,
+				0099363BD2F349B5A8DD4E45 /* AppTheme.swift */,
+				38825C95E581402895DB96C3 /* BuildMonitor.swift */,
+				04DC37E723CA4E01A1D2AF7F /* BuildSessionManager.swift */,
+				35B0ADA56AD34F0CA89DE256 /* Dependency.swift */,
+				501BACC3564E4714954B1CB6 /* DependencyManager.swift */,
+				2776315DE2B144E597C5281F /* KeychainService.swift */,
+				CC11223344556677889900AA /* TagStore.swift */,
+				3BC941E211914B829C3AD816 /* NotificationService.swift */,
+				090BC1C80D204AE6BB983F65 /* PreflightCheck.swift */,
+				E8DE3071761A4538AE953FA4 /* ProcessRunner.swift */,
+				196EF7D5163C44038DE700CA /* StreamConsumer.swift */,
+				D8FF7ADBF798437882E835B2 /* AppDatabase.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		87FDBE7DA3F94342B358A18C /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				F7152AABA91042BBB43617E2 /* AppState.swift */,
+				DDDA72681BA6432EA975A6F2 /* BaseVMDetailPane.swift */,
+				0912D55CE46348ED9BD264E4 /* BaseVMEditSheet.swift */,
+				307C3835BF934401833B9115 /* BaseVMRow.swift */,
+				E58A4CB788DF4483853B4BF8 /* BaseVMView.swift */,
+				63883F142B084732896F41DB /* BuildLogView.swift */,
+				C8B127936D1F4DD7AF1E24E8 /* CirrusCatalogueSheet.swift */,
+				F9FD5DCF622846F4B6B67581 /* CirrusLabsCatalogueRow.swift */,
+				A8E1BC9BB8234124A332E6FA /* CloneVMSheet.swift */,
+				37F00D5340524103BE80E362 /* ContentView.swift */,
+				AD60437C2E2242CDB8636D9F /* EmptyStateView.swift */,
+				87361791C26C4F599DE39C5E /* InputLockedOverlay.swift */,
+				78338E0B4F0D412AA2F4C5AE /* InstallerView.swift */,
+				E2C9829214CF4A57B8A60F00 /* LaunchModeSheet.swift */,
+				D62F23CD05DD45D1A68B44A5 /* LiveBuildLogPanel.swift */,
+				A481348E372E4E76A0C3C1A0 /* LogView.swift */,
+				F1C8AB4946FD4DF48587C72F /* MDMProfileView.swift */,
+				6B136032C71C41DF8BF12D0F /* MDMServersView.swift */,
+				919695014D01453AA43FE234 /* NewBaseVMSheet.swift */,
+				BE1EC22205AB415CA710630A /* NewVMSheet.swift */,
+				3728663A3D8D44DBB45CFB39 /* OvenApp.swift */,
+				DFCB8E50F004441182E9A71B /* PreferencesView.swift */,
+				9232A1E52E4E48588ED88223 /* PullDestinationSheet.swift */,
+				12E1FEC4AC884CDBAF8045A9 /* PushToRegistrySheet.swift */,
+				53DAEAD53B9B4D45B2C23929 /* RecipesView.swift */,
+				87381C56C3B57F827194C459 /* PackerTemplate.swift */,
+				2772108AB68029B7DAC37CD9 /* HCLEditor.swift */,
+				30651F3F5B753D7D75669A7E /* BuildingBlock.swift */,
+				EC017322702C80197B5AB428 /* BuildingBlockDetailPane.swift */,
+				71F5B1500F01F3EE398E6063 /* BuildingBlockStore.swift */,
+				078C278F85DB044634D24B41 /* PackerTemplateMetadata.swift */,
+				EC1130E4B53CC12770CA0085 /* RecipesViewModel.swift */,
+				2B45FAE9421A56C9B9C35336 /* TemplateDetailPane.swift */,
+				34FBF4CE2F4C87F7C7DE5901 /* VarsFileDetailPane.swift */,
+				08FF7DB125291D00AAAEF0ED /* NewPackerObjectSheet.swift */,
+				A1DA9832E91A42EF968F15CA /* RegistryImageRow.swift */,
+				5F760E74E7D9435396495133 /* RegistryView.swift */,
+				A0400F6E76364FCEAAF77384 /* SetupView.swift */,
+				4F11466DB2E74106B4FA2992 /* TagChip.swift */,
+				33398081AC9A43628033879D /* VMCard.swift */,
+				7B2E2C823C90407BA57A9B8D /* VMDetailPane.swift */,
+				762A2D3AF1264A06AB0F863E /* VMEditSheet.swift */,
+				2B14F8A8C198458999D688B4 /* VMListView.swift */,
+				D07DE4DDCDB04F639133EEE2 /* VMViewHelpers.swift */,
+				B605AD8CB894481CA4152C12 /* VMListViewModel.swift */,
+				8242771449DF49E5A9F2564B /* BaseVMViewModel.swift */,
+				71C3D520548C43B387838E19 /* RegistryViewModel.swift */,
+				BFA2A44AC35F44C3B148332B /* GeneralPrefsTab.swift */,
+				D159BAC45A624561AA7D5473 /* BuildPrefsTab.swift */,
+				9254A1862FF54F48B711F92F /* StoragePrefsTab.swift */,
+				8D7CC6B8851E454A81E5D6C7 /* NotificationPrefsTab.swift */,
+				A48BCA5004344B659461399F /* IntegrationsPrefsTab.swift */,
+				82AFD002D57A425686F97AF7 /* TagsPrefsTab.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		9CA7177160014371B6277C88 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				C5BBC0F7F4C5493E8F19BD8B /* AppSettings.swift */,
+				B79EFA2071E14B4F9BAA4878 /* MDMProfile.swift */,
+				69B97A9DF99E4EED99FCED17 /* MDMServer.swift */,
+				732D124B57634F13BF633500 /* RegistryCredential.swift */,
+				CB765F10A5F2414F9124B081 /* VirtualMachine.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		9F601D4619724817B57E6E0D = {
+			isa = PBXGroup;
+			children = (
+				72E53890534946409C963267 /* Core */,
+				9CA7177160014371B6277C88 /* Models */,
+				AA1D30413CBB47DC855824DD /* Services */,
+				87FDBE7DA3F94342B358A18C /* UI */,
+				1FFEAC249D3B4496A7FAA1E8 /* Resources */,
+				AD35D209E2BF44C7B2933341 /* Products */,
+				B9A815A42F7DDC1B00A83680 /* Recovered References */,
+			);
+			sourceTree = "<group>";
+		};
+		AA1D30413CBB47DC855824DD /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B9ADE8BF2F7DE64D00B30458 /* SOFAService.swift */,
+				C3540F44515C4D7194D7AF9A /* BaseVMStore.swift */,
+				75F5248C443B43BDB968B56D /* IPSWService.swift */,
+				54FC456F7F38464BB4CA4BF1 /* JamfService.swift */,
+				2AF0A6F3427D423A9C61A8FF /* MistService.swift */,
+				2C78BA20892E40C1B9DA4E8E /* PackerService.swift */,
+				8E22A8EF924A4E6AA6AE3FC5 /* RegistryService.swift */,
+				038B00DC3027437E8A11A2F9 /* TartService.swift */,
+				AA3407A9972E4871AB9375EB /* VMStore.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		AD35D209E2BF44C7B2933341 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AE2F1FA309634143A0C27A18 /* Oven.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B9A815A42F7DDC1B00A83680 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				B02BCD21BC2FF6DA5508A215 /* Services/PackerTemplateStore.swift */,
+				273C6C18293D2A76C91A9DB1 /* SOFAService.swift */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3E93BEFABF36486383286137 /* Oven */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9D073D94D5F847A7A8CAFA3C /* Build configuration list for PBXNativeTarget "Oven" */;
+			buildPhases = (
+				BB6D17B42E1F423FA3D0304C /* Sources */,
+				DA9D72F99AA54BB1A3384D3D /* Frameworks */,
+				5996A65382EE4AD6959B4064 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Oven;
+			productName = Oven;
+			productReference = AE2F1FA309634143A0C27A18 /* Oven.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B20F1A55ED834A10AD1DA456 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1540;
+				LastUpgradeCheck = 1540;
+				TargetAttributes = {
+					3E93BEFABF36486383286137 = {
+						CreatedOnToolsVersion = 15.4;
+					};
+				};
+			};
+			buildConfigurationList = 6833A8AD457C4B85BB65C54A /* Build configuration list for PBXProject "Oven" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 9F601D4619724817B57E6E0D;
+			productRefGroup = AD35D209E2BF44C7B2933341 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3E93BEFABF36486383286137 /* Oven */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5996A65382EE4AD6959B4064 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				07D7BE71A1A84285A28FCA30 /* wallpaper-ventura.jpg in Resources */,
+				B7F2353406F74DA29BC32C98 /* wallpaper-tahoe.jpeg in Resources */,
+				913E77B9C7234987A66EEB69 /* wallpaper-sonoma.jpg in Resources */,
+				35019327E94D46B48C0B3721 /* wallpaper-sequoia.jpg in Resources */,
+				E5C7AEBBC9D04EA59DDC1D5E /* wallpaper-monterey.jpg in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		BB6D17B42E1F423FA3D0304C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3B0AC036841A488882339733 /* AppLogger.swift in Sources */,
+				9BA5FF9559FA4B3C9F2FEFE8 /* AppSettings.swift in Sources */,
+				2F44781222644152BD02BF7F /* AppState.swift in Sources */,
+				73A7179818F144EAB63ADCC8 /* AppTheme.swift in Sources */,
+				E19CD75D7F6C42A9AF80D234 /* BaseVMDetailPane.swift in Sources */,
+				D47681E4C31446C29C356850 /* BaseVMEditSheet.swift in Sources */,
+				95C70AF01F304C9AAB6DDD3C /* BaseVMRow.swift in Sources */,
+				E0394ED035C447DC8F00D77A /* BaseVMStore.swift in Sources */,
+				1D8FC871ABAC420F8C4D5815 /* BaseVMView.swift in Sources */,
+				50ACC8882A244C0CA52598C0 /* BuildLogView.swift in Sources */,
+				80969823F20249C08B1638DB /* BuildMonitor.swift in Sources */,
+				956EFBA268334D67BB2C88C9 /* BuildSessionManager.swift in Sources */,
+				D52FB5DDC895499D911FA20A /* CirrusCatalogueSheet.swift in Sources */,
+				7B23F5DD1EE24C788EBAEC5B /* CirrusLabsCatalogueRow.swift in Sources */,
+				4643B10B3B364CC2A34AE103 /* CloneVMSheet.swift in Sources */,
+				73054575B317430EBFA56649 /* ContentView.swift in Sources */,
+				B9ADE8C02F7DE64D00B30458 /* SOFAService.swift in Sources */,
+				7C35CBA641854707ABDC0925 /* Dependency.swift in Sources */,
+				F991657C3B6A417FA9F35F32 /* DependencyManager.swift in Sources */,
+				B39FD500255442D793F5D6E4 /* EmptyStateView.swift in Sources */,
+				2F9BC3605FE441F9AB5BFB0B /* IPSWService.swift in Sources */,
+				F99A0C6113F643E4BF9C4BA8 /* InputLockedOverlay.swift in Sources */,
+				BD83F46D40364D3683D9FF41 /* InstallerView.swift in Sources */,
+				C0463FF8C7C44D91AE30213E /* JamfService.swift in Sources */,
+				4D0FCA38B8D74F2ABAD31CFD /* KeychainService.swift in Sources */,
+				31EFAC40E69947489E42DF23 /* LaunchModeSheet.swift in Sources */,
+				65B477599B59464FB5E5C380 /* LiveBuildLogPanel.swift in Sources */,
+				D457657148CA47B3BB9E84EF /* LogView.swift in Sources */,
+				C50AFE686F2C42E9916951F2 /* MDMProfile.swift in Sources */,
+				93636E15E6E847419710A257 /* MDMProfileView.swift in Sources */,
+				3245D697DD9E40D7B815104C /* MDMServer.swift in Sources */,
+				4099E881D0A14D4E800362A1 /* MDMServersView.swift in Sources */,
+				FDBA5DD58B5F4903A09CC048 /* MistService.swift in Sources */,
+				7A8E5E70450B4D78B28BC128 /* NewBaseVMSheet.swift in Sources */,
+				1F8390C6C5694FD18B4EB3D7 /* NewVMSheet.swift in Sources */,
+				6084DCE449FE47D39296CB5C /* NotificationService.swift in Sources */,
+				05900CE23CDB487BBA1CFF91 /* OvenApp.swift in Sources */,
+				E33F3AEED31240E3A3B7C81B /* PackerService.swift in Sources */,
+				31E567C2DEEA476F96BABFDE /* PreferencesView.swift in Sources */,
+				6BD2AFE8F9784129A4BA4380 /* PreflightCheck.swift in Sources */,
+				B9C8AE33CA8A401BBB4E7A90 /* ProcessRunner.swift in Sources */,
+				F8813317A2EA47C492C824B1 /* PullDestinationSheet.swift in Sources */,
+				788E2C888D194CFD896B87C7 /* PushToRegistrySheet.swift in Sources */,
+				FD553859E6C84FE2ABD46F7F /* RecipesView.swift in Sources */,
+				9DDA46FCB2B94A9801B36C2B /* PackerTemplate.swift in Sources */,
+				FD31881B18A20CE7D501B422 /* HCLEditor.swift in Sources */,
+				33A88016FDFCA1505226CD55 /* BuildingBlock.swift in Sources */,
+				0710E86F4880421F7A082349 /* BuildingBlockDetailPane.swift in Sources */,
+				67B908241F12695FECC8CA0C /* BuildingBlockStore.swift in Sources */,
+				5D0F61CE6EA16CADB02D8C92 /* PackerTemplateMetadata.swift in Sources */,
+				EEB9AF3D07DA3DD2B2EFB725 /* RecipesViewModel.swift in Sources */,
+				A1AA6C9C58C480F05F0988F2 /* TemplateDetailPane.swift in Sources */,
+				8A76F26E9669B5589A03E929 /* VarsFileDetailPane.swift in Sources */,
+				D106B83FBF5548850499ACB6 /* NewPackerObjectSheet.swift in Sources */,
+				542CCC4E31BEF50B1A871918 /* Services/PackerTemplateStore.swift in Sources */,
+				AAC69E7A339449BD9EAB580E /* RegistryCredential.swift in Sources */,
+				EA6F4FE3BD644AC686E0F328 /* RegistryImageRow.swift in Sources */,
+				96EC6A01B9BD4129869AB92B /* RegistryService.swift in Sources */,
+				BFB8A48BC686468691CA5658 /* RegistryView.swift in Sources */,
+				C3D8415537B744118F8E6C2C /* SetupView.swift in Sources */,
+				150BA21AC538496989BF9EB6 /* TagChip.swift in Sources */,
+				4E609391533F4F59A312D26B /* TagStore.swift in Sources */,
+				51A38B8AFD8C4536A8EC2C55 /* TartService.swift in Sources */,
+				77B09001EC3B4AF380070C2D /* VMCard.swift in Sources */,
+				91FDA52DE23F4C6E98429156 /* VMDetailPane.swift in Sources */,
+				1BE5BAB3501343A79B6E6C33 /* VMEditSheet.swift in Sources */,
+				B6539E2F3DF443149F26FB2D /* VMListView.swift in Sources */,
+				A15EBB8EDDCD4E8F9C9918F3 /* VMStore.swift in Sources */,
+				934B04FDA9784EBDADB0378F /* VMViewHelpers.swift in Sources */,
+				BFC50767AAAC47B981D5F1DA /* VirtualMachine.swift in Sources */,
+				16B7EA75358743BCB2E35770 /* VMListViewModel.swift in Sources */,
+				7C5758A01C8F4AFA8D09C21D /* BaseVMViewModel.swift in Sources */,
+				C2374D01732841E6838CCC53 /* RegistryViewModel.swift in Sources */,
+				56FBE82476DC4C36A23E5110 /* StreamConsumer.swift in Sources */,
+				AB10C071951741DE9B85D648 /* AppDatabase.swift in Sources */,
+				4F5AE2957A23433FABAE7233 /* GeneralPrefsTab.swift in Sources */,
+				1DE30F1412084C618E30E457 /* BuildPrefsTab.swift in Sources */,
+				5F2F7F6234A74AF5A8517B49 /* StoragePrefsTab.swift in Sources */,
+				43CBAFEB428D4276994B436F /* NotificationPrefsTab.swift in Sources */,
+				17FA307EDDB4424C8719B4A5 /* IntegrationsPrefsTab.swift in Sources */,
+				7C98E251A01F4BBDBD88C4B7 /* TagsPrefsTab.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		05379D94493C4922AB39CCE9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 301;
+				DEVELOPMENT_TEAM = V4RT59UVJJ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Resources/Info.plist;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.9;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hooleahn.oven;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		351FE6B360774FE58AB20959 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		8F9FD305CD454FC286D07062 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		FED8957A3DA545AA80316F07 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 301;
+				DEVELOPMENT_TEAM = V4RT59UVJJ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Resources/Info.plist;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.9;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hooleahn.oven;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		6833A8AD457C4B85BB65C54A /* Build configuration list for PBXProject "Oven" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8F9FD305CD454FC286D07062 /* Debug */,
+				351FE6B360774FE58AB20959 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9D073D94D5F847A7A8CAFA3C /* Build configuration list for PBXNativeTarget "Oven" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FED8957A3DA545AA80316F07 /* Debug */,
+				05379D94493C4922AB39CCE9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B20F1A55ED834A10AD1DA456 /* Project object */;
+}
