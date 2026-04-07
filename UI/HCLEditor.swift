@@ -118,12 +118,31 @@ private class LineNumberRulerView: NSRulerView {
             maxLabelWidth = max(maxLabelWidth, size.width)
         }
 
+        
         // Adjust ruler width dynamically.
         let required = max(minWidth, maxLabelWidth + padding * 2)
         if abs(ruleThickness - required) > 1 {
             ruleThickness = required
             enclosingScrollView?.tile()
         }
+    }
+}
+
+// MARK: - Scroll view that confines the ruler to the content area
+
+private class RulerScrollView: NSScrollView {
+    override func tile() {
+        super.tile()
+        // After tiling, the ruler runs the full height of the scroll view frame,
+        // which bleeds into sibling SwiftUI views above. Constrain it to sit
+        // exactly alongside the content view.
+        guard let ruler = verticalRulerView else { return }
+        let cv = contentView
+        var rf = ruler.frame
+        let cvf = cv.frame
+        rf.origin.y = cvf.origin.y
+        rf.size.height = cvf.size.height
+        ruler.frame = rf
     }
 }
 
@@ -139,8 +158,16 @@ struct HCLEditor: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSTextView.scrollableTextView()
-        let tv = scrollView.documentView as! NSTextView
+        let scrollView = RulerScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        let tv = NSTextView()
+        tv.autoresizingMask = [.width]
+        tv.isVerticallyResizable = true
+        tv.isHorizontallyResizable = false
+        tv.textContainer?.widthTracksTextView = true
+        scrollView.documentView = tv
         tv.isEditable = isEditable
         tv.isRichText = false
         tv.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)

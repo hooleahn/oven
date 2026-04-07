@@ -110,9 +110,25 @@
             filePath = "UI/HCLEditor.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "177"
-            endingLineNumber = "177"
-            landmarkName = "updateNSView(_:context:)"
+            startingLineNumber = "204"
+            endingLineNumber = "204"
+            landmarkName = "HCLEditor"
+            landmarkType = "14">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "228C8B4F-13DB-4FD9-9269-7B3C2EB50B71"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "UI/HCLEditor.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "116"
+            endingLineNumber = "116"
+            landmarkName = "drawHashMarksAndLabels(in:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
