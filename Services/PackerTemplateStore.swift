@@ -70,10 +70,10 @@ final class PackerTemplateStore: ObservableObject {
                 try? meta.save(for: url)
             }
             let existingID = templates.first(where: { $0.url == url })?.id ?? meta.id
-            // Restore validated state if the file has not been modified since last validation
+            // Restore validation state if the file has not been modified since the last run
             let restoredValidationState: PackerTemplate.ValidationState = {
-                guard let validatedAt = meta.validatedAt else { return .unknown }
-                return mod <= validatedAt ? .valid : .unknown
+                guard let record = meta.lastValidation, mod <= record.date else { return .unknown }
+                return record.succeeded ? .valid : .invalid(record.output)
             }()
             return PackerTemplate(
                 id: existingID,
@@ -118,21 +118,21 @@ final class PackerTemplateStore: ObservableObject {
         try content.write(to: tmpl.url, atomically: true, encoding: .utf8)
     }
 
-    /// Stamps the sidecar with the current date so the validated state survives relaunch.
-    func markValidated(id: UUID) {
+    /// Persists the validation outcome so state survives relaunch.
+    func saveValidationResult(id: UUID, succeeded: Bool, output: String) {
         guard let tmpl = template(id: id) else { return }
         var meta = PackerTemplateMetadata.load(for: tmpl.url) ??
             PackerTemplateMetadata(id: id, displayName: tmpl.displayName)
-        meta.validatedAt = Date()
+        meta.lastValidation = .init(date: Date(), succeeded: succeeded, output: output)
         try? meta.save(for: tmpl.url)
     }
 
-    /// Clears the validated stamp so the template is no longer considered valid after relaunch.
-    func clearValidated(id: UUID) {
+    /// Clears the persisted validation result (e.g. when content is edited).
+    func clearValidationResult(id: UUID) {
         guard let tmpl = template(id: id) else { return }
         var meta = PackerTemplateMetadata.load(for: tmpl.url) ??
             PackerTemplateMetadata(id: id, displayName: tmpl.displayName)
-        meta.validatedAt = nil
+        meta.lastValidation = nil
         try? meta.save(for: tmpl.url)
     }
 

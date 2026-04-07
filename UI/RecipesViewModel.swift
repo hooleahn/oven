@@ -156,7 +156,7 @@ final class RecipesViewModel {
                     }
                 }
                 if wasContentDirty {
-                    store.clearValidated(id: id)
+                    store.clearValidationResult(id: id)
                 }
             }
         } catch {
@@ -205,11 +205,7 @@ final class RecipesViewModel {
                 t.validationState = succeeded ? .valid : .invalid(result)
             }
             // Persist to sidecar so the badge survives relaunch
-            if succeeded {
-                store.markValidated(id: tmpl.id)
-            } else {
-                store.clearValidated(id: tmpl.id)
-            }
+            store.saveValidationResult(id: tmpl.id, succeeded: succeeded, output: result)
         }
     }
 }

@@ -18,20 +18,26 @@ struct PackerTemplateMetadata: Codable {
     var osVersion: String       // e.g. "15.4", empty for vars files
     var createdAt: Date
     var schemaVersion: Int = 1
-    /// Date of the last successful validation. Used to restore `.valid` state
-    /// on relaunch, provided the file has not been modified since.
-    var validatedAt: Date? = nil
+
+    /// Result of the last packer validate run. Persisted so validation state
+    /// survives relaunch. Cleared when the template content is edited.
+    struct ValidationRecord: Codable {
+        var date: Date
+        var succeeded: Bool
+        var output: String   // full packer output; empty string on success
+    }
+    var lastValidation: ValidationRecord? = nil
 
     init(id: UUID = UUID(), displayName: String, templateDescription: String = "",
          osName: String = "", osVersion: String = "", createdAt: Date = Date(),
-         validatedAt: Date? = nil) {
+         lastValidation: ValidationRecord? = nil) {
         self.id = id
         self.displayName = displayName
         self.templateDescription = templateDescription
         self.osName = osName
         self.osVersion = osVersion
         self.createdAt = createdAt
-        self.validatedAt = validatedAt
+        self.lastValidation = lastValidation
     }
 }
 
