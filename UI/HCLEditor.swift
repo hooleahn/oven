@@ -42,33 +42,14 @@ private class LineNumberRulerView: NSRulerView {
 
     @objc private func invalidate(_ note: Notification) { needsDisplay = true }
 
-    override var isOpaque: Bool { true }
     override var requiredThickness: CGFloat { ruleThickness }
 
     override func drawHashMarksAndLabels(in rect: NSRect) {
         guard
             let tv = textView,
             let layoutManager = tv.layoutManager,
-            let textContainer = tv.textContainer,
-            let context = NSGraphicsContext.current
+            let textContainer = tv.textContainer
         else { return }
-
-        // Clip to the dirty rect.
-        context.saveGraphicsState()
-        NSBezierPath.clip(rect)
-        defer { context.restoreGraphicsState() }
-
-        // Opaque background fill covers anything drawn behind us.
-        NSColor.windowBackgroundColor.setFill()
-        rect.fill()
-
-        // Right-edge separator line.
-        NSColor.separatorColor.setStroke()
-        let sep = NSBezierPath()
-        sep.move(to: NSPoint(x: bounds.maxX - 0.5, y: rect.minY))
-        sep.line(to: NSPoint(x: bounds.maxX - 0.5, y: rect.maxY))
-        sep.lineWidth = 1
-        sep.stroke()
 
         let defaults: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .regular),
@@ -169,9 +150,6 @@ struct HCLEditor: NSViewRepresentable {
         tv.string = text
         context.coordinator.textView = tv
         HCLEditor.applyHighlighting(to: tv)
-
-        // Remove the default bezel border so it doesn't bleed into sibling views.
-        scrollView.borderType = .noBorder
 
         // Attach line number ruler.
         let ruler = LineNumberRulerView(scrollView: scrollView)
