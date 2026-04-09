@@ -1,148 +1,85 @@
 import SwiftUI
 import AppKit
 
-// MARK: - Line number ruler view
+// MARK: - NSTextView subclass that draws its own line numbers in the left margin
 
-private class LineNumberRulerView: NSRulerView {
-    private let padding: CGFloat = 6
-    private let minWidth: CGFloat = 40
+private class LineNumberTextView: NSTextView {
+    private let gutterWidth: CGFloat = 44
+    private let gutterPadding: CGFloat = 6
 
-    weak var textView: NSTextView? {
-        didSet {
-            NotificationCenter.default.removeObserver(self)
-            if let tv = textView {
-                NotificationCenter.default.addObserver(
-                    self,
-                    selector: #selector(invalidate),
-                    name: NSText.didChangeNotification,
-                    object: tv
-                )
-                // Redraw whenever the user scrolls.
-                if let clipView = tv.enclosingScrollView?.contentView {
-                    NotificationCenter.default.addObserver(
-                        self,
-                        selector: #selector(invalidate),
-                        name: NSView.boundsDidChangeNotification,
-                        object: clipView
-                    )
-                    clipView.postsBoundsChangedNotifications = true
-                }
-            }
-        }
+    // Called once after init to apply the left inset that makes room for numbers.
+    func setupGutter() {
+        textContainerInset = NSSize(width: 8, height: 10)
+        textContainer?.lineFragmentPadding = gutterWidth
     }
 
-    init(scrollView: NSScrollView) {
-        super.init(scrollView: scrollView, orientation: .verticalRuler)
-        clientView = scrollView.documentView
-    }
+    override func drawBackground(in rect: NSRect) {
+        super.drawBackground(in: rect)
 
-    required init(coder: NSCoder) { fatalError() }
-
-    deinit { NotificationCenter.default.removeObserver(self) }
-
-    @objc private func invalidate(_ note: Notification) { needsDisplay = true }
-
-    override var requiredThickness: CGFloat { ruleThickness }
-
-    override func drawHashMarksAndLabels(in rect: NSRect) {
         guard
-            let tv = textView,
-            let layoutManager = tv.layoutManager,
-            let textContainer = tv.textContainer
+            let layoutManager = layoutManager,
+            let textContainer = textContainer
         else { return }
 
-        let defaults: [NSAttributedString.Key: Any] = [
+        // Gutter background.
+        NSColor.windowBackgroundColor.withAlphaComponent(0.6).setFill()
+        NSRect(x: 0, y: rect.minY, width: gutterWidth, height: rect.height).fill()
+
+        // Right separator line.
+        NSColor.separatorColor.setStroke()
+        let sep = NSBezierPath()
+        sep.move(to: NSPoint(x: gutterWidth - 0.5, y: rect.minY))
+        sep.line(to: NSPoint(x: gutterWidth - 0.5, y: rect.maxY))
+        sep.lineWidth = 1
+        sep.stroke()
+
+        let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .regular),
             .foregroundColor: NSColor.tertiaryLabelColor
         ]
 
-        let string = tv.string as NSString
-        let visibleRect = tv.visibleRect
+        let src = string as NSString
         let visibleGlyphRange = layoutManager.glyphRange(forBoundingRect: visibleRect, in: textContainer)
         let visibleCharRange = layoutManager.characterRange(forGlyphRange: visibleGlyphRange, actualGlyphRange: nil)
 
-        // Count newlines before the visible range to get the starting line number.
-        let textBeforeVisible = string.substring(to: visibleCharRange.location)
+        let textBeforeVisible = src.substring(to: visibleCharRange.location)
         var lineNumber = textBeforeVisible.components(separatedBy: "\n").count
-
-        // Convert the text view's origin into the ruler's coordinate space.
-        // This maps document-space Y values into ruler-space Y values correctly
-        // regardless of scroll position.
-        let tvOriginInRuler = convert(tv.textContainerOrigin, from: tv)
 
         var glyphIndex = visibleGlyphRange.location
         let glyphEnd = NSMaxRange(visibleGlyphRange)
 
-        var maxLabelWidth: CGFloat = 0
-
         while glyphIndex < glyphEnd {
             let charIndex = layoutManager.characterIndexForGlyph(at: glyphIndex)
-            let lineCharRange = string.lineRange(for: NSRange(location: charIndex, length: 0))
+            let lineCharRange = src.lineRange(for: NSRange(location: charIndex, length: 0))
             let lineGlyphRange = layoutManager.glyphRange(forCharacterRange: lineCharRange, actualCharacterRange: nil)
 
-            // Walk each line-fragment rect (handles wrapped lines).
-            var fragmentGlyphIndex = lineGlyphRange.location
-            var isFirstFragment = true
-            while fragmentGlyphIndex < NSMaxRange(lineGlyphRange) {
-                var effectiveRange = NSRange(location: 0, length: 0)
-                let fragmentRect = layoutManager.lineFragmentRect(forGlyphAt: fragmentGlyphIndex, effectiveRange: &effectiveRange, withoutAdditionalLayout: true)
+            // Only label the first fragment of each logical line.
+            var effectiveRange = NSRange(location: 0, length: 0)
+            let fragmentRect = layoutManager.lineFragmentRect(
+                forGlyphAt: lineGlyphRange.location,
+                effectiveRange: &effectiveRange,
+                withoutAdditionalLayout: true
+            )
 
-                let y = tvOriginInRuler.y + NSMinY(fragmentRect)
-
-                if isFirstFragment {
-                    let label = "\(lineNumber)" as NSString
-                    let size = label.size(withAttributes: defaults)
-                    let x = ruleThickness - size.width - padding
-                    let drawRect = NSRect(x: x, y: y + (NSHeight(fragmentRect) - size.height) / 2, width: size.width, height: size.height)
-                    label.draw(in: drawRect, withAttributes: defaults)
-                    maxLabelWidth = max(maxLabelWidth, size.width)
-                    isFirstFragment = false
-                }
-
-                fragmentGlyphIndex = NSMaxRange(effectiveRange)
-            }
+            let label = "\(lineNumber)" as NSString
+            let size = label.size(withAttributes: attrs)
+            let x = gutterWidth - gutterPadding - size.width
+            let y = textContainerOrigin.y + NSMinY(fragmentRect) + (NSHeight(fragmentRect) - size.height) / 2
+            label.draw(at: NSPoint(x: x, y: y), withAttributes: attrs)
 
             glyphIndex = NSMaxRange(lineGlyphRange)
             lineNumber += 1
         }
 
-        // Handle empty last line (extra line fragment).
+        // Empty trailing line.
         if layoutManager.extraLineFragmentTextContainer != nil {
             let fragmentRect = layoutManager.extraLineFragmentRect
-            let y = tvOriginInRuler.y + NSMinY(fragmentRect)
             let label = "\(lineNumber)" as NSString
-            let size = label.size(withAttributes: defaults)
-            let x = ruleThickness - size.width - padding
-            let drawRect = NSRect(x: x, y: y + (NSHeight(fragmentRect) - size.height) / 2, width: size.width, height: size.height)
-            label.draw(in: drawRect, withAttributes: defaults)
-            maxLabelWidth = max(maxLabelWidth, size.width)
+            let size = label.size(withAttributes: attrs)
+            let x = gutterWidth - gutterPadding - size.width
+            let y = textContainerOrigin.y + NSMinY(fragmentRect) + (NSHeight(fragmentRect) - size.height) / 2
+            label.draw(at: NSPoint(x: x, y: y), withAttributes: attrs)
         }
-
-        
-        // Adjust ruler width dynamically.
-        let required = max(minWidth, maxLabelWidth + padding * 2)
-        if abs(ruleThickness - required) > 1 {
-            ruleThickness = required
-            enclosingScrollView?.tile()
-        }
-    }
-}
-
-// MARK: - Scroll view that confines the ruler to the content area
-
-private class RulerScrollView: NSScrollView {
-    override func tile() {
-        super.tile()
-        // After tiling, the ruler runs the full height of the scroll view frame,
-        // which bleeds into sibling SwiftUI views above. Constrain it to sit
-        // exactly alongside the content view.
-        guard let ruler = verticalRulerView else { return }
-        let cv = contentView
-        var rf = ruler.frame
-        let cvf = cv.frame
-        rf.origin.y = cvf.origin.y
-        rf.size.height = cvf.size.height
-        ruler.frame = rf
     }
 }
 
@@ -158,32 +95,38 @@ struct HCLEditor: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = RulerScrollView()
+        let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
-        let tv = NSTextView()
+        scrollView.borderType = .noBorder
+
+        let tv = LineNumberTextView()
         tv.autoresizingMask = [.width]
         tv.isVerticallyResizable = true
         tv.isHorizontallyResizable = false
         tv.textContainer?.widthTracksTextView = true
-        scrollView.documentView = tv
         tv.isEditable = isEditable
         tv.isRichText = false
         tv.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        tv.textContainerInset = NSSize(width: 8, height: 10)
         tv.allowsUndo = true
+        tv.setupGutter()
         tv.delegate = context.coordinator
         tv.string = text
         context.coordinator.textView = tv
         HCLEditor.applyHighlighting(to: tv)
 
-        // Attach line number ruler.
-        let ruler = LineNumberRulerView(scrollView: scrollView)
-        ruler.textView = tv
-        scrollView.verticalRulerView = ruler
-        scrollView.hasVerticalRuler = true
-        scrollView.rulersVisible = true
+        scrollView.documentView = tv
+
+        // Redraw line numbers on scroll.
+        let clipView = scrollView.contentView
+        clipView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.scrolled),
+            name: NSView.boundsDidChangeNotification,
+            object: clipView
+        )
 
         return scrollView
     }
@@ -196,7 +139,6 @@ struct HCLEditor: NSViewRepresentable {
             tv.string = text
             tv.selectedRanges = sel
             HCLEditor.applyHighlighting(to: tv)
-            scrollView.verticalRulerView?.needsDisplay = true
         }
     }
 
@@ -253,7 +195,11 @@ struct HCLEditor: NSViewRepresentable {
             parent.text = tv.string
             parent.onChange()
             HCLEditor.applyHighlighting(to: tv)
-            tv.enclosingScrollView?.verticalRulerView?.needsDisplay = true
+            tv.setNeedsDisplay(tv.visibleRect)
+        }
+
+        @objc func scrolled(_ note: Notification) {
+            textView?.setNeedsDisplay(textView?.visibleRect ?? .zero)
         }
     }
 }
