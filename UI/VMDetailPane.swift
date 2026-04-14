@@ -6,6 +6,7 @@ struct VMDetailPane: View {
     @EnvironmentObject var vmStore: VMStore
     @EnvironmentObject var baseVMStore: BaseVMStore
     @EnvironmentObject var serverStore: MDMServerStore
+    @EnvironmentObject var theme: AppTheme
     let vm: VirtualMachine
     let onDismiss: () -> Void
     let onStart: () -> Void
@@ -15,6 +16,16 @@ struct VMDetailPane: View {
     @State private var liveConfig: TartService.TartVMConfig? = nil
     @State private var isLoadingConfig = false
     @State private var confirmStop: VirtualMachine? = nil
+
+    // MDM enrollment status
+    @State private var enrollmentStatus: JamfEnrollmentStatus? = nil
+    @State private var enrollmentError: String? = nil
+    @State private var isLookingUpEnrollment = false
+
+    /// True when serial number is long enough and an MDM server is linked
+    private var canLookUpEnrollment: Bool {
+        vm.serialNumber.count >= 10 && vm.mdmServerID != nil
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -116,7 +127,7 @@ struct VMDetailPane: View {
                         }
                     }
                     // MDM enrollment
-                    if vm.mdmProfileID != nil || vm.mdmServerID != nil {
+                    if theme.mdmEnabled && (vm.mdmProfileID != nil || vm.mdmServerID != nil || canLookUpEnrollment) {
                         DetailSection("MDM") {
                             if let serverID = vm.mdmServerID,
                                let server = serverStore.servers.first(where: { $0.id == serverID }) {
@@ -126,6 +137,18 @@ struct VMDetailPane: View {
                                 let profileName = loadProfileName(id: profileID)
                                 if let name = profileName {
                                     DetailRow("Profile", name)
+                                }
+                            }
+                            // Enrollment status lookup (requires serial number ≥ 10 chars + MDM server)
+                            if canLookUpEnrollment {
+                                MDMEnrollmentStatusRow(
+                                    vm: vm,
+                                    server: serverStore.servers.first(where: { $0.id == vm.mdmServerID }),
+                                    status: enrollmentStatus,
+                                    error: enrollmentError,
+                                    isLoading: isLookingUpEnrollment
+                                ) {
+                                    Task { await lookUpEnrollment() }
                                 }
                             }
                         }
@@ -169,11 +192,18 @@ struct VMDetailPane: View {
             Text("The VM will be sent a shutdown signal and given 30 seconds to stop gracefully.")
         }
         .task(id: vm.id) {
+            // Reset transient state when VM selection changes
+            enrollmentStatus = nil
+            enrollmentError  = nil
             // Start IP polling immediately when detail pane opens for a running VM
             if vm.status == .running && (vm.ipAddress == nil || vm.ipAddress?.isEmpty == true) {
                 await vmStore.refreshIP(for: vm)
             }
             await loadLiveConfig()
+            // Auto-look up enrollment status if eligible
+            if canLookUpEnrollment {
+                await lookUpEnrollment()
+            }
         }
         .onChange(of: vm.status) { _, newStatus in
             if newStatus == .running && vm.ipAddress == nil {
@@ -370,5 +400,86 @@ struct VMDetailPane: View {
         guard !profiles.isEmpty || true
         else { return nil }
         return profiles.first(where: { $0.id == id })?.name
+    }
+
+    @MainActor
+    private func lookUpEnrollment() async {
+        guard canLookUpEnrollment,
+              let serverID = vm.mdmServerID,
+              let server = serverStore.servers.first(where: { $0.id == serverID }),
+              let jamf = server.makeJamfService() else { return }
+        isLookingUpEnrollment = true
+        enrollmentError = nil
+        do {
+            enrollmentStatus = try await jamf.lookupEnrollment(serialNumber: vm.serialNumber)
+            if enrollmentStatus == nil {
+                enrollmentError = "Not found in \(server.friendlyName)"
+            }
+        } catch {
+            enrollmentError = error.localizedDescription
+        }
+        isLookingUpEnrollment = false
+    }
+}
+
+// MARK: - MDMEnrollmentStatusRow
+
+private struct MDMEnrollmentStatusRow: View {
+    let vm: VirtualMachine
+    let server: MDMServer?
+    let status: JamfEnrollmentStatus?
+    let error: String?
+    let isLoading: Bool
+    let onRefresh: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text("Enrollment")
+                    .font(.caption).fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if isLoading {
+                    ProgressView().controlSize(.mini)
+                } else {
+                    Button(action: onRefresh) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Look up enrollment status in \(server?.friendlyName ?? "MDM")")
+                }
+            }
+
+            if let status {
+                HStack(spacing: 5) {
+                    Image(systemName: status.enrolled ? "checkmark.shield.fill" : "xmark.shield")
+                        .foregroundStyle(status.enrolled ? (status.managed ? .green : .orange) : .red)
+                        .font(.callout)
+                    Text(status.summary)
+                        .font(.callout)
+                }
+                if let name = status.deviceName, !name.isEmpty {
+                    Text(name)
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if status.enrolledViaADE {
+                    Text("Enrolled via ADE")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if let contact = status.lastContact {
+                    Text("Last contact: \(contact.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } else if let error {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.caption).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Tap \(Image(systemName: "arrow.clockwise")) to look up in \(server?.friendlyName ?? "MDM")")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 6)
     }
 }

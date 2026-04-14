@@ -269,31 +269,33 @@ struct NewBaseVMSheet: View {
                   footer: { Text("Optional. A vars file can override CPU, memory, disk, VM name, and other settings defined in the template.") }
 
                 // MDM enrollment
-                Section {
-                    Picker("Enrollment profile", selection: $selectedMDMProfileID) {
-                        Text("None").tag(Optional<UUID>.none)
-                        ForEach(mdmProfiles) { profile in
-                            Text(profile.name).tag(Optional(profile.id))
+                if theme.mdmEnabled {
+                    Section {
+                        Picker("Enrollment profile", selection: $selectedMDMProfileID) {
+                            Text("None").tag(Optional<UUID>.none)
+                            ForEach(mdmProfiles) { profile in
+                                Text(profile.name).tag(Optional(profile.id))
+                            }
                         }
-                    }
-                    if let server = selectedMDMServer, let profile = selectedMDMProfile {
-                        LabeledContent("Server") { Text(server.friendlyName).foregroundStyle(.secondary) }
-                        LabeledContent("Invitation ID") {
-                            Text(profile.invitationID.isEmpty ? "Not set" : profile.invitationID)
-                                .foregroundStyle(profile.invitationID.isEmpty ? .red : .secondary)
+                        if let server = selectedMDMServer, let profile = selectedMDMProfile {
+                            LabeledContent("Server") { Text(server.friendlyName).foregroundStyle(.secondary) }
+                            LabeledContent("Invitation ID") {
+                                Text(profile.invitationID.isEmpty ? "Not set" : profile.invitationID)
+                                    .foregroundStyle(profile.invitationID.isEmpty ? .red : .secondary)
+                            }
+                            if profile.invitationID.isEmpty {
+                                Label("Set an Invitation ID in MDM Enrollment first.",
+                                      systemImage: "exclamationmark.triangle")
+                                    .font(.caption).foregroundStyle(.orange)
+                            }
                         }
-                        if profile.invitationID.isEmpty {
-                            Label("Set an Invitation ID in MDM Enrollment first.",
-                                  systemImage: "exclamationmark.triangle")
-                                .font(.caption).foregroundStyle(.orange)
+                        if mdmProfiles.isEmpty {
+                            Text("No enrollment profiles configured. Add one in MDM Enrollment.")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
-                    }
-                    if mdmProfiles.isEmpty {
-                        Text("No enrollment profiles configured. Add one in MDM Enrollment.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                } header: { Text("MDM enrollment") }
-                  footer: { Text("If selected, the enrollment profile and invitation ID will be baked into the Packer template.") }
+                    } header: { Text("MDM enrollment") }
+                      footer: { Text("If selected, the enrollment profile and invitation ID will be baked into the Packer template.") }
+                }
             }
             .formStyle(.grouped)
         }

@@ -116,10 +116,15 @@ struct BuildingBlockDetailPane: View {
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(!isAnyDirty)
+                Divider().frame(height: 16)
+                Button(action: onDuplicate) {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.borderless).help("Duplicate")
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")
                 }
-                .buttonStyle(.bordered).controlSize(.small).tint(.red)
+                .buttonStyle(.borderless).foregroundStyle(.red).help("Delete")
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)

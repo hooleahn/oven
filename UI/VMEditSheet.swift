@@ -6,6 +6,8 @@ struct VMEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var vmStore: VMStore
     @EnvironmentObject var tagStore: TagStore
+    @EnvironmentObject var serverStore: MDMServerStore
+    @EnvironmentObject var theme: AppTheme
 
     let vm: VirtualMachine
 
@@ -31,6 +33,7 @@ struct VMEditSheet: View {
     @State private var serialNumber: String
     @State private var sofaVersions: [String] = []
     @State private var isFetchingVersions = false
+    @State private var mdmServerID: UUID?
 
     private var versionList: [String] {
         sofaVersions.isEmpty ? osName.fallbackVersions : sofaVersions
@@ -53,6 +56,7 @@ struct VMEditSheet: View {
         _osName            = State(initialValue: vm.osName)
         _osVersion         = State(initialValue: vm.osVersion)
         _serialNumber      = State(initialValue: vm.serialNumber)
+        _mdmServerID       = State(initialValue: vm.mdmServerID)
         _sharedFolders     = State(initialValue: vm.sharedFolders)
         _cpuCount          = State(initialValue: vm.cpuCount)
         _memoryGB          = State(initialValue: vm.memoryGB)
@@ -173,6 +177,23 @@ struct VMEditSheet: View {
                     }
                 }
 
+                if theme.mdmEnabled && !serverStore.servers.isEmpty {
+                    Section {
+                        Picker("MDM Server", selection: $mdmServerID) {
+                            Text("None").tag(Optional<UUID>.none)
+                            ForEach(serverStore.servers) { server in
+                                Text(server.friendlyName).tag(Optional(server.id))
+                            }
+                        }
+                        if mdmServerID != nil && vm.serialNumber.count < 10 {
+                            Label("Set a serial number (≥ 10 chars) to enable enrollment lookup.",
+                                  systemImage: "info.circle")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    } header: { Text("MDM") }
+                      footer: { Text("Link this VM to an MDM server to look up its enrollment status.") }
+                }
+
                 Section("Default and SSH credentials") {
                     LabeledContent("Username") {
                         TextField("", text: $sshUsername,
@@ -283,6 +304,7 @@ struct VMEditSheet: View {
             v.osName        = osName
             v.osVersion     = osVersion
             v.serialNumber  = serialNumber
+            v.mdmServerID   = mdmServerID
             v.sshPassword   = sshPassword.isEmpty ? nil : sshPassword
             if !v.isOCIBased { v.isBaseVM = isBaseVM }
         }

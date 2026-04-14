@@ -17,6 +17,62 @@ struct JamfDevice: Decodable {
     }
 }
 
+// MARK: - Inventory-API types (Jamf Pro API v1/computers-inventory)
+
+/// Lightweight result returned by the filter endpoint.
+struct JamfInventoryResult: Decodable {
+    let id: String   // string ID in the Pro API (e.g. "42")
+    let udid: String
+}
+
+/// Management status block nested inside an inventory detail response.
+struct JamfManagementStatus: Decodable {
+    let enrolled: Bool
+    let managed: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case enrolled = "supervised"  // Jamf calls it supervised/enrolled
+        case managed  = "managed"
+    }
+}
+
+/// Subset of the inventory-detail response we care about.
+struct JamfComputerInventory: Decodable {
+    let id: String
+    let udid: String
+    let managementStatus: JamfManagementStatus?
+    let general: JamfInventoryGeneral?
+}
+
+struct JamfInventoryGeneral: Decodable {
+    let name: String?
+    let lastContactTime: String?   // ISO8601
+    let enrolledViaAutomatedDeviceEnrollment: Bool?
+    let supervised: Bool?
+    let mdmCapable: JamfMDMCapable?
+}
+
+struct JamfMDMCapable: Decodable {
+    let capable: Bool
+}
+
+/// Distilled result surfaced in the UI.
+struct JamfEnrollmentStatus {
+    let deviceName: String?
+    let enrolled: Bool
+    let managed: Bool
+    let mdmCapable: Bool
+    let lastContact: Date?
+    let enrolledViaADE: Bool
+
+    /// Human-readable summary line.
+    var summary: String {
+        if enrolled && managed { return "Enrolled & Managed" }
+        if enrolled            { return "Enrolled (not managed)" }
+        return "Not enrolled"
+    }
+}
+
 struct JamfBasicTokenResponse: Decodable {
     let token: String
     let expires: String
@@ -178,6 +234,73 @@ actor JamfService {
         
     }
 
+    // MARK: - Enrollment status lookup (Jamf Pro API v1/computers-inventory)
+
+    /// Looks up a computer by serial number and returns its enrollment status.
+    /// Uses the modern Jamf Pro API (not the deprecated Classic API).
+    func lookupEnrollment(serialNumber: String) async throws -> JamfEnrollmentStatus? {
+        let token = try await ensureToken()
+
+        // Step 1: filter by serial number to get the device ID
+        var filterURL = serverURL.appendingPathComponent("api/v1/computers-inventory")
+        filterURL = filterURL.appending(queryItems: [
+            URLQueryItem(name: "filter", value: "hardware.serialNumber==\"\(serialNumber)\""),
+            URLQueryItem(name: "section",  value: "GENERAL"),
+        ])
+        var filterReq = URLRequest(url: filterURL)
+        filterReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        filterReq.setValue("application/json",  forHTTPHeaderField: "Accept")
+
+        let (filterData, filterResp) = try await URLSession.shared.data(for: filterReq)
+        guard let filterHTTP = filterResp as? HTTPURLResponse,
+              (200...299).contains(filterHTTP.statusCode) else {
+            throw JamfError.lookupFailed
+        }
+
+        struct FilterResponse: Decodable {
+            let results: [JamfInventoryResult]
+        }
+        let filterBody = try JSONDecoder().decode(FilterResponse.self, from: filterData)
+        guard let first = filterBody.results.first else {
+            return nil  // device not in Jamf
+        }
+
+        // Step 2: fetch full inventory detail for that device ID
+        let detailURL = serverURL.appendingPathComponent("api/v1/computers-inventory-detail/\(first.id)")
+        var detailReq = URLRequest(url: detailURL)
+        detailReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        detailReq.setValue("application/json",  forHTTPHeaderField: "Accept")
+
+        let (detailData, detailResp) = try await URLSession.shared.data(for: detailReq)
+        guard let detailHTTP = detailResp as? HTTPURLResponse,
+              (200...299).contains(detailHTTP.statusCode) else {
+            throw JamfError.lookupFailed
+        }
+
+        let decoder = JSONDecoder()
+        let detail = try decoder.decode(JamfComputerInventory.self, from: detailData)
+
+        // Parse last-contact timestamp
+        var lastContact: Date? = nil
+        if let ts = detail.general?.lastContactTime, !ts.isEmpty {
+            lastContact = ISO8601DateFormatter().date(from: ts)
+        }
+
+        let enrolled  = detail.managementStatus?.enrolled  ?? (detail.general?.supervised ?? false)
+        let managed   = detail.managementStatus?.managed   ?? false
+        let mdmCap    = detail.general?.mdmCapable?.capable ?? managed
+        let ade       = detail.general?.enrolledViaAutomatedDeviceEnrollment ?? false
+
+        return JamfEnrollmentStatus(
+            deviceName:    detail.general?.name,
+            enrolled:      enrolled,
+            managed:       managed,
+            mdmCapable:    mdmCap,
+            lastContact:   lastContact,
+            enrolledViaADE: ade
+        )
+    }
+
     // MARK: - Device lookup
 
     func findDevice(serialNumber: String) async throws -> JamfDevice? {
@@ -249,12 +372,14 @@ enum JamfError: LocalizedError {
     case authFailed
     case deleteFailed
     case deviceNotFound
+    case lookupFailed
 
     var errorDescription: String? {
         switch self {
         case .authFailed:    return "Jamf Pro authentication failed. Check your credentials. (See: https://developer.jamf.com/api-reference/authentication) and try again."
         case .deleteFailed:  return "Failed to remove device from Jamf Pro."
         case .deviceNotFound: return "Device not found in Jamf Pro."
+        case .lookupFailed:  return "Failed to look up device in Jamf Pro. Check the server URL and permissions."
         }
     }
 }

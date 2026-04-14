@@ -46,10 +46,49 @@ final class AppTheme: ObservableObject {
     @AppStorage("buildHeartbeatMinutes")  var buildHeartbeatMinutes: Int = 10  // warn if silent
     @AppStorage("batteryThresholdPct")    var batteryThresholdPct: Double = 80.0
 
-    // Notification settings
-    @AppStorage("systemNotificationsEnabled")       var systemNotificationsEnabled: Bool = false
-    @AppStorage("pushoverEnabled")    var pushoverEnabled: Bool = false
-    @AppStorage("slackEnabled")       var slackEnabled: Bool = false
+    // Notification settings — master toggles
+    @AppStorage("systemNotificationsEnabled") var systemNotificationsEnabled: Bool = false
+    @AppStorage("pushoverEnabled")            var pushoverEnabled: Bool = false
+    @AppStorage("slackEnabled")               var slackEnabled: Bool = false
+    @AppStorage("teamsEnabled")               var teamsEnabled: Bool = false
+
+    // System notification — delivery style (banner vs alert handled by OS; we track sound preference)
+    @AppStorage("notif.system.soundEnabled")  var systemNotifSoundEnabled: Bool = true
+
+    // Per-event toggles — System
+    @AppStorage("notif.system.baseVMBuildSucceeded") var systemNotifBaseVMBuildSucceeded: Bool = true
+    @AppStorage("notif.system.baseVMBuildFailed")    var systemNotifBaseVMBuildFailed: Bool = true
+    @AppStorage("notif.system.ipswDownloaded")       var systemNotifIPSWDownloaded: Bool = true
+    @AppStorage("notif.system.imagePullCompleted")   var systemNotifImagePullCompleted: Bool = true
+    @AppStorage("notif.system.imagePushCompleted")   var systemNotifImagePushCompleted: Bool = false
+    @AppStorage("notif.system.vmStopped")            var systemNotifVMStopped: Bool = false
+
+    // Per-event toggles — Pushover
+    @AppStorage("notif.pushover.baseVMBuildSucceeded") var pushoverNotifBaseVMBuildSucceeded: Bool = true
+    @AppStorage("notif.pushover.baseVMBuildFailed")    var pushoverNotifBaseVMBuildFailed: Bool = true
+    @AppStorage("notif.pushover.ipswDownloaded")       var pushoverNotifIPSWDownloaded: Bool = true
+    @AppStorage("notif.pushover.imagePullCompleted")   var pushoverNotifImagePullCompleted: Bool = true
+    @AppStorage("notif.pushover.imagePushCompleted")   var pushoverNotifImagePushCompleted: Bool = false
+    @AppStorage("notif.pushover.vmStopped")            var pushoverNotifVMStopped: Bool = false
+
+    // Per-event toggles — Slack
+    @AppStorage("notif.slack.baseVMBuildSucceeded") var slackNotifBaseVMBuildSucceeded: Bool = true
+    @AppStorage("notif.slack.baseVMBuildFailed")    var slackNotifBaseVMBuildFailed: Bool = true
+    @AppStorage("notif.slack.ipswDownloaded")       var slackNotifIPSWDownloaded: Bool = true
+    @AppStorage("notif.slack.imagePullCompleted")   var slackNotifImagePullCompleted: Bool = true
+    @AppStorage("notif.slack.imagePushCompleted")   var slackNotifImagePushCompleted: Bool = false
+    @AppStorage("notif.slack.vmStopped")            var slackNotifVMStopped: Bool = false
+
+    // Per-event toggles — Teams
+    @AppStorage("notif.teams.baseVMBuildSucceeded") var teamsNotifBaseVMBuildSucceeded: Bool = true
+    @AppStorage("notif.teams.baseVMBuildFailed")    var teamsNotifBaseVMBuildFailed: Bool = true
+    @AppStorage("notif.teams.ipswDownloaded")       var teamsNotifIPSWDownloaded: Bool = true
+    @AppStorage("notif.teams.imagePullCompleted")   var teamsNotifImagePullCompleted: Bool = true
+    @AppStorage("notif.teams.imagePushCompleted")   var teamsNotifImagePushCompleted: Bool = false
+    @AppStorage("notif.teams.vmStopped")            var teamsNotifVMStopped: Bool = false
+
+    // MDM features
+    @AppStorage("mdmEnabled") var mdmEnabled: Bool = true
 
     // Build settings
     @AppStorage("preventSleepDuringBuild") var preventSleepDuringBuild: Bool = true

@@ -72,9 +72,11 @@ struct SidebarView: View {
                 sidebarItem(.installers)
                 sidebarItem(.registry)
             }
-            Section("MDM") {
-                sidebarItem(.mdmServers)
-                sidebarItem(.mdmEnrollment)
+            if theme.mdmEnabled {
+                Section("MDM") {
+                    sidebarItem(.mdmServers)
+                    sidebarItem(.mdmEnrollment)
+                }
             }
             Section("General") {
                 sidebarItem(.activityLog)

@@ -40,6 +40,18 @@ final class RecipesViewModel {
     var editedOSVersion: String = ""
     var isMetadataDirty: Bool = false
 
+    // In-memory draft cache: preserves unsaved edits across tab switches
+    private struct TemplateDraft {
+        var content: String
+        var displayName: String
+        var description: String
+        var osName: String
+        var osVersion: String
+        var isDirty: Bool
+        var isMetadataDirty: Bool
+    }
+    private var templateDrafts: [UUID: TemplateDraft] = [:]
+
     // Validation state
     var isValidating: Bool = false
     var validationResult: String? = nil
@@ -101,17 +113,49 @@ final class RecipesViewModel {
 
     func loadTemplateContent(_ id: UUID, from store: PackerTemplateStore) {
         guard let tmpl = store.template(id: id) else { return }
-        let content = store.loadContent(for: id) ?? ""
-        editedContent = content
-        editedDisplayName = tmpl.displayName
-        editedDescription = tmpl.templateDescription
-        editedOSName = tmpl.osName
-        editedOSVersion = tmpl.osVersion
-        isDirty = false
-        isMetadataDirty = false
         saveError = nil
         validationResult = nil
         isValidating = false
+        // Restore from draft cache if there are unsaved edits
+        if let draft = templateDrafts[id] {
+            editedContent = draft.content
+            editedDisplayName = draft.displayName
+            editedDescription = draft.description
+            editedOSName = draft.osName
+            editedOSVersion = draft.osVersion
+            isDirty = draft.isDirty
+            isMetadataDirty = draft.isMetadataDirty
+        } else {
+            editedContent = store.loadContent(for: id) ?? ""
+            editedDisplayName = tmpl.displayName
+            editedDescription = tmpl.templateDescription
+            editedOSName = tmpl.osName
+            editedOSVersion = tmpl.osVersion
+            isDirty = false
+            isMetadataDirty = false
+        }
+    }
+
+    /// True if there are any unsaved edits in the current editor or the draft cache.
+    var hasUnsavedChanges: Bool {
+        isDirty || isMetadataDirty || !templateDrafts.isEmpty
+    }
+
+    /// Persists the current editor state into the draft cache for the given template.
+    func saveDraft(for id: UUID) {
+        guard isDirty || isMetadataDirty else {
+            templateDrafts.removeValue(forKey: id)
+            return
+        }
+        templateDrafts[id] = TemplateDraft(
+            content: editedContent,
+            displayName: editedDisplayName,
+            description: editedDescription,
+            osName: editedOSName,
+            osVersion: editedOSVersion,
+            isDirty: isDirty,
+            isMetadataDirty: isMetadataDirty
+        )
     }
 
     // MARK: - Save / revert
@@ -134,10 +178,11 @@ final class RecipesViewModel {
                 try store.saveMetadata(id: id, displayName: newDisplayName,
                     description: newDescription, osName: newOSName, osVersion: newOSVersion)
             }
-            // Clear model state first
+            // Clear model state and draft cache
             isDirty = false
             isMetadataDirty = false
             isSaving = false
+            templateDrafts.removeValue(forKey: id)
             // Defer store.update() to the next run loop iteration so its objectWillChange
             // fires in a separate render pass from the @Observable model changes above.
             // This guarantees SwiftUI re-evaluates templatesList with the fresh array.
@@ -167,6 +212,7 @@ final class RecipesViewModel {
 
     func revert(from store: PackerTemplateStore) {
         guard let id = selectedTemplateID else { return }
+        templateDrafts.removeValue(forKey: id)
         loadTemplateContent(id, from: store)
     }
 

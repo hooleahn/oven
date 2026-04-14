@@ -20,7 +20,9 @@ struct TemplateDetailPane: View {
     let onSave: () -> Void
     let onRevert: () -> Void
     let onValidate: () -> Void
-    let onFork: () -> Void   // called when user tries to edit a base template
+    let onFork: () -> Void       // called when user tries to edit a base template
+    let onDuplicate: () -> Void
+    let onDelete: () -> Void
 
     @EnvironmentObject var theme: AppTheme
 
@@ -100,6 +102,15 @@ struct TemplateDetailPane: View {
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(!isAnyDirty)
+                Divider().frame(height: 16)
+                Button(action: onDuplicate) {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.borderless).help("Duplicate")
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless).foregroundStyle(.red).help("Delete")
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)

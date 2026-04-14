@@ -12,6 +12,21 @@ struct MDMServer: Identifiable, Codable, Hashable , Sendable {
     var serverUsername: String
     // Password stored in Keychain — never in this struct
 
+    // Connection test state (transient — not persisted)
+    var connectionState: ConnectionState = .unknown
+
+    enum ConnectionState: Equatable, Hashable {
+        case unknown
+        case testing
+        case connected
+        case failed(String)
+    }
+
+    // Exclude connectionState from Codable so it is never persisted.
+    enum CodingKeys: String, CodingKey {
+        case id, friendlyName, serverURL, serverAuthType, serverUsername
+    }
+
     init(
         id: UUID = UUID(),
         friendlyName: String,

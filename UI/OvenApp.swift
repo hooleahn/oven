@@ -7,6 +7,7 @@ enum SharedStores {
     static var baseVMStore: BaseVMStore?
     static var appState: AppState?
     static var packerService: PackerService?
+    static var recipesViewModel: RecipesViewModel?
     /// Set to true before an intentional relaunch to bypass the quit guard.
     static var skipQuitGuard = false
 }
@@ -29,6 +30,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 alert.addButton(withTitle: "Cancel")
                 if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
             }
+        }
+
+        // Check active Base VM builds
+        if let baseVMStore = SharedStores.baseVMStore, baseVMStore.isBuilding {
+            let alert = NSAlert()
+            alert.messageText = "Base VM build in progress"
+            alert.informativeText = "A Base VM is currently being built. Quitting now will cancel the build and may leave a partial VM."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Quit Anyway")
+            alert.addButton(withTitle: "Cancel")
+            if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
+        }
+
+        // Check unsaved recipe edits (templates, vars files, building blocks)
+        if let rvm = SharedStores.recipesViewModel, rvm.hasUnsavedChanges {
+            let alert = NSAlert()
+            alert.messageText = "Unsaved changes in Recipes"
+            alert.informativeText = "You have unsaved edits in one or more templates, variables files, or building blocks. They will be lost if you quit."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Quit Anyway")
+            alert.addButton(withTitle: "Cancel")
+            if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
         }
 
         // Check active downloads (IPSW + registry pulls)
@@ -70,6 +93,7 @@ struct OvenApp: App {
     @State private var baseVMStore = OvenApp.makeBaseVMStore()
     @State private var templateStore = PackerTemplateStore()
     @State private var blockStore = BuildingBlockStore()
+    @State private var recipesViewModel = RecipesViewModel()
 
     // MARK: - Store factories (called once at app launch)
 
@@ -138,6 +162,7 @@ struct OvenApp: App {
                         .environmentObject(baseVMStore)
                         .environmentObject(templateStore)
                         .environmentObject(blockStore)
+                        .environment(recipesViewModel)
                 } else {
                     SetupView(depManager: depManager)
                 }
@@ -189,6 +214,7 @@ struct AppRootView: View {
     @EnvironmentObject var tagStore: TagStore
     @EnvironmentObject var vmStore: VMStore
     @EnvironmentObject var baseVMStore: BaseVMStore
+    @Environment(RecipesViewModel.self) private var recipesViewModel
 
     /// Remove leftover oven-ssh-*.command files from previous sessions
     private func cleanupSSHTempFiles() {
@@ -206,6 +232,7 @@ struct AppRootView: View {
                 SharedStores.vmStore = vmStore
                 SharedStores.baseVMStore = baseVMStore
                 SharedStores.appState = appState
+                SharedStores.recipesViewModel = recipesViewModel
                 await vmStore.sync()
                 for tag in Set(vmStore.vms.flatMap { $0.tags }) {
                     if tagStore.colors[tag] == nil {

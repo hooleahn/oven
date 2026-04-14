@@ -15,19 +15,17 @@ struct MDMEnrollmentView: View {
                 toolbar
                 Divider()
                 if profiles.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Enrollment Profiles", systemImage: "lock.shield")
-                    } description: {
-                        Text("Create an enrollment profile linked to an MDM Server.")
-                    } actions: {
+                    EmptyStateView("No Enrollment Profiles", systemImage: "lock.shield",
+                                   description: "Create an enrollment profile linked to an MDM Server.") {
                         Button("New Profile") { isPresentingSheet = true }
                             .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
+                            .keyboardShortcut(.defaultAction)
                         if serverStore.servers.isEmpty {
                             Text("Add an MDM Server first.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(profiles, id: \.id, selection: $selectedProfile) { profile in
                         MDMProfileRow(profile: profile, servers: serverStore.servers).tag(profile)
@@ -68,7 +66,7 @@ struct MDMEnrollmentView: View {
     }
 
     private var toolbar: some View {
-        HStack {
+        HStack(spacing: 8) {
             Spacer()
             Button { isPresentingSheet = true } label: {
                 Label("New Profile", systemImage: "plus")

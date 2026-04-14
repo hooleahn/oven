@@ -15,6 +15,8 @@ struct VarsFileDetailPane: View {
 
     let onSave: () -> Void
     let onRevert: () -> Void
+    let onDuplicate: () -> Void
+    let onDelete: () -> Void
 
     private var isAnyDirty: Bool { isDirty || isMetadataDirty }
 
@@ -68,6 +70,15 @@ struct VarsFileDetailPane: View {
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut("s", modifiers: .command)
                 .disabled(!isAnyDirty)
+            Divider().frame(height: 16)
+            Button(action: onDuplicate) {
+                Image(systemName: "doc.on.doc")
+            }
+            .buttonStyle(.borderless).help("Duplicate")
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless).foregroundStyle(.red).help("Delete")
         }
         .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
     }

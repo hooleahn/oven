@@ -60,12 +60,14 @@ struct MDMServersView: View {
                             .buttonStyle(.borderedProminent)
                             .keyboardShortcut(.defaultAction)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(serverStore.servers, id: \.id, selection: $selectedServer) { server in
                         MDMServerRow(server: server).tag(server)
                     }
                     .listStyle(.inset)
                 }
+                
             }
 
             if let server = selectedServer {
@@ -117,7 +119,7 @@ struct MDMServersView: View {
     }
 
     private var toolbar: some View {
-        HStack {
+        HStack(spacing: 8) {
             Spacer()
             Button { isPresentingSheet = true } label: {
                 Label("Add Server", systemImage: "plus")
@@ -135,8 +137,7 @@ struct MDMServerRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "server.rack")
-                .font(.title3).foregroundStyle(.blue).frame(width: 28)
+            connectionIcon
             VStack(alignment: .leading, spacing: 2) {
                 Text(server.friendlyName).fontWeight(.medium)
                 Text(server.serverURL.host ?? server.serverURL.absoluteString)
@@ -153,6 +154,31 @@ struct MDMServerRow: View {
         }
         .padding(.vertical, 4)
     }
+
+    @ViewBuilder
+    private var connectionIcon: some View {
+        switch server.connectionState {
+        case .connected:
+            Image(systemName: "checkmark.seal.fill")
+                .foregroundStyle(.green)
+                .font(.title3)
+                .frame(width: 28)
+                .help("Connection verified")
+        case .failed:
+            Image(systemName: "xmark.seal.fill")
+                .foregroundStyle(.red)
+                .font(.title3)
+                .frame(width: 28)
+                .help("Connection failed")
+        case .testing:
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 28)
+        case .unknown:
+            Image(systemName: "server.rack")
+                .font(.title3).foregroundStyle(.blue).frame(width: 28)
+        }
+    }
 }
 
 // MARK: - Detail pane
@@ -163,6 +189,7 @@ struct MDMServerDetailPane: View {
     let onDelete: () -> Void
     @State private var testResult: String?
     @State private var isTesting = false
+    @EnvironmentObject var serverStore: MDMServerStore
 
     var body: some View {
         VStack(spacing: 0) {
@@ -225,15 +252,19 @@ struct MDMServerDetailPane: View {
         guard let svc = server.makeJamfService() else {
             testResult = "✗ No password stored in Keychain"
             AppLogger.shared.error("No password stored in Keychain", source:"MDMServersView")
+            serverStore.update(id: server.id) { $0.connectionState = .failed("No password stored in Keychain") }
             return
         }
         isTesting = true
+        serverStore.update(id: server.id) { $0.connectionState = .testing }
         do {
             let version = try await svc.testConnection()
             testResult = "✓ Connected — Jamf Pro \(version)"
             await AppLogger.shared.success("Connected to \(server.friendlyName)", source: "MDM Servers")
+            serverStore.update(id: server.id) { $0.connectionState = .connected }
         } catch {
             testResult = "✗ \(error.localizedDescription)"
+            serverStore.update(id: server.id) { $0.connectionState = .failed(error.localizedDescription) }
         }
         isTesting = false
     }

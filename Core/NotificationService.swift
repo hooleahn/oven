@@ -13,9 +13,10 @@ final class NotificationService {
 
     // MARK: - Keychain keys
 
-    private let pushoverTokenKey = "notification.pushover.appToken"
-    private let pushoverUserKeychainKey  = "notification.pushover.userKey"
-    private let slackWebhookKey  = "notification.slack.webhookURL"
+    private let pushoverTokenKey        = "notification.pushover.appToken"
+    private let pushoverUserKeychainKey = "notification.pushover.userKey"
+    private let slackWebhookKey         = "notification.slack.webhookURL"
+    private let teamsWebhookKey         = "notification.teams.webhookURL"
 
     // MARK: - Credential storage (Keychain)
 
@@ -52,40 +53,67 @@ final class NotificationService {
         }
     }
 
+    var teamsWebhookURL: String? {
+        get { KeychainService.retrieve(key: teamsWebhookKey) }
+        set {
+            if let v = newValue, !v.isEmpty {
+                KeychainService.store(key: teamsWebhookKey, value: v)
+            } else {
+                KeychainService.delete(key: teamsWebhookKey)
+            }
+        }
+    }
+
+    // MARK: - OS authorization state
+
+    /// Returns the current UNAuthorizationStatus without prompting.
+    func currentAuthorizationStatus() async -> UNAuthorizationStatus {
+        await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+    }
+
+    /// Returns all granular UNNotificationSetting values for display in prefs.
+    func currentNotificationSettings() async -> UNNotificationSettings {
+        await UNUserNotificationCenter.current().notificationSettings()
+    }
+
     // MARK: - Send build notification
 
     func notifyBuildComplete(vmName: String, success: Bool, detail: String? = nil) async {
+        let pushEnabled   = UserDefaults.standard.bool(forKey: "pushoverEnabled")
+        let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
+        let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
+        let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
+        guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
 
-        let pushEnabled = UserDefaults.standard.bool(forKey: "pushoverEnabled")
-        let slackEnabled = UserDefaults.standard.bool(forKey: "slackEnabled")
-        let systemNotificationsEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
-        
-        guard pushEnabled || slackEnabled || systemNotificationsEnabled else { return }
-        
         let title   = success ? "✅ Oven: Build Complete" : "❌ Oven: Build Failed"
         let message = success
             ? "Base VM '\(vmName)' was built successfully."
             : "Base VM '\(vmName)' failed to build.\(detail.map { " \($0)" } ?? "")"
-        
+
+        let eventKey = success ? "notif.%@.baseVMBuildSucceeded" : "notif.%@.baseVMBuildFailed"
 
         await withTaskGroup(of: Void.self) { group in
-            if pushEnabled {
+            if pushEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "pushover")) {
                 group.addTask { await self.sendPushover(title: title, message: message) }
             }
-            if slackEnabled {
+            if slackEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "slack")) {
                 group.addTask { await self.sendSlack(title: title, message: message, success: success) }
             }
-            if systemNotificationsEnabled {
+            if teamsEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "teams")) {
+                group.addTask { await self.sendTeams(title: title, message: message, success: success) }
+            }
+            if systemEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "system")) {
                 group.addTask { await self.sendSystemNotification(title: title, message: message, success: success) }
             }
         }
     }
 
     func notifyBuildStarted(vmName: String) async {
-        let pushEnabled  = UserDefaults.standard.bool(forKey: "pushoverEnabled")
-        let slackEnabled = UserDefaults.standard.bool(forKey: "slackEnabled")
-        let systemNotificationsEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
-        guard pushEnabled || slackEnabled || systemNotificationsEnabled else { return }
+        let pushEnabled   = UserDefaults.standard.bool(forKey: "pushoverEnabled")
+        let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
+        let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
+        let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
+        guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
 
         let title   = "🔨 Oven: Build Started"
         let message = "Building base VM '\(vmName)'…"
@@ -93,9 +121,8 @@ final class NotificationService {
         await withTaskGroup(of: Void.self) { group in
             if pushEnabled  { group.addTask { await self.sendPushover(title: title, message: message) } }
             if slackEnabled { group.addTask { await self.sendSlack(title: title, message: message, success: nil) } }
-            if systemNotificationsEnabled {
-                group.addTask { await self.sendSystemNotification(title: title, message: message, success: nil) }
-            }
+            if teamsEnabled { group.addTask { await self.sendTeams(title: title, message: message, success: nil) } }
+            if systemEnabled { group.addTask { await self.sendSystemNotification(title: title, message: message, success: nil) } }
         }
     }
 
@@ -181,7 +208,8 @@ final class NotificationService {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body  = message
-        content.sound = .default
+        let soundEnabled = UserDefaults.standard.bool(forKey: "notif.system.soundEnabled")
+        content.sound = soundEnabled ? .default : nil
         
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
@@ -237,29 +265,20 @@ final class NotificationService {
     
     func checkCurrentAuthorizationSetting() async {
         let notificationCenter = UNUserNotificationCenter.current()
-        // Request the current notification settings
         let currentSettings = await notificationCenter.notificationSettings()
         switch currentSettings.authorizationStatus {
-            case .authorized:
-                AppLogger.shared.success("System notifications are enabled", source:"NotificationService")
-            case .denied:
-                AppLogger.shared.error("System notifications are disabled", source:"NotificationService")
-            async {
-                do {
-                    let _ = try await requestAuthorizationForSystemNotifications()
-                } catch {
-                    print(error.localizedDescription)
-                    return
-                }
-            }
-            case .ephemeral:
-                AppLogger.shared.warning("System notifications are enabled but temporary disabled", source:"NotificationService")
-            case .notDetermined:
-                AppLogger.shared.log("System notifications are not determined", source:"NotificationService")
-            case .provisional:
-                AppLogger.shared.warning("System notifications are enabled but temporary disabled", source:"NotificationService")
-            @unknown default:
-                AppLogger.shared.log("System notifications are not determined", source:"NotificationService")
+        case .authorized:
+            AppLogger.shared.success("System notifications are enabled", source: "NotificationService")
+        case .denied:
+            AppLogger.shared.error("System notifications are disabled", source: "NotificationService")
+        case .ephemeral:
+            AppLogger.shared.warning("System notifications are enabled but temporary", source: "NotificationService")
+        case .notDetermined:
+            AppLogger.shared.log("System notifications are not determined", source: "NotificationService")
+        case .provisional:
+            AppLogger.shared.warning("System notifications are provisional", source: "NotificationService")
+        @unknown default:
+            AppLogger.shared.log("System notifications are not determined", source: "NotificationService")
         }
     }
 
@@ -345,6 +364,107 @@ final class NotificationService {
             let (_, resp) = try await URLSession.shared.data(for: req)
             let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
             return status == 200 ? .success(()) : .failure(.httpError(status))
+        } catch { return .failure(.network(error.localizedDescription)) }
+    }
+
+    // MARK: - Teams
+
+    private func sendTeams(title: String, message: String, success: Bool?) async {
+        guard let webhookURLString = teamsWebhookURL, !webhookURLString.isEmpty,
+              let webhookURL = URL(string: webhookURLString) else {
+            AppLogger.shared.warning("Teams enabled but webhook URL not configured", source: "NotificationService")
+            return
+        }
+
+        let themeColor: String
+        switch success {
+        case true:  themeColor = "36a64f"
+        case false: themeColor = "d32f2f"
+        case nil:   themeColor = "f0a500"
+        }
+
+        // Adaptive Card (Teams Incoming Webhook format)
+        let payload: [String: Any] = [
+            "type": "message",
+            "attachments": [[
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "contentUrl": NSNull(),
+                "content": [
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.2",
+                    "msteams": ["width": "Full"],
+                    "body": [
+                        [
+                            "type": "TextBlock",
+                            "text": title,
+                            "weight": "Bolder",
+                            "size": "Medium",
+                            "color": success == false ? "Attention" : (success == true ? "Good" : "Warning")
+                        ],
+                        [
+                            "type": "TextBlock",
+                            "text": message,
+                            "wrap": true
+                        ],
+                        [
+                            "type": "TextBlock",
+                            "text": "Oven · macOS VM Manager",
+                            "isSubtle": true,
+                            "size": "Small"
+                        ]
+                    ]
+                ]
+            ]]
+        ]
+
+        do {
+            var request = URLRequest(url: webhookURL)
+            request.httpMethod = "POST"
+            request.httpBody   = try JSONSerialization.data(withJSONObject: payload)
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let (_, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 200 || status == 202 {
+                AppLogger.shared.success("Teams notification sent", source: "NotificationService")
+            } else {
+                AppLogger.shared.warning("Teams returned HTTP \(status)", source: "NotificationService")
+            }
+        } catch {
+            AppLogger.shared.error("Teams failed: \(error.localizedDescription)", source: "NotificationService")
+        }
+    }
+
+    func testTeams() async -> Result<Void, NotificationError> {
+        guard let urlStr = teamsWebhookURL, !urlStr.isEmpty,
+              let url = URL(string: urlStr)
+        else { return .failure(.notConfigured("Webhook URL is required")) }
+
+        let payload: [String: Any] = [
+            "type": "message",
+            "attachments": [[
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "contentUrl": NSNull(),
+                "content": [
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.2",
+                    "body": [[
+                        "type": "TextBlock",
+                        "text": "Oven: Test notification — Teams is configured correctly 🎉",
+                        "wrap": true
+                    ]]
+                ]
+            ]]
+        ]
+        do {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.httpBody   = try JSONSerialization.data(withJSONObject: payload)
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let (_, resp) = try await URLSession.shared.data(for: req)
+            let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            return (status == 200 || status == 202) ? .success(()) : .failure(.httpError(status))
         } catch { return .failure(.network(error.localizedDescription)) }
     }
 }

@@ -10,7 +10,10 @@ struct RecipesView: View {
     @EnvironmentObject var blockStore: BuildingBlockStore
     @EnvironmentObject var baseVMStore: BaseVMStore
 
-    @State private var model = RecipesViewModel()
+    @Environment(RecipesViewModel.self) private var model
+
+    // Bindable wrapper so computed sub-view properties can produce bindings.
+    private var bindableModel: Bindable<RecipesViewModel> { Bindable(model) }
 
     // PackerService for validation — resolved from shared deps
     private var packerService: PackerService? {
@@ -23,11 +26,19 @@ struct RecipesView: View {
             detail
         }
         .navigationTitle(theme.recipes)
-        .searchable(text: $model.searchText, prompt: "Search…")
+        .searchable(text: bindableModel.searchText, prompt: "Search…")
+        .onChange(of: model.selectedTab) { _, _ in
+            // Persist any unsaved edits to the draft cache before clearing selection,
+            // so they can be restored if the user returns to the same item.
+            if let id = model.selectedTemplateID { model.saveDraft(for: id) }
+            model.selectedTemplateID = nil
+            model.selectedBlockID = nil
+            model.editedContent = ""
+        }
         // Fork base confirmation
         .confirmationDialog(
             "Create a Custom Copy?",
-            isPresented: $model.showForkConfirmation,
+            isPresented: bindableModel.showForkConfirmation,
             titleVisibility: .visible
         ) {
             Button("Create Custom Copy") {
@@ -83,7 +94,7 @@ struct RecipesView: View {
             get: { model.renamingTemplateID != nil },
             set: { if !$0 { model.renamingTemplateID = nil } }
         )) {
-            TextField("Filename", text: $model.renameText)
+            TextField("Filename", text: bindableModel.renameText)
             Button("Rename") {
                 if let id = model.renamingTemplateID {
                     let newID = templateStore.rename(id: id, to: model.renameText)
@@ -97,7 +108,7 @@ struct RecipesView: View {
             Button("Cancel", role: .cancel) { model.renamingTemplateID = nil }
         }
         // New object sheet
-        .sheet(isPresented: $model.isPresentingNewSheet) {
+        .sheet(isPresented: bindableModel.isPresentingNewSheet) {
             NewPackerObjectSheet(
                 onCreatedTemplate: { id in
                     model.selectedTemplateID = id
@@ -122,17 +133,7 @@ struct RecipesView: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
-            // Tab picker
-            Picker("", selection: $model.selectedTab) {
-                ForEach(RecipesTab.allCases, id: \.self) { tab in
-                    Image(systemName: tab.systemImage).tag(tab)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(.bar)
-
-            sidebarToolbar
+            toolbar
             Divider()
 
             switch model.selectedTab {
@@ -146,24 +147,15 @@ struct RecipesView: View {
 
     // MARK: - Sidebar toolbar
 
-    private var sidebarToolbar: some View {
-        HStack(spacing: 4) {
-            // Count badge
-            Group {
-                switch model.selectedTab {
-                case .templates:
-                    let c = templateStore.customFullTemplates.count
-                    let b = templateStore.baseFullTemplates.count
-                    Text("\(c) custom · \(b) base")
-                case .varsFiles:
-                    Text("\(templateStore.varsFiles.count) files")
-                case .blocks:
-                    let c = blockStore.customBlocks.count
-                    let b = blockStore.baseBlocks.count
-                    Text("\(c) custom · \(b) base")
+    private var toolbar: some View {
+        HStack(spacing: 8) {
+            Picker("", selection: bindableModel.selectedTab) {
+                ForEach(RecipesTab.allCases, id: \.self) { tab in
+                    Image(systemName: tab.systemImage).tag(tab)
                 }
             }
-            .font(.caption).foregroundStyle(.secondary)
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 120)
 
             Spacer()
 
@@ -172,39 +164,15 @@ struct RecipesView: View {
             }
             .buttonStyle(.borderless).help("Refresh")
 
-            // Context-sensitive actions for selected item
-            if model.selectedTab != .blocks, let id = model.selectedTemplateID,
-               let tmpl = templateStore.template(id: id), !tmpl.isBase {
-                Button { model.renamingTemplateID = id; model.renameText = tmpl.url.deletingPathExtension().lastPathComponent } label: {
-                    Image(systemName: "pencil")
-                }
-                .buttonStyle(.borderless).help("Rename")
-
-                Button { _ = templateStore.duplicate(id: id) } label: {
-                    Image(systemName: "doc.on.doc")
-                }
-                .buttonStyle(.borderless).help("Duplicate")
-
-                Button { model.confirmDeleteTemplateID = id } label: {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.borderless).foregroundStyle(.red).help("Delete")
-            }
-
-            if model.selectedTab == .blocks, let id = model.selectedBlockID,
-               let block = blockStore.blocks.first(where: { $0.id == id }), !block.isBase {
-                Button { model.confirmDeleteBlockID = id } label: {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.borderless).foregroundStyle(.red).help("Delete block")
-            }
-
             Button { model.isPresentingNewSheet = true } label: {
                 Image(systemName: "plus")
+//                Label("", systemImage: "plus")
             }
-            .buttonStyle(.borderless).help("New…")
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .help("New…")
         }
-        .padding(.horizontal, 10).padding(.vertical, 6).background(.bar)
+        .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
     }
 
     // MARK: - Templates list (computed property on RecipesView so templateStore is read
@@ -227,7 +195,7 @@ struct RecipesView: View {
             } else if customs.isEmpty && bases.isEmpty {
                 ContentUnavailableView.search
             } else {
-                List(selection: $model.selectedTemplateID) {
+                List(selection: bindableModel.selectedTemplateID) {
                     if !customs.isEmpty {
                         Section("Custom") {
                             ForEach(customs) { tmpl in
@@ -257,7 +225,7 @@ struct RecipesView: View {
                         }
                     }
                 }
-                .listStyle(.sidebar)
+                .listStyle(.inset)
                 .onChange(of: model.selectedTemplateID) { _, id in
                     if let id { model.loadTemplateContent(id, from: templateStore) }
                 }
@@ -280,7 +248,7 @@ struct RecipesView: View {
             } else if filtered.isEmpty {
                 ContentUnavailableView.search
             } else {
-                List(selection: $model.selectedTemplateID) {
+                List(selection: bindableModel.selectedTemplateID) {
                     Section("Variables Files") {
                         ForEach(filtered) { tmpl in
                             PackerTemplateRow(template: tmpl)
@@ -297,7 +265,7 @@ struct RecipesView: View {
                         }
                     }
                 }
-                .listStyle(.sidebar)
+                .listStyle(.inset)
                 .onChange(of: model.selectedTemplateID) { _, id in
                     if let id { model.loadTemplateContent(id, from: templateStore) }
                 }
@@ -317,7 +285,7 @@ struct RecipesView: View {
             } else if filtered.isEmpty {
                 ContentUnavailableView.search
             } else {
-                List(selection: $model.selectedBlockID) {
+                List(selection: bindableModel.selectedBlockID) {
                     if !customs.isEmpty {
                         Section("Custom") {
                             ForEach(customs) { block in
@@ -333,7 +301,7 @@ struct RecipesView: View {
                         }
                     }
                 }
-                .listStyle(.sidebar)
+                .listStyle(.inset)
             }
         }
     }
@@ -363,17 +331,17 @@ struct RecipesView: View {
             if tmpl.kind == .fullTemplate {
                 TemplateDetailPane(
                     template: tmpl,
-                    editedContent: $model.editedContent,
-                    editedDisplayName: $model.editedDisplayName,
-                    editedDescription: $model.editedDescription,
-                    editedOSName: $model.editedOSName,
-                    editedOSVersion: $model.editedOSVersion,
-                    isDirty: $model.isDirty,
-                    isMetadataDirty: $model.isMetadataDirty,
-                    isSaving: $model.isSaving,
-                    saveError: $model.saveError,
-                    isValidating: $model.isValidating,
-                    validationResult: $model.validationResult,
+                    editedContent: bindableModel.editedContent,
+                    editedDisplayName: bindableModel.editedDisplayName,
+                    editedDescription: bindableModel.editedDescription,
+                    editedOSName: bindableModel.editedOSName,
+                    editedOSVersion: bindableModel.editedOSVersion,
+                    isDirty: bindableModel.isDirty,
+                    isMetadataDirty: bindableModel.isMetadataDirty,
+                    isSaving: bindableModel.isSaving,
+                    saveError: bindableModel.saveError,
+                    isValidating: bindableModel.isValidating,
+                    validationResult: bindableModel.validationResult,
                     onSave: { model.save(in: templateStore) },
                     onRevert: { model.revert(from: templateStore) },
                     onValidate: {
@@ -381,7 +349,9 @@ struct RecipesView: View {
                             model.validate(template: tmpl, packerService: svc, store: templateStore)
                         }
                     },
-                    onFork: { model.requestFork(id: id) }
+                    onFork: { model.requestFork(id: id) },
+                    onDuplicate: { _ = templateStore.duplicate(id: id) },
+                    onDelete: { model.confirmDeleteTemplateID = id }
                 )
                 .environmentObject(theme)
                 .onChange(of: model.isDirty) { _, dirty in
@@ -393,15 +363,17 @@ struct RecipesView: View {
             } else {
                 VarsFileDetailPane(
                     template: tmpl,
-                    editedContent: $model.editedContent,
-                    editedDisplayName: $model.editedDisplayName,
-                    editedDescription: $model.editedDescription,
-                    isDirty: $model.isDirty,
-                    isMetadataDirty: $model.isMetadataDirty,
-                    isSaving: $model.isSaving,
-                    saveError: $model.saveError,
+                    editedContent: bindableModel.editedContent,
+                    editedDisplayName: bindableModel.editedDisplayName,
+                    editedDescription: bindableModel.editedDescription,
+                    isDirty: bindableModel.isDirty,
+                    isMetadataDirty: bindableModel.isMetadataDirty,
+                    isSaving: bindableModel.isSaving,
+                    saveError: bindableModel.saveError,
                     onSave: { model.save(in: templateStore) },
-                    onRevert: { model.revert(from: templateStore) }
+                    onRevert: { model.revert(from: templateStore) },
+                    onDuplicate: { _ = templateStore.duplicate(id: id) },
+                    onDelete: { model.confirmDeleteTemplateID = id }
                 )
             }
         } else {

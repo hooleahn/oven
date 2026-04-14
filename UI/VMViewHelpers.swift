@@ -118,8 +118,8 @@ struct StatusDot: View {
     var body: some View {
         Circle()
             .fill(color)
-            .frame(width: 9, height: 9)
-            .overlay(Circle().stroke(.white.opacity(0.6), lineWidth: 1.5))
+            .frame(width: 12, height: 12)
+            .overlay(Circle().stroke(.white.opacity(1), lineWidth: 1))
             .accessibilityLabel(status.label)
             .accessibilityHidden(false)
     }

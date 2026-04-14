@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct IntegrationsPrefsTab: View {
+    @EnvironmentObject var theme: AppTheme
     @State private var credentials: [RegistryCredential] = []
     @State private var isPresentingCredentialSheet = false
     @State private var editingCredential: RegistryCredential?
@@ -10,6 +11,13 @@ struct IntegrationsPrefsTab: View {
 
     var body: some View {
         Form {
+            Section {
+                Toggle(isOn: $theme.mdmEnabled) {
+                    Label("MDM features", systemImage: "lock.shield")
+                }
+            } header: { Text("MDM") }
+              footer: { Text("When disabled, MDM Servers, MDM Enrollment, and MDM enrollment options are hidden throughout the app.") }
+
             Section {
                 if credentials.isEmpty {
                     Text("No registry credentials configured.").foregroundStyle(.secondary)

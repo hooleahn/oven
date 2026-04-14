@@ -10,6 +10,7 @@ struct NewVMSheet: View {
     @EnvironmentObject var vmStore: VMStore
     @EnvironmentObject var baseVMStore: BaseVMStore
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var theme: AppTheme
     @Environment(\.dismiss) var dismiss
 
     // Loaded from disk
@@ -181,16 +182,18 @@ struct NewVMSheet: View {
                     }
 
                     // MDM
-                    Section("MDM enrollment") {
-                        Picker("Profile", selection: $selectedMDMProfileID) {
-                            Text("None").tag(Optional<UUID>.none)
-                            ForEach(mdmProfiles) { p in
-                                Text(p.name).tag(Optional(p.id))
+                    if theme.mdmEnabled {
+                        Section("MDM enrollment") {
+                            Picker("Profile", selection: $selectedMDMProfileID) {
+                                Text("None").tag(Optional<UUID>.none)
+                                ForEach(mdmProfiles) { p in
+                                    Text(p.name).tag(Optional(p.id))
+                                }
                             }
-                        }
-                        if let server = selectedMDMServer {
-                            LabeledContent("Server") {
-                                Text(server.friendlyName).foregroundStyle(.secondary)
+                            if let server = selectedMDMServer {
+                                LabeledContent("Server") {
+                                    Text(server.friendlyName).foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }

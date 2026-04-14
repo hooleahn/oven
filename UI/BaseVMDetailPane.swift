@@ -91,7 +91,7 @@ struct BaseVMDetailPane: View {
                         DetailRow("Passwordless sudo",baseVM.enablePasswordlessSudo ? "Yes" : "No")
                         if let xcode = baseVM.xcodeVersion { DetailRow("Xcode", xcode) }
                     }
-                    if baseVM.mdmProfileID != nil {
+                    if theme.mdmEnabled && baseVM.mdmProfileID != nil {
                         DetailSection("MDM") {
                             DetailRow("Enrollment", "Configured")
                         }

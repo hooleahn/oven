@@ -140,6 +140,13 @@ struct HCLEditor: NSViewRepresentable {
             tv.selectedRanges = sel
             HCLEditor.applyHighlighting(to: tv)
         }
+        // Force a layout and redraw pass on every update. This is necessary because
+        // NSTextView with a custom gutter inset defers layout until geometry is known;
+        // without this the editor appears blank until the user scrolls.
+        if let container = tv.textContainer {
+            tv.layoutManager?.ensureLayout(for: container)
+        }
+        tv.needsDisplay = true
     }
 
     // MARK: - Token colouring
