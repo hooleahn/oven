@@ -73,7 +73,7 @@ struct MDMServersView: View {
             if let server = selectedServer {
                 Divider()
                 MDMServerDetailPane(
-                    server: server,
+                    serverID: server.id,
                     onEdit: { editingServer = server },
                     onDelete: { confirmDeleteServer = server }
                 )
@@ -107,10 +107,13 @@ struct MDMServersView: View {
             if let toEdit = editingServer {
                 MDMServerSheet(server: toEdit) { updated in
                     serverStore.update(id: toEdit.id) { existing in
-                        existing.friendlyName = updated.friendlyName
-                        existing.serverURL    = updated.serverURL
+                        existing.friendlyName   = updated.friendlyName
+                        existing.serverURL      = updated.serverURL
                         existing.serverAuthType = updated.serverAuthType
-                        existing.serverUsername  = updated.serverUsername
+                        existing.serverUsername = updated.serverUsername
+                        existing.featureCheckEnrollment       = updated.featureCheckEnrollment
+                        existing.featureDeleteFromJamf        = updated.featureDeleteFromJamf
+                        existing.featureCheckInvitationStatus = updated.featureCheckInvitationStatus
                     }
                     editingServer = nil
                 }
@@ -159,11 +162,13 @@ struct MDMServerRow: View {
     private var connectionIcon: some View {
         switch server.connectionState {
         case .connected:
+            let hasMissingPrivileges = !server.storedPrivileges.isEmpty &&
+                MDMServerDetailPane.activeRequiredPrivileges(for: server).contains { !server.storedPrivileges.contains($0.name) }
             Image(systemName: "checkmark.seal.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(hasMissingPrivileges ? .yellow : .green)
                 .font(.title3)
                 .frame(width: 28)
-                .help("Connection verified")
+                .help(hasMissingPrivileges ? "Connected — missing required privileges" : "Connection verified")
         case .failed:
             Image(systemName: "xmark.seal.fill")
                 .foregroundStyle(.red)
@@ -184,14 +189,52 @@ struct MDMServerRow: View {
 // MARK: - Detail pane
 
 struct MDMServerDetailPane: View {
-    let server: MDMServer
+    let serverID: UUID
     let onEdit: () -> Void
     let onDelete: () -> Void
-    @State private var testResult: String?
     @State private var isTesting = false
     @EnvironmentObject var serverStore: MDMServerStore
 
+    struct RequiredPrivilege {
+        let name: String
+        let reason: String
+        /// Returns true when the feature that needs this privilege is enabled on the given server.
+        let isActive: (MDMServer) -> Bool
+    }
+
+    static let requiredPrivileges: [RequiredPrivilege] = [
+        RequiredPrivilege(name: "Read Computers",
+                          reason: "Required to check if a VM is enrolled in Jamf Pro.",
+                          isActive: { $0.featureCheckEnrollment }),
+        RequiredPrivilege(name: "Delete Computers",
+                          reason: "Required to remove a VM from Jamf Pro when deleted from Oven.",
+                          isActive: { $0.featureDeleteFromJamf }),
+        RequiredPrivilege(name: "Read Computer Enrollment Invitations",
+                          reason: "Required to fetch the expiration date of enrollment invitations.",
+                          isActive: { $0.featureCheckInvitationStatus }),
+    ]
+
+    /// Privileges whose associated feature is currently enabled for the given server.
+    static func activeRequiredPrivileges(for server: MDMServer) -> [RequiredPrivilege] {
+        requiredPrivileges.filter { $0.isActive(server) }
+    }
+
+    /// Always reads the current value from the store so updates are instant.
+    private var server: MDMServer? {
+        serverStore.servers.first { $0.id == serverID }
+    }
+
     var body: some View {
+        Group {
+            if let server {
+                content(for: server)
+            }
+        }
+        .background(.windowBackground)
+    }
+
+    @ViewBuilder
+    private func content(for server: MDMServer) -> some View {
         VStack(spacing: 0) {
             VStack(spacing: 6) {
                 Image(systemName: "server.rack")
@@ -206,15 +249,54 @@ struct MDMServerDetailPane: View {
                     DetailSection("Connection") {
                         DetailRow("URL", server.serverURL.absoluteString)
                         DetailRow("Authentication Type", server.serverAuthType)
-                        DetailRow("API Client ID/Username", server.serverUsername)
-                        DetailRow("API Client Secret/Password", server.serverPassword != nil ? "Stored in Keychain" : "Not set")
+                        DetailRow(server.serverAuthType == "API Client" ? "Client ID" : "Username", server.serverUsername)
+                        DetailRow(server.serverAuthType == "API Client" ? "API Client Secret" : "Password", server.serverPassword != nil ? "Stored in Keychain" : "Not set")
+                        DetailRow("Features", featuresLabel(for: server))
                     }
-                    if let result = testResult {
-                        DetailSection("Test result") {
-                            Text(result)
-                                .font(.callout)
-                                .foregroundStyle(result.hasPrefix("✓") ? .green : .red)
+                    if let result = server.lastTestResult {
+                        DetailSection("Last Test") {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(result)
+                                    .font(.callout)
+                                    .foregroundStyle(result.hasPrefix("✓") ? .green : .red)
+                                if let date = server.lastTestedAt {
+                                    Text("Tested \(date.formatted(.relative(presentation: .named)))")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                        }
+                    }
+                    if !server.storedPrivileges.isEmpty {
+                        let missingPrivileges = MDMServerDetailPane.activeRequiredPrivileges(for: server).filter {
+                            !server.storedPrivileges.contains($0.name)
+                        }
+                        if !missingPrivileges.isEmpty {
+                            DetailSection("Missing Privileges") {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    ForEach(missingPrivileges, id: \.name) { priv in
+                                        HStack(alignment: .top, spacing: 8) {
+                                            Image(systemName: "exclamationmark.triangle.fill")
+                                                .font(.caption)
+                                                .foregroundStyle(.orange)
+                                                .padding(.top, 1)
+                                            VStack(alignment: .leading, spacing: 1) {
+                                                Text(priv.name)
+                                                    .font(.caption)
+                                                    .fontWeight(.medium)
+                                                Text(priv.reason)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
+                                    }
+                                }
                                 .padding(.horizontal, 14).padding(.vertical, 8)
+                            }
+                        }
+                        DetailSection("Privileges") {
+                            PrivilegesListView(privileges: server.storedPrivileges)
                         }
                     }
                 }
@@ -222,7 +304,7 @@ struct MDMServerDetailPane: View {
             Divider()
             VStack(spacing: 6) {
                 Button {
-                    Task { await testConnection() }
+                    Task { await testConnection(server: server) }
                 } label: {
                     if isTesting {
                         HStack { ProgressView().controlSize(.small); Text("Testing…") }
@@ -245,28 +327,90 @@ struct MDMServerDetailPane: View {
             }
             .padding(12)
         }
-        .background(.windowBackground)
     }
 
-    private func testConnection() async {
+    private func featuresLabel(for server: MDMServer) -> String {
+        let labels: [(Bool, String)] = [
+            (server.featureCheckEnrollment,       "Enrollment Check"),
+            (server.featureDeleteFromJamf,        "Delete from Jamf"),
+            (server.featureCheckInvitationStatus, "Invitation Status"),
+        ]
+        let enabled = labels.filter(\.0).map(\.1)
+        return enabled.isEmpty ? "None enabled" : enabled.joined(separator: ", ")
+    }
+
+    private func testConnection(server: MDMServer) async {
         guard let svc = server.makeJamfService() else {
-            testResult = "✗ No password stored in Keychain"
-            AppLogger.shared.error("No password stored in Keychain", source:"MDMServersView")
-            serverStore.update(id: server.id) { $0.connectionState = .failed("No password stored in Keychain") }
+            let msg = "✗ No password stored in Keychain"
+            AppLogger.shared.error("No password stored in Keychain", source: "MDMServersView")
+            serverStore.update(id: serverID) {
+                $0.connectionState = .failed("No password stored in Keychain")
+                $0.lastTestResult = msg
+                $0.lastTestedAt = Date()
+            }
             return
         }
         isTesting = true
-        serverStore.update(id: server.id) { $0.connectionState = .testing }
+        serverStore.update(id: serverID) { $0.connectionState = .testing }
         do {
             let version = try await svc.testConnection()
-            testResult = "✓ Connected — Jamf Pro \(version)"
+            let privileges = (try? await svc.fetchPrivileges()) ?? []
+            let privSummary = privileges.isEmpty ? "no privileges returned" : "\(privileges.count) privilege\(privileges.count == 1 ? "" : "s")"
+            let result = "✓ Connected — Jamf Pro \(version) · \(privSummary)"
             await AppLogger.shared.success("Connected to \(server.friendlyName)", source: "MDM Servers")
-            serverStore.update(id: server.id) { $0.connectionState = .connected }
+            serverStore.update(id: serverID) {
+                $0.connectionState = .connected
+                $0.storedPrivileges = privileges.sorted()
+                $0.lastTestResult = result
+                $0.lastTestedAt = Date()
+            }
         } catch {
-            testResult = "✗ \(error.localizedDescription)"
-            serverStore.update(id: server.id) { $0.connectionState = .failed(error.localizedDescription) }
+            let msg = "✗ \(error.localizedDescription)"
+            serverStore.update(id: serverID) {
+                $0.connectionState = .failed(error.localizedDescription)
+                $0.lastTestResult = msg
+                $0.lastTestedAt = Date()
+            }
         }
         isTesting = false
+    }
+}
+
+// MARK: - Privileges list
+
+private struct PrivilegesListView: View {
+    let privileges: [String]
+    @State private var isExpanded = false
+
+    private let previewCount = 5
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            let shown = isExpanded ? privileges : Array(privileges.prefix(previewCount))
+            ForEach(shown, id: \.self) { priv in
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                    Text(priv)
+                        .font(.caption)
+                        .foregroundStyle(.primary)
+                }
+            }
+            if privileges.count > previewCount {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+                } label: {
+                    Text(isExpanded ? "Show less" : "Show \(privileges.count - previewCount) more…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
     }
 }
 
@@ -282,6 +426,9 @@ struct MDMServerSheet: View {
     @State private var serverAuthType = ""
     @State private var serverUsername = ""
     @State private var serverPassword = ""
+    @State private var featureCheckEnrollment = true
+    @State private var featureDeleteFromJamf = true
+    @State private var featureCheckInvitationStatus = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -312,11 +459,16 @@ struct MDMServerSheet: View {
                         Text("API Client/Secret").tag("API Client")
                     }.pickerStyle(.inline)
                     LabeledContent("API Client ID or Username") {
-                        TextField("", text: $serverUsername, prompt: Text(" Username").foregroundColor(.secondary))
+                        TextField("", text: $serverUsername, prompt: Text(" Client ID/Username").foregroundColor(.secondary))
                     }
                     LabeledContent("API Client Secret or Password") {
                         SecureField("", text: $serverPassword, prompt: Text("Stored in Keychain").foregroundColor(.secondary))
                     }
+                }
+                Section("Features") {
+                    Toggle("Check Computer Enrollment", isOn: $featureCheckEnrollment)
+                    Toggle("Delete Computer from Jamf", isOn: $featureDeleteFromJamf)
+                    Toggle("Check Enrollment Invitation Status", isOn: $featureCheckInvitationStatus)
                 }
             }
             .formStyle(.grouped)
@@ -329,19 +481,25 @@ struct MDMServerSheet: View {
             serverAuthType = s.serverAuthType
             serverUsername = s.serverUsername
             serverPassword = s.serverPassword ?? ""
+            featureCheckEnrollment      = s.featureCheckEnrollment
+            featureDeleteFromJamf       = s.featureDeleteFromJamf
+            featureCheckInvitationStatus = s.featureCheckInvitationStatus
         }
     }
 
     private func save() {
         let urlString = serverURL.hasPrefix("https") ? serverURL : "https://\(serverURL)"
         guard let url = URL(string: urlString) else { return }
-        let s = MDMServer(
+        var s = MDMServer(
             id: server?.id ?? UUID(),
             friendlyName: friendlyName,
             serverURL: url,
             serverAuthType: serverAuthType,
             serverUsername: serverUsername
         )
+        s.featureCheckEnrollment      = featureCheckEnrollment
+        s.featureDeleteFromJamf       = featureDeleteFromJamf
+        s.featureCheckInvitationStatus = featureCheckInvitationStatus
         if !serverPassword.isEmpty { s.serverPassword = serverPassword }
         onSave(s)
         dismiss()

@@ -90,7 +90,7 @@ struct BuildingBlockDetailPane: View {
                     }
                 }
                 if !block.isBase {
-                    Text("Created " + block.createdAt.formatted(date: .abbreviated, time: .omitted))
+                    Text("Created " + block.createdAt.formatted(date: .numeric, time: .omitted))
                         .font(.caption).foregroundStyle(.tertiary)
                 }
             }

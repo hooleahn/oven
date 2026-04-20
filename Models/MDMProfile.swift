@@ -1,55 +1,37 @@
 import Foundation
 
-struct MDMProfile: Identifiable, Codable, Hashable , Sendable {
+struct MDMProfile: Identifiable, Codable, Hashable, Sendable {
     let id: UUID
-    var name: String
-    var serverID: UUID              // references MDMServer.id
-    var invitationID: String        // Jamf Pro Enrollment Invitation ID
-    var enrollmentType: EnrollmentType
-    var site: String?
-    var department: String?
-    var smartGroup: String?
-    var tokenLifetimeDays: Int
-    var autoRenewToken: Bool
-    var runPolicyOnEnroll: Bool
-    var enrollmentPolicyName: String?
-    var isActive: Bool
-    var tokenExpiresAt: Date?
-
-    enum EnrollmentType: String, Codable, CaseIterable, Hashable {
-        case profile = "Profile (desktop)"
-        case link    = "Link (URL)"
-    }
+    var displayName: String
+    var profileDescription: String
+    /// nil means "Custom" (no linked server)
+    var serverID: UUID?
+    /// For custom mode, the user provides the full MDM server URL
+    var customServerURL: String
+    var invitationID: String
+    var expirationDate: Date?
 
     init(
         id: UUID = UUID(),
-        name: String,
-        serverID: UUID,
+        displayName: String,
+        profileDescription: String = "",
+        serverID: UUID? = nil,
+        customServerURL: String = "",
         invitationID: String = "",
-        enrollmentType: EnrollmentType = .profile,
-        site: String? = nil,
-        department: String? = nil,
-        smartGroup: String? = nil,
-        tokenLifetimeDays: Int = 30,
-        autoRenewToken: Bool = true,
-        runPolicyOnEnroll: Bool = false,
-        enrollmentPolicyName: String? = nil,
-        isActive: Bool = true,
-        tokenExpiresAt: Date? = nil
+        expirationDate: Date? = nil
     ) {
         self.id = id
-        self.name = name
+        self.displayName = displayName
+        self.profileDescription = profileDescription
         self.serverID = serverID
+        self.customServerURL = customServerURL
         self.invitationID = invitationID
-        self.enrollmentType = enrollmentType
-        self.site = site
-        self.department = department
-        self.smartGroup = smartGroup
-        self.tokenLifetimeDays = tokenLifetimeDays
-        self.autoRenewToken = autoRenewToken
-        self.runPolicyOnEnroll = runPolicyOnEnroll
-        self.enrollmentPolicyName = enrollmentPolicyName
-        self.isActive = isActive
-        self.tokenExpiresAt = tokenExpiresAt
+        self.expirationDate = expirationDate
+    }
+
+    /// Returns true when the invitation is not yet expired (or has no expiration date set).
+    var isValid: Bool {
+        guard let exp = expirationDate else { return true }
+        return exp > Date()
     }
 }

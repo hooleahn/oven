@@ -15,6 +15,16 @@ struct MDMServer: Identifiable, Codable, Hashable , Sendable {
     // Connection test state (transient — not persisted)
     var connectionState: ConnectionState = .unknown
 
+    // Persisted test result fields
+    var storedPrivileges: [String] = []
+    var lastTestResult: String? = nil
+    var lastTestedAt: Date? = nil
+
+    // Per-server feature toggles (all enabled by default)
+    var featureCheckEnrollment: Bool = true
+    var featureDeleteFromJamf: Bool = true
+    var featureCheckInvitationStatus: Bool = true
+
     enum ConnectionState: Equatable, Hashable {
         case unknown
         case testing
@@ -22,9 +32,11 @@ struct MDMServer: Identifiable, Codable, Hashable , Sendable {
         case failed(String)
     }
 
-    // Exclude connectionState from Codable so it is never persisted.
+    // connectionState is transient; all other fields are persisted.
     enum CodingKeys: String, CodingKey {
         case id, friendlyName, serverURL, serverAuthType, serverUsername
+        case storedPrivileges, lastTestResult, lastTestedAt
+        case featureCheckEnrollment, featureDeleteFromJamf, featureCheckInvitationStatus
     }
 
     init(
@@ -39,6 +51,27 @@ struct MDMServer: Identifiable, Codable, Hashable , Sendable {
         self.serverURL = serverURL
         self.serverAuthType = serverAuthType
         self.serverUsername = serverUsername
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        friendlyName = try c.decode(String.self, forKey: .friendlyName)
+        serverURL = try c.decode(URL.self, forKey: .serverURL)
+        serverAuthType = try c.decode(String.self, forKey: .serverAuthType)
+        serverUsername = try c.decode(String.self, forKey: .serverUsername)
+        storedPrivileges = (try? c.decode([String].self, forKey: .storedPrivileges)) ?? []
+        lastTestResult   = try? c.decode(String.self, forKey: .lastTestResult)
+        lastTestedAt     = try? c.decode(Date.self,   forKey: .lastTestedAt)
+        featureCheckEnrollment      = (try? c.decode(Bool.self, forKey: .featureCheckEnrollment))      ?? true
+        featureDeleteFromJamf       = (try? c.decode(Bool.self, forKey: .featureDeleteFromJamf))       ?? true
+        featureCheckInvitationStatus = (try? c.decode(Bool.self, forKey: .featureCheckInvitationStatus)) ?? true
+
+        // Restore connection state from the last persisted test result so the
+        // row icon is correct immediately after an app restart.
+        if let result = lastTestResult {
+            connectionState = result.hasPrefix("✓") ? .connected : .failed(result)
+        }
     }
 
     // MARK: - Keychain helpers

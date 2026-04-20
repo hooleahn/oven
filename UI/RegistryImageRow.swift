@@ -27,7 +27,7 @@ struct RegistryImageRow: View {
                             .font(.caption).foregroundStyle(.green)
                         if let date = image.pulledAt {
                             Text("·").foregroundStyle(.secondary)
-                            Text("on " + date.formatted(date: .abbreviated, time: .omitted))
+                            Text("on " + date.formatted(date: .numeric, time: .omitted))
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     } else {

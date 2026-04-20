@@ -1,12 +1,13 @@
 import SwiftUI
 
+// MARK: - Enrollment view
+
 struct MDMEnrollmentView: View {
     @EnvironmentObject var serverStore: MDMServerStore
     @State private var profiles: [MDMProfile] = []
     @State private var selectedProfile: MDMProfile?
     @State private var isPresentingSheet = false
-    @State private var testResult: String?
-    @State private var isTesting = false
+    @State private var editingProfile: MDMProfile? = nil
     @State private var confirmDeleteProfile: MDMProfile? = nil
 
     var body: some View {
@@ -16,14 +17,10 @@ struct MDMEnrollmentView: View {
                 Divider()
                 if profiles.isEmpty {
                     EmptyStateView("No Enrollment Profiles", systemImage: "lock.shield",
-                                   description: "Create an enrollment profile linked to an MDM Server.") {
+                                   description: "Create an enrollment profile to use for MDM enrollment.") {
                         Button("New Profile") { isPresentingSheet = true }
                             .buttonStyle(.borderedProminent)
                             .keyboardShortcut(.defaultAction)
-                        if serverStore.servers.isEmpty {
-                            Text("Add an MDM Server first.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -36,19 +33,19 @@ struct MDMEnrollmentView: View {
             if let profile = selectedProfile {
                 Divider()
                 MDMProfileDetailPane(
-                    profile: profile,
+                    profile: profileBinding(for: profile.id),
                     server: serverStore.servers.first(where: { $0.id == profile.serverID }),
-                    isTesting: isTesting,
-                    testResult: testResult,
-                    onTest: { Task { await testConnection(profile) } },
+                    servers: serverStore.servers,
+                    onEdit: { editingProfile = profile },
                     onDelete: { confirmDeleteProfile = profile }
                 )
                 .frame(width: 280)
+                .id(profile.id)
             }
         }
         .navigationTitle("MDM Enrollment")
         .confirmationDialog(
-            confirmDeleteProfile.map { "Delete \"\($0.name)\"?" } ?? "Delete profile?",
+            confirmDeleteProfile.map { "Delete \"\($0.displayName)\"?" } ?? "Delete profile?",
             isPresented: Binding(get: { confirmDeleteProfile != nil }, set: { if !$0 { confirmDeleteProfile = nil } }),
             titleVisibility: .visible
         ) {
@@ -62,6 +59,16 @@ struct MDMEnrollmentView: View {
         .sheet(isPresented: $isPresentingSheet) {
             MDMProfileSheet(servers: serverStore.servers) { profiles.append($0); saveProfiles() }
         }
+        .sheet(item: $editingProfile) { profile in
+            MDMProfileSheet(servers: serverStore.servers, editing: profile) { updated in
+                if let i = profiles.firstIndex(where: { $0.id == updated.id }) {
+                    profiles[i] = updated
+                    // Keep selected profile in sync
+                    if selectedProfile?.id == updated.id { selectedProfile = updated }
+                    saveProfiles()
+                }
+            }
+        }
         .onAppear { loadProfiles() }
     }
 
@@ -72,34 +79,28 @@ struct MDMEnrollmentView: View {
                 Label("New Profile", systemImage: "plus")
             }
             .buttonStyle(.borderedProminent).controlSize(.small)
-            .disabled(serverStore.servers.isEmpty)
         }
         .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
     }
 
-    private func testConnection(_ profile: MDMProfile) async {
-        guard let server = serverStore.servers.first(where: { $0.id == profile.serverID }),
-              let svc = server.makeJamfService() else {
-            testResult = "✗ Server not found or no credentials"
-            AppLogger.shared.error("Failed to test connection: no server or credentials", source: "MDMProfileView")
-            return
-        }
-        isTesting = true; testResult = nil
-        do {
-            let version = try await svc.testConnection()
-            testResult = "✓ Connected — Jamf Pro \(version)"
-        } catch {
-            testResult = "✗ \(error.localizedDescription)"
-        }
-        isTesting = false
+    private func profileBinding(for id: UUID) -> Binding<MDMProfile> {
+        Binding(
+            get: { profiles.first(where: { $0.id == id }) ?? MDMProfile(displayName: "") },
+            set: { updated in
+                if let i = profiles.firstIndex(where: { $0.id == id }) {
+                    profiles[i] = updated
+                    saveProfiles()
+                }
+            }
+        )
     }
 
     private func deleteProfile(_ profile: MDMProfile) {
         profiles.removeAll { $0.id == profile.id }
         if selectedProfile?.id == profile.id { selectedProfile = nil }
+        confirmDeleteProfile = nil
         saveProfiles()
     }
-
 
     private func loadProfiles() {
         let loaded = AppDatabase.shared.readOrDefault(.mdmProfiles, default: [MDMProfile]())
@@ -118,25 +119,29 @@ struct MDMProfileRow: View {
     let profile: MDMProfile
     let servers: [MDMServer]
 
-    var serverName: String {
-        servers.first(where: { $0.id == profile.serverID })?.friendlyName ?? "Unknown server"
+    private var serverName: String {
+        if let sid = profile.serverID {
+            return servers.first(where: { $0.id == sid })?.friendlyName ?? "Unknown Server"
+        }
+        return profile.customServerURL.isEmpty ? "Custom" : profile.customServerURL
     }
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: profile.isActive ? "lock.shield.fill" : "lock.shield")
-                .font(.title3).foregroundStyle(profile.isActive ? .blue : .secondary)
+            Image(systemName: profile.isValid ? "checkmark.seal.fill" : "xmark.seal.fill")
+                .font(.title3)
+                .foregroundStyle(profile.isValid ? .green : .red)
                 .frame(width: 28)
+                .help(profile.isValid ? "Invitation is valid" : "Invitation has expired")
             VStack(alignment: .leading, spacing: 2) {
-                Text(profile.name).fontWeight(.medium)
+                Text(profile.displayName).fontWeight(.medium)
                 Text(serverName).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            if profile.isActive {
-                Text("Active").font(.caption).fontWeight(.medium)
-                    .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(Color.green.opacity(0.12), in: Capsule())
-                    .foregroundStyle(.green)
+            if let exp = profile.expirationDate {
+                Text(exp, style: .date)
+                    .font(.caption)
+                    .foregroundStyle(profile.isValid ? Color.secondary : Color.red)
             }
         }
         .padding(.vertical, 4)
@@ -146,53 +151,118 @@ struct MDMProfileRow: View {
 // MARK: - Detail pane
 
 struct MDMProfileDetailPane: View {
-    let profile: MDMProfile
+    @Binding var profile: MDMProfile
     let server: MDMServer?
-    let isTesting: Bool
-    let testResult: String?
-    let onTest: () -> Void
+    let servers: [MDMServer]
+    let onEdit: () -> Void
     let onDelete: () -> Void
+
+    @State private var isFetchingExpiry = false
+    @State private var fetchError: String? = nil
+
+    private var serverLabel: String {
+        if let s = server { return s.friendlyName }
+        return profile.customServerURL.isEmpty ? "Custom" : profile.customServerURL
+    }
+
+    private var canFetchExpiry: Bool {
+        guard let s = server else { return false }
+        guard s.featureCheckInvitationStatus else { return false }
+        let hasPrivilege = s.storedPrivileges.isEmpty || s.storedPrivileges.contains("Read Computer Enrollment Invitations")
+        return !profile.invitationID.isEmpty && hasPrivilege
+    }
 
     var body: some View {
         VStack(spacing: 0) {
+            // Header
             VStack(spacing: 6) {
-                Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 28, weight: .light)).foregroundStyle(.blue)
-                Text(profile.name).font(.headline).lineLimit(1)
-                Text(server?.friendlyName ?? "Unknown").font(.caption).foregroundStyle(.secondary)
+                Image(systemName: profile.isValid ? "checkmark.seal.fill" : "xmark.seal.fill")
+                    .font(.system(size: 28, weight: .light))
+                    .foregroundStyle(profile.isValid ? .green : .red)
+                Text(profile.displayName).font(.headline).lineLimit(1)
+                Text(serverLabel).font(.caption).foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity).padding(14).background(.bar)
             Divider()
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    DetailSection("MDM Server") {
-                        DetailRow("Name", server?.friendlyName ?? "—")
-                        DetailRow("URL", server?.serverURL.host ?? "—")
+                    DetailSection("Identity") {
+                        DetailRow("Display Name", profile.displayName)
+                        if !profile.profileDescription.isEmpty {
+                            DetailRow("Description", profile.profileDescription)
+                        }
                     }
+
+                    DetailSection("MDM Server") {
+                        if let s = server {
+                            DetailRow("Server", s.friendlyName)
+                            DetailRow("URL", s.serverURL.host ?? s.serverURL.absoluteString)
+                        } else {
+                            DetailRow("Server", "Custom")
+                            if !profile.customServerURL.isEmpty {
+                                DetailRow("URL", profile.customServerURL)
+                            }
+                        }
+                    }
+
                     DetailSection("Enrollment") {
                         DetailRow("Invitation ID", profile.invitationID.isEmpty ? "—" : profile.invitationID)
-                        DetailRow("Type", profile.enrollmentType.rawValue)
-                        DetailRow("Site", profile.site ?? "None")
+                        if let exp = profile.expirationDate {
+                            DetailRow("Expires", exp.formatted(date: .abbreviated, time: .omitted))
+                            if !profile.isValid {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.caption).foregroundStyle(.red)
+                                    Text("This invitation has expired.")
+                                        .font(.caption).foregroundStyle(.red)
+                                }
+                                .padding(.horizontal, 14).padding(.bottom, 8)
+                            }
+                        } else {
+                            DetailRow("Expires", "Unknown")
+                        }
                     }
-                    if let result = testResult {
-                        DetailSection("Test result") {
-                            Text(result).font(.callout)
-                                .foregroundStyle(result.hasPrefix("✓") ? .green : .red)
+
+                    if let err = fetchError {
+                        DetailSection("Fetch Error") {
+                            Text(err)
+                                .font(.caption).foregroundStyle(.red)
                                 .padding(.horizontal, 14).padding(.vertical, 8)
                         }
                     }
                 }
             }
+
             Divider()
             VStack(spacing: 6) {
-                Button(action: onTest) {
-                    if isTesting {
-                        HStack { ProgressView().controlSize(.small); Text("Testing…") }.frame(maxWidth: .infinity)
-                    } else {
-                        Label("Test Connection", systemImage: "network").frame(maxWidth: .infinity)
+                if canFetchExpiry {
+                    Button {
+                        Task { await fetchExpiry() }
+                    } label: {
+                        if isFetchingExpiry {
+                            HStack { ProgressView().controlSize(.small); Text("Fetching…") }
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Label("Fetch Expiration Date", systemImage: "arrow.clockwise")
+                                .frame(maxWidth: .infinity)
+                        }
                     }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isFetchingExpiry)
+                } else if server != nil {
+                    Label("Missing 'Read Computer Enrollment Invitations' privilege", systemImage: "lock.slash")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent).disabled(isTesting)
+
+                Button(action: onEdit) {
+                    Label("Edit", systemImage: "pencil").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
                 Button(role: .destructive, action: onDelete) {
                     Label("Delete", systemImage: "trash").frame(maxWidth: .infinity)
                 }
@@ -202,94 +272,129 @@ struct MDMProfileDetailPane: View {
         }
         .background(.windowBackground)
     }
+
+    private func fetchExpiry() async {
+        guard let s = server, let svc = s.makeJamfService() else { return }
+        isFetchingExpiry = true
+        fetchError = nil
+        do {
+            let date = try await svc.fetchInvitationExpiry(invitationID: profile.invitationID)
+            profile.expirationDate = date
+            if date == nil {
+                fetchError = "No expiration date found for this invitation ID."
+            }
+        } catch {
+            fetchError = error.localizedDescription
+        }
+        isFetchingExpiry = false
+    }
 }
 
-// MARK: - New profile sheet
+// MARK: - New / Edit profile sheet
 
 struct MDMProfileSheet: View {
     @Environment(\.dismiss) var dismiss
     let servers: [MDMServer]
+    /// Non-nil when editing an existing profile.
+    var editing: MDMProfile? = nil
     let onSave: (MDMProfile) -> Void
 
-    @State private var name = ""
+    @State private var displayName = ""
+    @State private var description = ""
+    /// nil = Custom mode
     @State private var selectedServerID: UUID?
+    @State private var customServerURL = ""
     @State private var invitationID = ""
-    @State private var enrollmentType: MDMProfile.EnrollmentType = .profile
-    @State private var site = ""
-    @State private var tokenLifetime = 30
-    @State private var autoRenew = true
-    @State private var runPolicy = false
-    @State private var policyName = ""
+    @State private var expirationDate: Date? = nil
+    @State private var hasExpiration = false
 
-    var canSave: Bool {
-        !name.isEmpty && selectedServerID != nil && !invitationID.isEmpty
+    private var isEditing: Bool { editing != nil }
+    private var useCustomServer: Bool { selectedServerID == nil }
+
+    private var canSave: Bool {
+        !displayName.isEmpty && !invitationID.isEmpty
     }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("New Enrollment Profile").font(.headline)
+                Text(isEditing ? "Edit Enrollment Profile" : "New Enrollment Profile").font(.headline)
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.escape)
-                Button("Save") { save() }.buttonStyle(.borderedProminent).disabled(!canSave)
+                Button(isEditing ? "Save Changes" : "Save") { save() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canSave)
             }
             .padding(16).background(.bar)
             Divider()
             Form {
-                Section("Profile") {
-                    LabeledContent("Name") { TextField("", text: $name, prompt: Text("e.g. Jamf Dev Enrollment").foregroundColor(.secondary)) }
+                Section("Identity") {
+                    LabeledContent("Display Name") {
+                        TextField("", text: $displayName, prompt: Text("e.g. Dev Enrollment").foregroundColor(.secondary))
+                    }
+                    LabeledContent("Description") {
+                        TextField("", text: $description, prompt: Text("Optional").foregroundColor(.secondary))
+                    }
                 }
+
                 Section("MDM Server") {
                     Picker("Server", selection: $selectedServerID) {
-                        Text("Select a server…").tag(Optional<UUID>.none)
+                        Text("Custom").tag(Optional<UUID>.none)
                         ForEach(servers) { Text($0.friendlyName).tag(Optional($0.id)) }
                     }
-                    if servers.isEmpty {
-                        Label("Add an MDM Server first.", systemImage: "exclamationmark.triangle")
-                            .font(.callout).foregroundStyle(.orange)
-                    }
-                }
-                Section("Enrollment") {
-                    LabeledContent("Invitation ID") {
-                        TextField("", text: $invitationID, prompt: Text("Paste Jamf enrollment invitation ID").foregroundColor(.secondary))
-                    }
-                    Picker("Enrollment type", selection: $enrollmentType) {
-                        ForEach(MDMProfile.EnrollmentType.allCases, id: \.self) {
-                            Text($0.rawValue).tag($0)
+                    if useCustomServer {
+                        LabeledContent("Server URL") {
+                            TextField("", text: $customServerURL, prompt: Text("https://yourorg.jamfcloud.com").foregroundColor(.secondary))
                         }
                     }
                 }
-                Section("Scope") {
-                    LabeledContent("Site") { TextField("", text: $site, prompt: Text("Optional").foregroundColor(.secondary)) }
-                    LabeledContent("Token lifetime: \(tokenLifetime) days") {
-                        Stepper("", value: $tokenLifetime, in: 1...365)
+
+                Section("Enrollment") {
+                    LabeledContent("Invitation ID") {
+                        TextField("", text: $invitationID, prompt: Text("Paste enrollment invitation ID").foregroundColor(.secondary))
                     }
-                    Toggle("Auto-renew token", isOn: $autoRenew)
-                    Toggle("Run policy on enroll", isOn: $runPolicy)
-                    if runPolicy {
-                        LabeledContent("Policy name") { TextField("", text: $policyName, prompt: Text("e.g. Dev Bootstrap").foregroundColor(.secondary)) }
+                    Toggle("Set expiration date manually", isOn: $hasExpiration)
+                    if hasExpiration {
+                        DatePicker("Expiration Date", selection: Binding(
+                            get: { expirationDate ?? Date() },
+                            set: { expirationDate = $0 }
+                        ), displayedComponents: .date)
                     }
                 }
             }
             .formStyle(.grouped)
         }
-        .frame(minWidth: 460, idealWidth: 500, minHeight: 440)
-        .onAppear {
-            if selectedServerID == nil { selectedServerID = servers.first?.id }
+        .frame(minWidth: 460, idealWidth: 500, minHeight: 360)
+        .onAppear { populate() }
+    }
+
+    private func populate() {
+        if let p = editing {
+            displayName = p.displayName
+            description = p.profileDescription
+            selectedServerID = p.serverID
+            customServerURL = p.customServerURL
+            invitationID = p.invitationID
+            hasExpiration = p.expirationDate != nil
+            expirationDate = p.expirationDate
+        } else {
+            // Default to first linked server when creating
+            if !servers.isEmpty {
+                selectedServerID = servers.first?.id
+            }
         }
     }
 
     private func save() {
-        guard let serverID = selectedServerID else { return }
         let p = MDMProfile(
-            name: name, serverID: serverID,
+            id: editing?.id ?? UUID(),
+            displayName: displayName,
+            profileDescription: description,
+            serverID: selectedServerID,
+            customServerURL: useCustomServer ? customServerURL : "",
             invitationID: invitationID,
-            enrollmentType: enrollmentType,
-            site: site.isEmpty ? nil : site,
-            tokenLifetimeDays: tokenLifetime,
-            autoRenewToken: autoRenew,
-            runPolicyOnEnroll: runPolicy,
-            enrollmentPolicyName: runPolicy && !policyName.isEmpty ? policyName : nil
+            expirationDate: hasExpiration ? expirationDate : nil
         )
         onSave(p)
         dismiss()

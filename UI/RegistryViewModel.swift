@@ -131,7 +131,7 @@ final class RegistryViewModel {
         else if lower.contains("sonoma")   { osName = .sonoma }
         else if lower.contains("ventura")  { osName = .ventura }
         else if lower.contains("monterey") { osName = .monterey }
-        else                               { osName = .sequoia }
+        else                               { osName = .unknown }
 
         let tag = ref.components(separatedBy: ":").last ?? "latest"
         let version = tag == "latest" ? "" : tag

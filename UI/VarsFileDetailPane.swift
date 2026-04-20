@@ -55,7 +55,7 @@ struct VarsFileDetailPane: View {
                     Text(template.filename)
                         .font(.caption).foregroundStyle(.tertiary)
                     Text("·").font(.caption).foregroundStyle(.tertiary)
-                    Text("Modified " + template.modifiedAt.formatted(date: .abbreviated, time: .shortened))
+                    Text("Modified " + template.modifiedAt.formatted(date: .numeric, time: .shortened))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }

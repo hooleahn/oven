@@ -59,7 +59,7 @@ struct BaseVMRow: View {
     private var subtitleLine: String {
         if vm.vmSource == .registry {
             if let built = vm.builtAt {
-                return "Pulled " + built.formatted(date: .abbreviated, time: .omitted)
+                return "Pulled " + built.formatted(date: .numeric, time: .omitted)
             }
             return "From registry"
         }
@@ -74,7 +74,7 @@ struct BaseVMRow: View {
         if vm.installHomebrew { flags.append("Homebrew") }
         if vm.enableSSHDaemon { flags.append("SSH") }
         if let built = vm.builtAt {
-            let dateStr = built.formatted(date: .abbreviated, time: .omitted)
+            let dateStr = built.formatted(date: .numeric, time: .omitted)
             if flags.isEmpty { return "Built \(dateStr)" }
             return flags.joined(separator: " · ") + " · Built \(dateStr)"
         }

@@ -250,20 +250,20 @@ final class BaseVMStore: ObservableObject {
                 // Load MDM profile if attached
                 var jamfURL: String? = nil
                 var invitationID: String? = nil
-                var enrollmentType = "profile"
+                let enrollmentType = "profile"
                 if let profileID = baseVM.mdmProfileID {
                     let _mdmProfiles = AppDatabase.shared.readOrDefault(.mdmProfiles, default: [MDMProfile]())
                     if !_mdmProfiles.isEmpty,
-                       let profiles = Optional(_mdmProfiles),
-                       let profile = profiles.first(where: { $0.id == profileID }) {
-                        let _mdmServers = AppDatabase.shared.readOrDefault(.mdmServers, default: [MDMServer]())
-                        if !_mdmServers.isEmpty,
-                           let servers = Optional(_mdmServers),
-                           let server = servers.first(where: { $0.id == profile.serverID }) {
-                            jamfURL = server.serverURL.absoluteString
+                       let profile = _mdmProfiles.first(where: { $0.id == profileID }) {
+                        if let sid = profile.serverID {
+                            let _mdmServers = AppDatabase.shared.readOrDefault(.mdmServers, default: [MDMServer]())
+                            if let server = _mdmServers.first(where: { $0.id == sid }) {
+                                jamfURL = server.serverURL.absoluteString
+                            }
+                        } else if !profile.customServerURL.isEmpty {
+                            jamfURL = profile.customServerURL
                         }
                         invitationID = profile.invitationID.isEmpty ? nil : profile.invitationID
-                        enrollmentType = profile.enrollmentType == .link ? "link" : "profile"
                     }
                 }
 

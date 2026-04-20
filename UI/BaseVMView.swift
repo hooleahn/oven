@@ -32,7 +32,9 @@ struct BaseVMView: View {
         let q = searchText.lowercased()
         return vms.filter { $0.name.localizedCaseInsensitiveContains(q)
                           || $0.displayName.localizedCaseInsensitiveContains(q)
-                          || $0.macOSVersion.localizedCaseInsensitiveContains(q) }
+                          || $0.description.localizedCaseInsensitiveContains(q)
+                          || $0.macOSVersion.localizedCaseInsensitiveContains(q)
+                          || $0.tags.contains(where: { $0.localizedCaseInsensitiveContains(q) }) }
     }
 
     var registryVMs: [VirtualMachine] {
@@ -40,7 +42,9 @@ struct BaseVMView: View {
         guard !searchText.isEmpty else { return vms }
         let q = searchText.lowercased()
         return vms.filter { $0.name.localizedCaseInsensitiveContains(q)
-                          || $0.displayName.localizedCaseInsensitiveContains(q) }
+                          || $0.displayName.localizedCaseInsensitiveContains(q)
+                          || $0.description.localizedCaseInsensitiveContains(q)
+                          || $0.tags.contains(where: { $0.localizedCaseInsensitiveContains(q) }) }
     }
 
     var body: some View {

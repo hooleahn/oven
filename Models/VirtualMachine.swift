@@ -25,7 +25,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
     var isBaseVM: Bool = false          // true = Base VM (can clone, cannot start)
 
     // Build metadata (only relevant when isBaseVM == true)
-    var osName: MacOSRelease.Name = .sequoia
+    var osName: MacOSRelease.Name = .unknown
     var osVersion: String = ""          // e.g. "15.3.2"
     var ipswLocalPath: String?
     var ipswRemoteURL: String?
@@ -217,7 +217,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         lastStartedAt    = try c.decodeIfPresent(Date.self,           forKey: .lastStartedAt)
         registryImageRef = try c.decodeIfPresent(String.self,        forKey: .registryImageRef)
         isBaseVM         = try c.decodeIfPresent(Bool.self,           forKey: .isBaseVM) ?? false
-        osName              = try c.decodeIfPresent(MacOSRelease.Name.self, forKey: .osName) ?? .sequoia
+        osName              = try c.decodeIfPresent(MacOSRelease.Name.self, forKey: .osName) ?? .unknown
         osVersion           = try c.decodeIfPresent(String.self,              forKey: .osVersion) ?? ""
         ipswLocalPath       = try c.decodeIfPresent(String.self,   forKey: .ipswLocalPath)
         ipswRemoteURL       = try c.decodeIfPresent(String.self,   forKey: .ipswRemoteURL)
@@ -305,6 +305,7 @@ struct MacOSRelease {
         case sonoma   = "Sonoma"
         case ventura  = "Ventura"
         case monterey = "Monterey"
+        case unknown  = "Unknown"
 
         // Major version prefix used to filter mist-cli results
         var majorVersion: Int {
@@ -314,6 +315,7 @@ struct MacOSRelease {
             case .sonoma:   return 14
             case .ventura:  return 13
             case .monterey: return 12
+            case .unknown:  return 0
             }
         }
 
@@ -325,6 +327,7 @@ struct MacOSRelease {
             case .sonoma:   return "macOS 14 Sonoma"
             case .ventura:  return "macOS 13 Ventura"
             case .monterey: return "macOS 12 Monterey"
+            case .unknown:  return "Unknown"
             }
         }
 
@@ -336,6 +339,7 @@ struct MacOSRelease {
             case .sonoma:   return ["14.7.6","14.7.5","14.7.4","14.7.3","14.7.2","14.7.1","14.7","14.6.1","14.6","14.5","14.4.1","14.4","14.3.1","14.3","14.2.1","14.2","14.1.2","14.1.1","14.1","14.0"]
             case .ventura:  return ["13.7.5","13.7.4","13.7.3","13.7.2","13.7.1","13.7","13.6.9","13.6.8","13.6.7","13.6.6","13.6.5","13.6.4","13.6.3","13.6.2","13.6.1","13.6"]
             case .monterey: return ["12.7.6","12.7.5","12.7.4","12.7.3","12.7.2","12.7.1","12.7","12.6.8","12.6.7","12.6.6","12.6.5"]
+            case .unknown:  return []
             }
         }
 

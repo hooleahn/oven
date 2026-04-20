@@ -77,7 +77,7 @@ struct LogView: View {
 
     private func exportLog() {
         let lines = logger.entries.map { entry -> String in
-            let ts = entry.timestamp.formatted(date: .abbreviated, time: .standard)
+            let ts = entry.timestamp.formatted(date: .numeric, time: .standard)
             return "[" + ts + "] [" + entry.source + "] " + entry.message
         }
         let text = lines.joined(separator: "\n")

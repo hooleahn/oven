@@ -48,7 +48,10 @@ struct RegistryView: View {
         let base = rvm.images.filter { $0.registryHost == rvm.selectedRegistry }
         guard !searchText.isEmpty else { return base }
         let q = searchText.lowercased()
-        return base.filter { $0.imageRef.lowercased().contains(q) }
+        return base.filter {
+            $0.imageRef.lowercased().contains(q) ||
+            ($0.localName?.lowercased().contains(q) == true)
+        }
     }
 
     var credentialForSelected: RegistryCredential? {

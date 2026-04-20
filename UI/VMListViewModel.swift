@@ -55,8 +55,7 @@ final class VMListViewModel {
         }
         if !selectedOSFilters.isEmpty {
             base = base.filter { vm in
-                let ver = vm.macOSVersion.replacingOccurrences(of: "macOS ", with: "")
-                return selectedOSFilters.contains(where: { ver.hasPrefix($0) })
+                selectedOSFilters.contains(vm.osVersion)
             }
         }
         if !searchQuery.isEmpty {
@@ -64,13 +63,14 @@ final class VMListViewModel {
             base = base.filter {
                 $0.name.localizedCaseInsensitiveContains(q) ||
                 $0.displayName.localizedCaseInsensitiveContains(q) ||
+                $0.description.localizedCaseInsensitiveContains(q) ||
                 $0.tags.contains(where: { $0.localizedCaseInsensitiveContains(q) })
             }
         }
 
         switch sortOrder {
         case .name:        return base.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
-        case .osVersion:   return base.sorted { $0.macOSVersion < $1.macOSVersion }
+        case .osVersion:   return base.sorted { $0.osVersion < $1.osVersion }
         case .createdAt:     return base.sorted { $0.createdAt > $1.createdAt }
         case .lastStarted: return base.sorted { ($0.lastStartedAt ?? .distantPast) > ($1.lastStartedAt ?? .distantPast) }
         }
@@ -82,14 +82,13 @@ final class VMListViewModel {
 
     func allOSMajors(from vms: [VirtualMachine]) -> [String] {
         let names = ["Tahoe", "Sequoia", "Sonoma", "Ventura", "Monterey"]
-        return names.filter { major in vms.contains { $0.macOSVersion.contains(major) } }
+        return names.filter { major in vms.contains { $0.osName.rawValue == major } }
     }
 
     func osVersions(under major: String, from vms: [VirtualMachine]) -> [String] {
         Array(Set(vms
-            .filter { $0.macOSVersion.contains(major) }
-            .map { $0.macOSVersion.replacingOccurrences(of: "macOS ", with: "") }
-            .filter { !$0.isEmpty }
+            .filter { $0.osName.rawValue == major && !$0.osVersion.isEmpty }
+            .map { $0.osVersion }
         )).sorted()
     }
 

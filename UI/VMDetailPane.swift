@@ -22,9 +22,10 @@ struct VMDetailPane: View {
     @State private var enrollmentError: String? = nil
     @State private var isLookingUpEnrollment = false
 
-    /// True when serial number is long enough and an MDM server is linked
+    /// True when serial number is long enough, an MDM server is linked, and the feature is enabled
     private var canLookUpEnrollment: Bool {
-        vm.serialNumber.count >= 10 && vm.mdmServerID != nil
+        guard vm.serialNumber.count >= 10, let serverID = vm.mdmServerID else { return false }
+        return serverStore.servers.first(where: { $0.id == serverID })?.featureCheckEnrollment ?? false
     }
 
     var body: some View {
@@ -55,7 +56,10 @@ struct VMDetailPane: View {
                         DetailRow("CPU", cpu)
                         DetailRow("Memory", mem)
                         DetailRow("Disk", disk)
-                        DetailRow("macOS", vm.macOSVersion.isEmpty ? "—" : vm.macOSVersion)
+                        DetailRow("macOS", vm.osName == .unknown && vm.osVersion.isEmpty ? "—"
+                            : vm.osName == .unknown ? vm.osVersion
+                            : vm.osVersion.isEmpty  ? vm.osName.rawValue
+                            : "\(vm.osName.rawValue) \(vm.osVersion)")
                         if let display = liveConfig?.display {
                             DetailRow("Display", display)
                         }
@@ -100,9 +104,9 @@ struct VMDetailPane: View {
                             DetailRow("Display name", vm.displayName)
                         }
                         DetailRow("Tart name", vm.name, monospaced: true, copyable: true)
-                        DetailRow("Created", vm.createdAt.formatted(date: .abbreviated, time: .omitted))
+                        DetailRow("Created", vm.createdAt.formatted(date: .numeric, time: .omitted))
                         DetailRow("Last started", vm.lastStartedAt.map {
-                            $0.formatted(date: .abbreviated, time: .shortened)
+                            $0.formatted(date: .numeric, time: .shortened)
                         } ?? "Never")
                         if !vm.tags.isEmpty {
                             VStack(alignment: .leading, spacing: 4) {
@@ -399,7 +403,7 @@ struct VMDetailPane: View {
         let profiles = AppDatabase.shared.readOrDefault(.mdmProfiles, default: [MDMProfile]())
         guard !profiles.isEmpty || true
         else { return nil }
-        return profiles.first(where: { $0.id == id })?.name
+        return profiles.first(where: { $0.id == id })?.displayName
     }
 
     @MainActor
@@ -468,7 +472,7 @@ private struct MDMEnrollmentStatusRow: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if let contact = status.lastContact {
-                    Text("Last contact: \(contact.formatted(date: .abbreviated, time: .shortened))")
+                    Text("Last contact: \(contact.formatted(date: .numeric, time: .shortened))")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             } else if let error {

@@ -18,23 +18,24 @@ struct TagChip: View {
     let tag: String
     var removable: Bool = false
     var onRemove: (() -> Void)? = nil
+    var size: CGFloat = 11
     @EnvironmentObject var tagStore: TagStore
 
     var body: some View {
         HStack(spacing: 3) {
             Text(tag)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: size, weight: .medium))
                 .lineLimit(1)
             if removable {
                 Button { onRemove?() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.system(size: size - 3, weight: .bold))
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
         .background(tagStore.color(for: tag).opacity(0.18), in: Capsule())
         .foregroundStyle(tagStore.color(for: tag))
     }

@@ -50,8 +50,12 @@ struct VMCard: View {
                         Text(showsDisplayName ? vm.name : " ")
                             .font(.system(.caption2, design: .monospaced))
                             .foregroundStyle(.tertiary).lineLimit(1)
-                        if !vm.macOSVersion.isEmpty {
-                            Text(vm.macOSVersion.replacingOccurrences(of: "macOS ", with: ""))
+                        if !vm.osVersion.isEmpty {
+                            Text("\(vm.osName.rawValue) \(vm.osVersion)")
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        if vm.osName == .unknown && vm.osVersion.isEmpty {
+                            Text("Unknown OS")
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Text({
@@ -60,11 +64,11 @@ struct VMCard: View {
                         }())
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         HStack(spacing: 4) {
-                            Text("Created \(vm.createdAt.formatted(date: .abbreviated, time: .omitted))")
+                            Text("Created \(vm.createdAt.formatted(date: .numeric, time: .omitted))")
                                 .font(.caption2).foregroundStyle(.tertiary)
                             if let last = vm.lastStartedAt {
                                 Text("·").font(.caption2).foregroundStyle(.tertiary)
-                                Text("Started \(last.formatted(date: .abbreviated, time: .omitted))")
+                                Text("Started \(last.formatted(date: .numeric, time: .omitted))")
                                     .font(.caption2).foregroundStyle(.tertiary)
                             }
                         }
@@ -145,7 +149,7 @@ struct VMCard: View {
     }
 
     private var osWallpaper: String? {
-        let v = vm.macOSVersion.lowercased()
+        let v = vm.osName.rawValue.lowercased()
         if v.contains("tahoe")    { return "wallpaper-tahoe" }
         if v.contains("sequoia")  { return "wallpaper-sequoia" }
         if v.contains("sonoma")   { return "wallpaper-sonoma" }
@@ -156,7 +160,7 @@ struct VMCard: View {
     }
 
     private var osIcon: String {
-        let v = vm.macOSVersion.lowercased()
+        let v = vm.osName.rawValue.lowercased()
         if v.contains("sequoia") { return "apple.logo" }
         if v.contains("sonoma")  { return "apple.logo" }
         if v.contains("ventura") { return "apple.logo" }
@@ -174,7 +178,7 @@ struct VMCard: View {
     }
 
     private var osVersionShort: String {
-        vm.macOSVersion
+        vm.osVersion
             .replacingOccurrences(of: "macOS ", with: "")
             .replacingOccurrences(of: "macOS", with: "")
             .trimmingCharacters(in: .whitespaces)
@@ -191,8 +195,8 @@ struct VMCard: View {
 
     private var subtitle: String {
         var parts: [String] = []
-        if !vm.macOSVersion.isEmpty {
-            parts.append(vm.macOSVersion.replacingOccurrences(of: "macOS ", with: ""))
+        if !vm.osName.rawValue.isEmpty {
+            parts.append(vm.osName.rawValue.replacingOccurrences(of: "macOS ", with: ""))
         }
         parts.append("\(vm.cpuCount) CPU · \(vm.memoryGB) GB")
         return parts.joined(separator: " · ")

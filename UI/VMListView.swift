@@ -16,9 +16,10 @@ struct VMListView: View {
     var filteredVMs: [VirtualMachine] {
         model.filteredVMs(from: vmStore.vms, searchQuery: appState.searchQuery)
     }
-    var allTags: [String]     { model.allTags(from: vmStore.vms) }
-    var allOSMajors: [String] { model.allOSMajors(from: vmStore.vms) }
-    func osVersions(under major: String) -> [String] { model.osVersions(under: major, from: vmStore.vms) }
+    private var workingVMs: [VirtualMachine] { vmStore.vms.filter { !$0.effectivelyBase } }
+    var allTags: [String]     { model.allTags(from: workingVMs) }
+    var allOSMajors: [String] { model.allOSMajors(from: workingVMs) }
+    func osVersions(under major: String) -> [String] { model.osVersions(under: major, from: workingVMs) }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -397,43 +398,62 @@ struct VMListView: View {
 
     // MARK: List
 
-    private var vmList: some View {
-        List(filteredVMs, selection: Binding(
+    private func makeVMListSelectionBinding() -> Binding<VirtualMachine.ID?> {
+        Binding(
             get: { model.selectedVM?.id },
             set: { id in
                 Task { @MainActor in self.model.selectedVM = self.vmStore.vms.first { $0.id == id } }
             }
-        )) { vm in
-            HStack(spacing: 10) {
-                StatusDot(status: vm.status)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(vm.displayName.isEmpty ? vm.name : vm.displayName)
-                        .fontWeight(.medium)
-                    HStack(spacing: 4) {
-                        if !vm.macOSVersion.isEmpty {
-                            Text(vm.macOSVersion.replacingOccurrences(of: "macOS ", with: ""))
+        )
+    }
+
+    @ViewBuilder
+    private func vmListRow(_ vm: VirtualMachine) -> some View {
+        HStack(spacing: 10) {
+            StatusDot(status: vm.status)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(vm.displayName.isEmpty ? vm.name : vm.displayName)
+                    .fontWeight(.medium)
+                HStack(spacing: 4) {
+                    if vm.osName != .unknown {
+                        Text(vm.osName.rawValue)
+                            .font(.caption).foregroundStyle(.secondary)
+                        if !vm.osVersion.isEmpty {
+                            Text(vm.osVersion)
                                 .font(.caption).foregroundStyle(.secondary)
                         }
-                        ForEach(Array(vm.tags.prefix(3).enumerated()), id: \.offset) { _, tag in
-                            TagChip(tag: tag)
-                        }
+                    } else if !vm.osVersion.isEmpty {
+                        Text(vm.osVersion)
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    ForEach(Array(vm.tags.prefix(3).enumerated()), id: \.offset) { _, tag in
+                        TagChip(tag: tag, size: 9)
                     }
                 }
-                Spacer()
-                StatusPill(status: vm.status)
-                Menu {
-                    Button("Start…") { model.pendingLaunchVM = vm }
-                    Button("Stop…") { model.confirmStop = vm }
-                        .disabled(vm.status == .stopped)
-                    Divider()
-                    Button("Edit…") { model.editingVM = vm }
-                    Button("Delete…", role: .destructive) { model.confirmDelete = vm }
-                } label: {
-                    Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
+                .frame(height: 16)
             }
-            .tag(vm.id)
+            Spacer()
+            StatusPill(status: vm.status)
+            Menu {
+                Button("Start…") { model.pendingLaunchVM = vm }
+                Button("Stop…") { model.confirmStop = vm }
+                    .disabled(vm.status == .stopped)
+                Divider()
+                Button("Edit…") { model.editingVM = vm }
+                Button("Delete…", role: .destructive) { model.confirmDelete = vm }
+            } label: {
+                Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .tag(vm.id)
+    }
+
+    private var vmList: some View {
+        List(selection: makeVMListSelectionBinding()) {
+            ForEach(filteredVMs) { vm in
+                vmListRow(vm)
+            }
         }
         .listStyle(.plain)
     }

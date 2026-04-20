@@ -84,8 +84,8 @@ struct NewBaseVMSheet: View {
         mdmProfiles.first(where: { $0.id == selectedMDMProfileID })
     }
     var selectedMDMServer: MDMServer? {
-        guard let profile = selectedMDMProfile else { return nil }
-        return mdmServers.first(where: { $0.id == profile.serverID })
+        guard let profile = selectedMDMProfile, let sid = profile.serverID else { return nil }
+        return mdmServers.first(where: { $0.id == sid })
     }
 
     var body: some View {
@@ -274,7 +274,7 @@ struct NewBaseVMSheet: View {
                         Picker("Enrollment profile", selection: $selectedMDMProfileID) {
                             Text("None").tag(Optional<UUID>.none)
                             ForEach(mdmProfiles) { profile in
-                                Text(profile.name).tag(Optional(profile.id))
+                                Text(profile.displayName).tag(Optional(profile.id))
                             }
                         }
                         if let server = selectedMDMServer, let profile = selectedMDMProfile {

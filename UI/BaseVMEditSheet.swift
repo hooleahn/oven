@@ -195,7 +195,7 @@ struct BaseVMEditSheet: View {
                     }
                     LabeledContent("Source", value: baseVM.vmSource.rawValue)
                     if let built = baseVM.builtAt {
-                        LabeledContent("Built", value: built.formatted(date: .abbreviated, time: .shortened))
+                        LabeledContent("Built", value: built.formatted(date: .numeric, time: .shortened))
                     }
                 }
             }

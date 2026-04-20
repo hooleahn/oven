@@ -88,7 +88,8 @@ final class RecipesViewModel {
         let q = searchText.lowercased()
         return all.filter {
             $0.displayName.lowercased().contains(q) ||
-            $0.filename.lowercased().contains(q)
+            $0.filename.lowercased().contains(q) ||
+            $0.templateDescription.lowercased().contains(q)
         }
     }
 

@@ -90,6 +90,27 @@ struct JamfTokenResponse: Decodable {
     let expires: String
 }
 
+// MARK: - Auth/privileges API types
+
+/// Response from GET /api/v1/auth — account privileges for the current token.
+struct JamfCurrentAuth: Decodable {
+    let account: JamfAuthAccount?
+}
+
+struct JamfAuthAccount: Decodable {
+    let username: String?
+    /// Keyed by site ID (e.g. "-1" for "All Sites"); values are privilege name arrays.
+    let privilegesBySite: [String: [String]]?
+}
+
+extension JamfAuthAccount {
+    /// Flattens all privileges across all sites into a unique sorted list.
+    var allPrivileges: [String] {
+        let all = (privilegesBySite?.values.flatMap { $0 } ?? [])
+        return Array(Set(all)).sorted()
+    }
+}
+
 // MARK: - JamfService
 
 actor JamfService {
@@ -208,7 +229,7 @@ actor JamfService {
         let url = serverURL.appendingPathComponent("api/v1/auth/keep-alive")
         await AppLogger.shared.log("[debug] URL: \(url.absoluteString)", source: "JamfService")
         var request = URLRequest(url: url)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(token ?? "NONE")", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.httpMethod = "POST"
 //        await AppLogger.shared.log("[debug] Token: \(token)", source: "JamfService")
@@ -340,6 +361,62 @@ actor JamfService {
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw JamfError.deleteFailed
         }
+    }
+
+    // MARK: - Privilege fetch
+
+    /// Fetches the privileges granted to the current credentials.
+    /// Uses GET /api/v1/auth which works for both Basic and API Client tokens.
+    func fetchPrivileges() async throws -> [String] {
+        let token = try await ensureToken()
+        let url = serverURL.appendingPathComponent("api/v1/auth")
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw JamfError.authFailed
+        }
+        let auth = try JSONDecoder().decode(JamfCurrentAuth.self, from: data)
+        let privileges = auth.account?.allPrivileges ?? []
+        await AppLogger.shared.log("[debug] Current privileges (\(privileges.count)): \(privileges.joined(separator: ", "))", source: "JamfService")
+        return privileges
+    }
+
+    // MARK: - Computer Enrollment Invitation lookup (Classic API)
+
+    /// Fetches the expiration date of a computer enrollment invitation.
+    /// Uses the Classic API endpoint: GET /JSSResource/computerinvitations/invitation/{id}
+    /// Returns nil if the invitation is not found or the server returns an error.
+    func fetchInvitationExpiry(invitationID: String) async throws -> Date? {
+        let token = try await ensureToken()
+        let url = serverURL.appendingPathComponent("JSSResource/computerinvitations/invitation/\(invitationID)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            return nil
+        }
+
+        struct InvitationWrapper: Decodable {
+            let computer_invitation: InvitationBody
+        }
+        struct InvitationBody: Decodable {
+            let expiration_date_epoch: Int64?
+        }
+
+        guard let wrapper = try? JSONDecoder().decode(InvitationWrapper.self, from: data),
+              let epochMs = wrapper.computer_invitation.expiration_date_epoch,
+              epochMs > 0 else {
+            return nil
+        }
+        // Jamf returns milliseconds since epoch
+        return Date(timeIntervalSince1970: TimeInterval(epochMs) / 1000)
     }
 
     // MARK: - Test connection
