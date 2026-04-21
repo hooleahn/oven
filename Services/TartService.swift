@@ -85,7 +85,7 @@ actor TartService {
     // MARK: - Run / Stop / Suspend
 
     /// Start a VM. Returns an AsyncStream of output events for live log display.
-    enum RunMode { case native, vnc, headless }
+    enum RunMode { case native, vnc, headless, recovery }
 
     func run(name: String, mode: RunMode = .native,
              sharedFolders: [VirtualMachine.SharedFolder] = []) async -> AsyncStream<ProcessEvent> {
@@ -94,6 +94,7 @@ actor TartService {
         case .native:   break
         case .vnc:      args.append("--vnc")
         case .headless: args.append("--no-graphics")
+        case .recovery: args.append("--recovery")
         }
         for folder in sharedFolders {
             args += ["--dir", folder.tartArg]

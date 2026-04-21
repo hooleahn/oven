@@ -27,7 +27,7 @@ struct LaunchModeSheet: View {
                 LaunchOptionButton(
                     icon: "desktopcomputer",
                     title: "Native",
-                    description: "Open in macOS Virtualization.Framework window"
+                    description: "Open in Tart window"
                 ) { onLaunch(.native); dismiss() }
 
                 LaunchOptionButton(
@@ -41,6 +41,12 @@ struct LaunchModeSheet: View {
                     title: "Headless (SSH only)",
                     description: "Start with no display — access via SSH at port 22"
                 ) { onLaunch(.headless); dismiss() }
+                
+                LaunchOptionButton(
+                    icon: "display.and.screwdriver",
+                    title: "Recovery (Native only)",
+                    description: "Start on Recovery Mode"
+                ) { onLaunch(.recovery); dismiss() }
             }
             .padding(20)
         }

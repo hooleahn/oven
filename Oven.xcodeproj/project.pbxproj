@@ -71,6 +71,7 @@
 		B90657DD2F96FB4500B426A0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5427CDAA002D4233B481E546 /* Assets.xcassets */; };
 		B97A40AA2F970E3F00FB577C /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40A92F970E3F00FB577C /* OnboardingView.swift */; };
 		B97A40AC2F970FB300FB577C /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40AB2F970FB300FB577C /* DesignSystem.swift */; };
+		B97A40B02F971CF000FB577C /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = B97A40AF2F971CF000FB577C /* AppIcon.icon */; };
 		B9ADE8C02F7DE64D00B30458 /* SOFAService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9ADE8BF2F7DE64D00B30458 /* SOFAService.swift */; };
 		B9C8AE33CA8A401BBB4E7A90 /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DE3071761A4538AE953FA4 /* ProcessRunner.swift */; };
 		BD83F46D40364D3683D9FF41 /* InstallerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78338E0B4F0D412AA2F4C5AE /* InstallerView.swift */; };
@@ -169,6 +170,7 @@
 		B79EFA2071E14B4F9BAA4878 /* MDMProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMProfile.swift; sourceTree = "<group>"; };
 		B97A40A92F970E3F00FB577C /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		B97A40AB2F970FB300FB577C /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
+		B97A40AF2F971CF000FB577C /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		B9ADE8BF2F7DE64D00B30458 /* SOFAService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SOFAService.swift; sourceTree = "<group>"; };
 		BE1EC22205AB415CA710630A /* NewVMSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewVMSheet.swift; sourceTree = "<group>"; };
 		BFA2A44AC35F44C3B148332B /* GeneralPrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralPrefsTab.swift; sourceTree = "<group>"; };
@@ -324,6 +326,7 @@
 				1FFEAC249D3B4496A7FAA1E8 /* Resources */,
 				AD35D209E2BF44C7B2933341 /* Products */,
 				B9A815A42F7DDC1B00A83680 /* Recovered References */,
+				B97A40AF2F971CF000FB577C /* AppIcon.icon */,
 			);
 			sourceTree = "<group>";
 		};
@@ -422,6 +425,7 @@
 				B7F2353406F74DA29BC32C98 /* wallpaper-tahoe.jpeg in Resources */,
 				913E77B9C7234987A66EEB69 /* wallpaper-sonoma.jpg in Resources */,
 				35019327E94D46B48C0B3721 /* wallpaper-sequoia.jpg in Resources */,
+				B97A40B02F971CF000FB577C /* AppIcon.icon in Resources */,
 				B90657DD2F96FB4500B426A0 /* Assets.xcassets in Resources */,
 				E5C7AEBBC9D04EA59DDC1D5E /* wallpaper-monterey.jpg in Resources */,
 			);
@@ -528,10 +532,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 302;
+				CURRENT_PROJECT_VERSION = 303;
 				DEVELOPMENT_TEAM = V4RT59UVJJ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Resources/Info.plist;
@@ -549,6 +554,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				SDKROOT = macosx;
@@ -561,6 +568,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
@@ -576,10 +585,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 302;
+				CURRENT_PROJECT_VERSION = 303;
 				DEVELOPMENT_TEAM = V4RT59UVJJ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Resources/Info.plist;
