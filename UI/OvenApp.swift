@@ -151,6 +151,7 @@ struct OvenApp: App {
             Group {
                 if depManager.allReady {
                     AppRootView()
+                        .tint(.orange)
                         .environmentObject(depManager)
                         .environmentObject(appState)
                         .environmentObject(theme)

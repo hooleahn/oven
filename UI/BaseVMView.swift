@@ -129,7 +129,6 @@ struct BaseVMView: View {
             if baseVMStore.isBuilding {
                 ProgressView().controlSize(.small)
                 Text("\(theme.building)…").font(.callout).foregroundStyle(.secondary)
-                // Lock / unlock toggle button
                 Button {
                     if buildSession.isLocked {
                         BuildSessionManager.shared.disableInputLock()
@@ -137,14 +136,13 @@ struct BaseVMView: View {
                         BuildSessionManager.shared.enableInputLock()
                     }
                 } label: {
-                    Label(buildSession.isLocked ? "Unlock Keyboard & Mouse" : "Lock Keyboard & Mouse",
+                    Label(buildSession.isLocked ? "Unlock Input" : "Lock Input",
                           systemImage: buildSession.isLocked ? "lock.fill" : "lock.open")
-//                    Image(systemName: buildSession.isLocked ? "lock.fill" : "lock.open")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help(buildSession.isLocked ? "Unlock input (⌘⇧⎋)" : "Lock keyboard and mouse input")
-                Button("Cancel") { baseVMStore.cancelBuild() }.controlSize(.small)
+                .buttonStyle(.bordered).controlSize(.small)
+                .help(buildSession.isLocked ? "Unlock keyboard & mouse (⌘⇧⎋)" : "Lock keyboard & mouse during build")
+                Button("Cancel") { baseVMStore.cancelBuild() }
+                    .buttonStyle(.bordered).controlSize(.small)
             }
             // Show Clone button when a ready base VM is selected
             if let selected = model.selectedBaseVM(from: baseVMStore.baseVMs),
@@ -159,6 +157,7 @@ struct BaseVMView: View {
             Button { Task { await baseVMStore.syncOCI(); lastRefreshedAt = Date() } } label: {
                 Image(systemName: "arrow.clockwise")
             }
+            .buttonStyle(.bordered).controlSize(.small)
             .help("Sync base VMs from tart")
             if let refreshed = lastRefreshedAt {
                 Text("Synced · " + coarseAge(of: refreshed))
@@ -168,8 +167,8 @@ struct BaseVMView: View {
             Button { model.isPresentingNewSheet = true } label: {
                 Label(theme.newBaseVM, systemImage: "plus")
             }
-            .help(theme.newBaseVM)
             .buttonStyle(.borderedProminent).controlSize(.small)
+            .help(theme.newBaseVM)
         }
         .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
     }
@@ -212,16 +211,62 @@ struct BaseVMView: View {
     }
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label(theme.baseVMs, systemImage: theme.baseVMIcon)
-        } description: {
-            Text(theme.funModeEnabled
-                 ? "No recipes yet. Bake a new one to get started."
-                 : "Build a base VM with Packer to start cloning from it.")
-        } actions: {
+        EmptyStateView(
+            theme.baseVMs,
+            systemImage: theme.baseVMIcon,
+            description: theme.funModeEnabled
+                ? "No recipes yet. Bake a new one to get started."
+                : "Build a base VM with Packer to start cloning from it."
+        ) {
             Button(theme.newBaseVM) { model.isPresentingNewSheet = true }
                 .buttonStyle(.borderedProminent)
+        } content: {
+            BaseVMWorkflowIndicator()
         }
+    }
+}
+
+// MARK: - Base VM workflow indicator (used in empty state)
+
+private struct BaseVMWorkflowIndicator: View {
+    var body: some View {
+        HStack(spacing: 0) {
+            WorkflowStep(icon: "arrow.down.circle.fill", color: .blue, label: "Download\nInstaller")
+            WorkflowArrow()
+            WorkflowStep(icon: "hammer.fill", color: .orange, label: "Build\nBase VM")
+            WorkflowArrow()
+            WorkflowStep(icon: "doc.on.doc.fill", color: .green, label: "Clone as\nWorking VM")
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct WorkflowStep: View {
+    let icon: String
+    let color: Color
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 24))
+                .foregroundStyle(color)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(width: 72)
+        }
+    }
+}
+
+private struct WorkflowArrow: View {
+    var body: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(.tertiary)
+            .padding(.horizontal, 8)
+            .padding(.bottom, 16) // optically align with icon centre
     }
 }
 

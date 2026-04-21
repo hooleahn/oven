@@ -68,6 +68,7 @@
 		B39FD500255442D793F5D6E4 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD60437C2E2242CDB8636D9F /* EmptyStateView.swift */; };
 		B6539E2F3DF443149F26FB2D /* VMListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B14F8A8C198458999D688B4 /* VMListView.swift */; };
 		B7F2353406F74DA29BC32C98 /* wallpaper-tahoe.jpeg in Resources */ = {isa = PBXBuildFile; fileRef = 67C9D25062A74F2FAB110AC8 /* wallpaper-tahoe.jpeg */; };
+		B90657DD2F96FB4500B426A0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5427CDAA002D4233B481E546 /* Assets.xcassets */; };
 		B9ADE8C02F7DE64D00B30458 /* SOFAService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9ADE8BF2F7DE64D00B30458 /* SOFAService.swift */; };
 		B9C8AE33CA8A401BBB4E7A90 /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DE3071761A4538AE953FA4 /* ProcessRunner.swift */; };
 		BD83F46D40364D3683D9FF41 /* InstallerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78338E0B4F0D412AA2F4C5AE /* InstallerView.swift */; };
@@ -415,6 +416,7 @@
 				B7F2353406F74DA29BC32C98 /* wallpaper-tahoe.jpeg in Resources */,
 				913E77B9C7234987A66EEB69 /* wallpaper-sonoma.jpg in Resources */,
 				35019327E94D46B48C0B3721 /* wallpaper-sequoia.jpg in Resources */,
+				B90657DD2F96FB4500B426A0 /* Assets.xcassets in Resources */,
 				E5C7AEBBC9D04EA59DDC1D5E /* wallpaper-monterey.jpg in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -521,7 +523,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 301;
+				CURRENT_PROJECT_VERSION = 302;
 				DEVELOPMENT_TEAM = V4RT59UVJJ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Resources/Info.plist;
@@ -569,7 +571,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 301;
+				CURRENT_PROJECT_VERSION = 302;
 				DEVELOPMENT_TEAM = V4RT59UVJJ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Resources/Info.plist;

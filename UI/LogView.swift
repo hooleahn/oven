@@ -12,6 +12,28 @@ struct LogView: View {
             .filter { searchText.isEmpty || $0.message.localizedCaseInsensitiveContains(searchText) || $0.source.localizedCaseInsensitiveContains(searchText) }
     }
 
+    // MARK: - Time grouping
+
+    private enum TimeGroup: String, CaseIterable {
+        case lastHour  = "Last Hour"
+        case today     = "Today"
+        case yesterday = "Yesterday"
+        case older     = "Older"
+    }
+
+    private func timeGroup(for entry: LogEntry) -> TimeGroup {
+        let now = Date()
+        let cal = Calendar.current
+        if now.timeIntervalSince(entry.timestamp) < 3600 { return .lastHour }
+        if cal.isDateInToday(entry.timestamp)            { return .today }
+        if cal.isDateInYesterday(entry.timestamp)        { return .yesterday }
+        return .older
+    }
+
+    private func entries(in group: TimeGroup) -> [LogEntry] {
+        filtered.filter { timeGroup(for: $0) == group }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Toolbar
@@ -56,11 +78,30 @@ struct LogView: View {
                                description: "Operations will be logged here as you use Oven.")
             } else {
                 ScrollViewReader { proxy in
-                    List(filtered) { entry in
-                        LogEntryRow(entry: entry)
-                            .id(entry.id)
-                            .listRowSeparator(.visible)
-                            .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+                    List {
+                        ForEach(TimeGroup.allCases, id: \.self) { group in
+                            let groupEntries = entries(in: group)
+                            if !groupEntries.isEmpty {
+                                Section {
+                                    ForEach(Array(groupEntries.enumerated()), id: \.element.id) { index, entry in
+                                        LogEntryRow(entry: entry, isEven: index.isMultiple(of: 2))
+                                            .id(entry.id)
+                                            .listRowSeparator(.hidden)
+                                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 12))
+                                            .listRowBackground(
+                                                index.isMultiple(of: 2)
+                                                    ? Color.primary.opacity(0.02)
+                                                    : Color.clear
+                                            )
+                                    }
+                                } header: {
+                                    Text(group.rawValue)
+                                        .font(.caption).fontWeight(.semibold)
+                                        .foregroundStyle(.secondary)
+                                        .textCase(nil)
+                                }
+                            }
+                        }
                     }
                     .listStyle(.plain)
                     .onChange(of: logger.entries.count) { _, _ in
@@ -95,12 +136,19 @@ struct LogView: View {
 
 struct LogEntryRow: View {
     let entry: LogEntry
+    var isEven: Bool = false
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
+            // 3px colored accent bar on the left edge
+            Rectangle()
+                .fill(accentBarColor)
+                .frame(width: 3)
+                .padding(.vertical, 4)
+
             Text(entry.formattedTimestamp)
                 .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.secondary.opacity(0.5))
                 .frame(width: 60, alignment: .leading)
 
             Image(systemName: levelIcon)
@@ -110,16 +158,27 @@ struct LogEntryRow: View {
 
             Text(entry.source)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.secondary.opacity(0.5))
                 .frame(width: 120, alignment: .leading)
                 .lineLimit(1)
 
             Text(entry.message)
                 .font(.callout)
+                .fontWeight(entry.level == .error ? .medium : .regular)
                 .foregroundStyle(entry.level == .error ? .red : .primary)
                 .textSelection(.enabled)
         }
-        .padding(.vertical, 1)
+        .padding(.vertical, 4)
+        .padding(.leading, 12)
+    }
+
+    private var accentBarColor: Color {
+        switch entry.level {
+        case .success: return .green
+        case .error:   return .red
+        case .warning: return .orange
+        case .info:    return .blue.opacity(0.6)
+        }
     }
 
     private var levelIcon: String {
@@ -139,5 +198,4 @@ struct LogEntryRow: View {
         case .error:   return .red
         }
     }
-
 }

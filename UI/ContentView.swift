@@ -61,25 +61,43 @@ struct ContentView: View {
 
 struct SidebarView: View {
     @EnvironmentObject var theme: AppTheme
+    @EnvironmentObject var vmStore: VMStore
+    @EnvironmentObject var appState: AppState
     @Binding var selection: SidebarItem?
+
+    private var runningVMCount: Int {
+        vmStore.vms.filter { $0.status == .running || $0.status == .suspended }.count
+    }
+
+    private var activeDownloadCount: Int {
+        appState.activeIPSWDownloads.count + appState.registryDownloads.count
+    }
 
     var body: some View {
         List(selection: $selection) {
-            Section("Library") {
-                sidebarItem(.virtualMachines)
+            Section {
+                sidebarItem(.virtualMachines, badge: runningVMCount > 0 ? "\(runningVMCount)" : nil)
                 sidebarItem(.baseVMs)
                 sidebarItem(.recipes)
-                sidebarItem(.installers)
+                sidebarItem(.installers, badge: activeDownloadCount > 0 ? "\(activeDownloadCount)" : nil)
                 sidebarItem(.registry)
+            } header: {
+                SidebarSectionHeader("Library")
             }
+
             if theme.mdmEnabled {
-                Section("MDM") {
+                Section {
                     sidebarItem(.mdmServers)
                     sidebarItem(.mdmEnrollment)
+                } header: {
+                    SidebarSectionHeader("MDM")
                 }
             }
-            Section("General") {
+
+            Section {
                 sidebarItem(.activityLog)
+            } header: {
+                SidebarSectionHeader("General")
             }
         }
         .listStyle(.sidebar)
@@ -87,8 +105,10 @@ struct SidebarView: View {
     }
 
     @ViewBuilder
-    private func sidebarItem(_ item: SidebarItem) -> some View {
-        Label(themedLabel(item), systemImage: themedIcon(item)).tag(item)
+    private func sidebarItem(_ item: SidebarItem, badge: String? = nil) -> some View {
+        Label(themedLabel(item), systemImage: themedIcon(item))
+            .badge(badge)
+            .tag(item)
     }
 
     // Resolve themed strings here, on the MainActor via @EnvironmentObject
@@ -116,6 +136,21 @@ struct SidebarView: View {
         case .mdmServers:      return "server.rack"
         case .activityLog:     return "list.bullet.rectangle"
         }
+    }
+}
+
+// MARK: - Sidebar section header
+
+private struct SidebarSectionHeader: View {
+    let title: String
+    init(_ title: String) { self.title = title }
+
+    var body: some View {
+        Text(title)
+            .font(.caption)
+            .fontWeight(.semibold)
+            .foregroundStyle(.secondary)
+            .textCase(nil)
     }
 }
 

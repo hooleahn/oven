@@ -17,10 +17,18 @@ struct MDMEnrollmentView: View {
                 Divider()
                 if profiles.isEmpty {
                     EmptyStateView("No Enrollment Profiles", systemImage: "lock.shield",
-                                   description: "Create an enrollment profile to use for MDM enrollment.") {
+                                   description: "Create an enrollment profile to make it easier to enroll VMs into your MDM.") {
                         Button("New Profile") { isPresentingSheet = true }
                             .buttonStyle(.borderedProminent)
                             .keyboardShortcut(.defaultAction)
+                    } content: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            MDMBenefitRow(icon: "checkmark.shield.fill", color: .green,
+                                          text: "Simplify enrolling VMs into Jamf Pro at boot")
+                            MDMBenefitRow(icon: "clock.arrow.2.circlepath", color: .orange,
+                                          text: "Reuse invitation IDs across multiple VM clones")
+                        }
+                        .padding(.vertical, 4)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -287,6 +295,25 @@ struct MDMProfileDetailPane: View {
             fetchError = error.localizedDescription
         }
         isFetchingExpiry = false
+    }
+}
+
+// MARK: - MDM benefit bullet row (used in empty state)
+
+private struct MDMBenefitRow: View {
+    let icon: String
+    let color: Color
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(color)
+                .frame(width: 20)
+            Text(text)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 

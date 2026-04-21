@@ -42,7 +42,7 @@ struct InstallerView: View {
                                description: err) {
                     Button("Retry") { Task { await loadFirmwares() } }
                         .buttonStyle(.borderedProminent)
-                }
+                } content: { EmptyView() }
             } else {
                 firmwareList
             }
@@ -78,8 +78,9 @@ struct InstallerView: View {
                     try? FileManager.default.removeItem(at: mistCache)
                     await loadFirmwares()
                 } } label: {
-                Image(systemName: "arrow.clockwise")
+                Label("Refresh", systemImage: "arrow.clockwise")
             }
+            .buttonStyle(.bordered).controlSize(.small)
             .help("Refresh firmware list")
         }
         .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
@@ -393,10 +394,11 @@ struct IPSWFirmwareRow: View {
                     }
                 }
             } else {
-                HStack(spacing: 8) {
-                    Button("Download", action: onDownload)
-                        .buttonStyle(.bordered).controlSize(.small)
+                Button(action: onDownload) {
+                    Label("Download", systemImage: "arrow.down.circle")
                 }
+                .buttonStyle(.borderedProminent).controlSize(.small)
+                .help("Download this IPSW installer")
             }
         }
         .padding(.vertical, 8)

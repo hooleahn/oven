@@ -187,6 +187,7 @@ struct RegistryView: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
+            .buttonStyle(.bordered).controlSize(.small)
             .help("Sync images from tart")
             if let refreshed = lastRefreshedAt {
                 Text("Synced · " + coarseAge(of: refreshed))
@@ -286,7 +287,8 @@ struct RegistryView: View {
                 rvm.saveImages()
                 rvm.newImageRef = ""
             }
-            .buttonStyle(.bordered).controlSize(.small)
+            .buttonStyle(.borderedProminent).controlSize(.small)
+            .keyboardShortcut(.defaultAction)
             .disabled(rvm.newImageRef.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(.horizontal, 14).padding(.vertical, 10).background(.bar)

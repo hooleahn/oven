@@ -162,7 +162,8 @@ struct RecipesView: View {
             Button { templateStore.load() } label: {
                 Image(systemName: "arrow.clockwise")
             }
-            .buttonStyle(.borderless).help("Refresh")
+            .buttonStyle(.bordered).controlSize(.small)
+            .help("Refresh VM list")
 
             Button { model.isPresentingNewSheet = true } label: {
                 Image(systemName: "plus")

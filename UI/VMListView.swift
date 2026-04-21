@@ -159,6 +159,7 @@ struct VMListView: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
+            .buttonStyle(.bordered).controlSize(.small)
             .help("Refresh VM list")
 
             // ── Filters + Sort ───────────────────────────────────────────────
@@ -172,6 +173,7 @@ struct VMListView: View {
             Button { model.isListView.toggle() } label: {
                 Image(systemName: model.isListView ? "square.grid.2x2" : "list.bullet")
             }
+            .buttonStyle(.bordered).controlSize(.small)
             .help(model.isListView ? "Switch to grid view" : "Switch to list view")
 
             // Stop All — only shown when VMs are running
@@ -465,7 +467,7 @@ struct VMListView: View {
                        description: "Create a new VM from a Base VM or pull an image from a registry.") {
             Button("New VM") { appState.isPresentingNewVM = true }
                 .buttonStyle(.borderedProminent)
-        }
+        } content: { EmptyView() }
     }
 
     // MARK: Actions

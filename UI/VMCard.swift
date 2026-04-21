@@ -11,6 +11,8 @@ struct VMCard: View {
     let onClone: () -> Void
     let onDelete: () -> Void
 
+    @State private var isHovered = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
 
@@ -19,19 +21,31 @@ struct VMCard: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // Thumbnail
                     ZStack {
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: 10)
                             .fill(thumbnailColor)
-                            .frame(height: 88)
+                            .frame(height: 140)
                         if let wallpaper = osWallpaper,
                            let nsImg = Bundle.main.image(forResource: wallpaper) {
                             Image(nsImage: nsImg)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(height: 88)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .frame(height: 140)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
+                                    RoundedRectangle(cornerRadius: 10)
                                         .fill(thumbnailOverlay)
+                                )
+                                .overlay(
+                                    // Gradient overlay on bottom 40% for text legibility
+                                    LinearGradient(
+                                        gradient: Gradient(stops: [
+                                            .init(color: .clear, location: 0.6),
+                                            .init(color: .black.opacity(0.7), location: 1.0)
+                                        ]),
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
                                 )
                         } else {
                             Image(systemName: osIcon)
@@ -43,10 +57,11 @@ struct VMCard: View {
                         StatusDot(status: vm.status).padding(8)
                     }
 
-                    // Info
-                    VStack(alignment: .leading, spacing: 2) {
+                    // Info — frame(maxWidth: .infinity) ensures the full card width is
+                    // hittable, not just the area directly beneath left-aligned text.
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(vm.displayName.isEmpty ? vm.name : vm.displayName)
-                            .font(.callout).fontWeight(.semibold).lineLimit(1)
+                            .font(.body).fontWeight(.bold).lineLimit(1)
                         Text(showsDisplayName ? vm.name : " ")
                             .font(.system(.caption2, design: .monospaced))
                             .foregroundStyle(.tertiary).lineLimit(1)
@@ -85,12 +100,15 @@ struct VMCard: View {
                             }
                         }
                         .frame(height: 22)
+                        // Prevent the ScrollView from swallowing taps that should select the card
+                        .allowsHitTesting(false)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .contentShape(Rectangle())
 
             // ── Action buttons ───────────────────────────────────────────────
             HStack(spacing: 4) {
@@ -136,15 +154,22 @@ struct VMCard: View {
             .padding(.bottom, 10)
             .zIndex(1)
         }
-        .contentShape(RoundedRectangle(cornerRadius: 10))
-        .background(.background, in: RoundedRectangle(cornerRadius: 10))
+        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .background(.background, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: 12)
                 .strokeBorder(isSelected ? Color.accentColor : Color.primary.opacity(0.08),
-                              lineWidth: isSelected ? 2 : 0.5)
+                              lineWidth: isSelected ? 3 : 0.5)
         )
-        .shadow(color: .black.opacity(isSelected ? 0.12 : 0.04), radius: isSelected ? 6 : 2)
-
+        .shadow(color: isSelected ? Color.accentColor.opacity(0.3) : .black.opacity(isSelected ? 0.12 : 0.04),
+                radius: isSelected ? 8 : 2)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .brightness(isHovered ? 0.03 : 0)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
         .animation(.easeInOut(duration: 0.15), value: isSelected)
     }
 
