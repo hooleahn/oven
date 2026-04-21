@@ -12,12 +12,14 @@ struct VarsFileDetailPane: View {
     @Binding var isMetadataDirty: Bool
     @Binding var isSaving: Bool
     @Binding var saveError: String?
+    @Binding var isLoadingContent: Bool
 
     let onSave: () -> Void
     let onRevert: () -> Void
     let onDuplicate: () -> Void
     let onDelete: () -> Void
 
+    @State private var copied = false
     private var isAnyDirty: Bool { isDirty || isMetadataDirty }
 
     var body: some View {
@@ -31,7 +33,7 @@ struct VarsFileDetailPane: View {
             HCLEditor(
                 text: $editedContent,
                 isEditable: true,
-                onChange: { isDirty = true }
+                onChange: { if !isLoadingContent { isDirty = true } }
             )
         }
     }
@@ -79,8 +81,41 @@ struct VarsFileDetailPane: View {
                 Image(systemName: "trash")
             }
             .buttonStyle(.borderless).foregroundStyle(.red).help("Delete")
+            Divider().frame(height: 16)
+            fileActionsMenu
         }
         .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
+    }
+
+    // MARK: - File actions overflow menu
+
+    private var fileActionsMenu: some View {
+        Menu {
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(editedContent, forType: .string)
+                copied = true
+                Task { try? await Task.sleep(for: .seconds(2)); copied = false }
+            } label: {
+                Label(copied ? "Copied!" : "Copy to Clipboard", systemImage: copied ? "checkmark" : "doc.on.doc")
+            }
+            Divider()
+            Button {
+                NSWorkspace.shared.open(template.url)
+            } label: {
+                Label("Open in Editor", systemImage: "pencil")
+            }
+            Button {
+                NSWorkspace.shared.activateFileViewerSelecting([template.url])
+            } label: {
+                Label("Reveal in Finder", systemImage: "folder")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("More actions")
     }
 
     // MARK: - Security banner
@@ -110,13 +145,13 @@ struct VarsFileDetailPane: View {
                 Text("Display Name").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
                 TextField("", text: $editedDisplayName,
                           prompt: Text(template.filename).foregroundStyle(.tertiary))
-                    .onChange(of: editedDisplayName) { _, _ in isMetadataDirty = true }
+                    .onChange(of: editedDisplayName) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
             }
             GridRow {
                 Text("Description").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
                 TextField("", text: $editedDescription, axis: .vertical)
                     .lineLimit(2...4)
-                    .onChange(of: editedDescription) { _, _ in isMetadataDirty = true }
+                    .onChange(of: editedDescription) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
             }
             GridRow {
                 Text("File Path").foregroundStyle(.secondary).gridColumnAlignment(.trailing)

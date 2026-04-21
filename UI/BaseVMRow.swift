@@ -22,24 +22,24 @@ struct BaseVMRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.md) {
             Image(systemName: vm.buildStatus.systemImage)
                 .font(.title3).foregroundStyle(statusColor).frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 // Line 1: Display name (or inferred for registry)
                 Text(vm.vmSource == .registry && vm.displayName.isEmpty ? inferredDisplayName : primaryName)
-                    .fontWeight(.medium).lineLimit(1)
+                    .font(.cardTitle).lineLimit(1)
                 // Line 2: Tart name (monospaced, smaller)
                 if vm.vmSource == .registry || (!vm.displayName.isEmpty && vm.displayName != vm.name) {
                     Text(vm.name)
-                        .font(.system(.caption2, design: .monospaced))
+                        .font(.cardMono)
                         .foregroundStyle(.tertiary).lineLimit(1)
                 }
                 // Line 3: OS + hardware / pull date
-                Text(subtitleLine).font(.caption).foregroundStyle(.secondary)
+                Text(subtitleLine).font(.cardSubtitle).foregroundStyle(.secondary)
                 // Line 4: Provisioning + build date (local only)
                 if vm.vmSource == .local, let line2 = provisioningLine {
-                    Text(line2).font(.caption).foregroundStyle(.secondary)
+                    Text(line2).font(.cardSubtitle).foregroundStyle(.secondary)
                 }
             }
             Spacer()
@@ -48,12 +48,12 @@ struct BaseVMRow: View {
             } else {
                 Text(vm.buildStatus.label)
                     .font(.caption).fontWeight(.medium)
-                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .padding(.horizontal, Spacing.sm).padding(.vertical, 3)
                     .background(statusColor.opacity(0.12), in: Capsule())
                     .foregroundStyle(statusColor)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Spacing.xs)
     }
 
     private var subtitleLine: String {
@@ -84,9 +84,9 @@ struct BaseVMRow: View {
     private var statusColor: Color {
         switch vm.buildStatus {
         case .ready:    return .green
-        case .building: return .purple
+        case .building: return .vmBuilding
         case .error:    return .red
-        default:        return .secondary
+        default:        return .vmStopped
         }
     }
 }

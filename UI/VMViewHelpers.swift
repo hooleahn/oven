@@ -13,8 +13,8 @@ struct StatusPill: View {
                 .font(.caption)
                 .fontWeight(.medium)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
+        .padding(.horizontal, Spacing.sm + 2) // 10 pt
+        .padding(.vertical, Spacing.xs)
         .background(bgColor, in: Capsule())
         .accessibilityLabel("Status: \(status.label)")
     }
@@ -55,9 +55,9 @@ struct DetailSection<Content: View>: View {
             Text(title.uppercased())
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 14)
-                .padding(.top, 14)
-                .padding(.bottom, 6)
+                .padding(.horizontal, Spacing.lg - 2) // 14 pt
+                .padding(.top, Spacing.lg - 2)
+                .padding(.bottom, Spacing.xs + 2)    // 6 pt
             content()
         }
     }
@@ -105,9 +105,9 @@ struct DetailRow: View {
                 .help("Copy to clipboard")
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, Spacing.lg - 2) // 14 pt
         .padding(.vertical, 5)
-        Divider().padding(.leading, 14)
+        Divider().padding(.leading, Spacing.lg - 2)
     }
 }
 

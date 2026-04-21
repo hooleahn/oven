@@ -1,5 +1,13 @@
 import SwiftUI
 
+// MARK: - Sort Order
+
+private enum FirmwareSortOrder: String, CaseIterable {
+    case date    = "Date"
+    case size    = "Size"
+    case version = "Version"
+}
+
 // MARK: - InstallerView
 
 struct InstallerView: View {
@@ -13,20 +21,42 @@ struct InstallerView: View {
     @State private var searchText: String = ""
     @State private var isPresentingBaseVMSheet = false
     @State private var selectedIPSWForBaseVM: URL? = nil
+    @State private var sortOrder: FirmwareSortOrder = .date
 
     private var settings: AppSettings { AppSettings.load() }
 
     var filteredLocalIPSWs: [URL] {
-        guard !searchText.isEmpty else { return localIPSWs }
-        let q = searchText.lowercased()
-        return localIPSWs.filter { $0.lastPathComponent.localizedCaseInsensitiveContains(q) }
+        let base = searchText.isEmpty ? localIPSWs : localIPSWs.filter {
+            $0.lastPathComponent.localizedCaseInsensitiveContains(searchText)
+        }
+        switch sortOrder {
+        case .date:
+            return base.sorted {
+                let a = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                let b = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                return a > b
+            }
+        case .size:
+            return base.sorted {
+                let a = (try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                let b = (try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                return a > b
+            }
+        case .version:
+            return base.sorted { $0.lastPathComponent > $1.lastPathComponent }
+        }
     }
 
     var filteredFirmwares: [IPSWFirmware] {
-        guard !searchText.isEmpty else { return firmwares }
-        let q = searchText.lowercased()
-        return firmwares.filter {
-            $0.displayName.lowercased().contains(q) || $0.version.contains(q) || $0.buildid.contains(q)
+        let base = searchText.isEmpty ? firmwares : firmwares.filter {
+            $0.displayName.lowercased().contains(searchText.lowercased())
+            || $0.version.contains(searchText)
+            || $0.buildid.contains(searchText)
+        }
+        switch sortOrder {
+        case .date:    return base.sorted { $0.releasedate > $1.releasedate }
+        case .size:    return base.sorted { $0.filesize > $1.filesize }
+        case .version: return base.sorted { $0.version > $1.version }
         }
     }
 
@@ -70,6 +100,23 @@ struct InstallerView: View {
                   systemImage: settings.ipswDownloadMode == .mistCli ? "terminal" : "network")
                 .font(.caption).foregroundStyle(.secondary)
 
+            Menu {
+                ForEach(FirmwareSortOrder.allCases, id: \.self) { order in
+                    Button {
+                        sortOrder = order
+                    } label: {
+                        HStack {
+                            Text(order.rawValue)
+                            if sortOrder == order { Image(systemName: "checkmark") }
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "arrow.up.arrow.down")
+            }
+            .buttonStyle(.bordered).controlSize(.small)
+            .help("Sort by: \(sortOrder.rawValue)")
+
             Button { Task {
                     await IPSWService.shared.invalidateCache()
                     // Also clear mist cache
@@ -83,7 +130,7 @@ struct InstallerView: View {
             .buttonStyle(.bordered).controlSize(.small)
             .help("Refresh firmware list")
         }
-        .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
+        .padding(.horizontal, Spacing.lg - 2).padding(.vertical, Spacing.sm).background(.bar)
     }
 
     // MARK: List
@@ -146,6 +193,22 @@ struct InstallerView: View {
                                 }) {
                                     try? FileManager.default.removeItem(at: url)
                                     localIPSWs.removeAll { $0 == url }
+                                }
+                            },
+                            onCreateBaseVM: {
+                                if let url = localIPSWs.first(where: { u in
+                                    let name = u.lastPathComponent
+                                    if name == fw.suggestedFilename { return true }
+                                    if name.contains(fw.buildid) { return true }
+                                    let stem = u.deletingPathExtension().lastPathComponent
+                                    if let r = stem.range(of: fw.version) {
+                                        let next = stem[r.upperBound...].first
+                                        return next == nil || next == "-" || next == "_"
+                                    }
+                                    return false
+                                }) {
+                                    selectedIPSWForBaseVM = url
+                                    isPresentingBaseVMSheet = true
                                 }
                             }
                         )
@@ -327,7 +390,7 @@ struct InstallerView: View {
     }
 }
 
-// MARK: - Firmware row (unified for both sources)
+// MARK: - Firmware row (Available from Apple)
 
 struct IPSWFirmwareRow: View {
     let firmware: IPSWFirmware
@@ -335,78 +398,165 @@ struct IPSWFirmwareRow: View {
     let isDownloaded: Bool
     let onDownload: () -> Void
     var onDelete: (() -> Void)? = nil
+    var onCreateBaseVM: (() -> Void)? = nil
 
+    @State private var isExpanded = false
     @State private var isPresentingDeleteConfirm = false
 
+    private var formattedReleaseDate: String {
+        let raw = String(firmware.releasedate.prefix(10)) // "YYYY-MM-DD"
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        if let date = df.date(from: raw) {
+            df.dateStyle = .medium
+            df.timeStyle = .none
+            return df.string(from: date)
+        }
+        return raw
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: isDownloaded ? "internaldrive.fill" : "apple.logo")
-                .font(.title3)
-                .foregroundStyle(isDownloaded ? .green : .secondary)
+        DisclosureGroup(isExpanded: $isExpanded) {
+            // Expanded detail rows
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 16) {
+                    Label {
+                        Text("Build").foregroundStyle(.secondary) +
+                        Text("  ") +
+                        Text(firmware.buildid)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.primary)
+                    } icon: {
+                        Image(systemName: "hammer")
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.caption)
+
+                    Label {
+                        Text("Released").foregroundStyle(.secondary) +
+                        Text("  ") +
+                        Text(formattedReleaseDate).foregroundStyle(.primary)
+                    } icon: {
+                        Image(systemName: "calendar")
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.caption)
+                }
+
+                if firmware.signed {
+                    Label("Currently signed by Apple — eligible for installation", systemImage: "checkmark.seal.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
+
+                if isDownloaded, let onCreateBaseVM {
+                    Button(action: onCreateBaseVM) {
+                        Label("Create Base VM", systemImage: "plus.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent).controlSize(.small)
+                    .padding(.top, 2)
+                }
+            }
+            .padding(.leading, 40)
+            .padding(.vertical, 4)
+        } label: {
+            HStack(spacing: 12) {
+                // Icon with optional downloaded badge
+                ZStack(alignment: .bottomTrailing) {
+                    Image(systemName: "apple.logo")
+                        .font(.title3)
+                        .foregroundStyle(isDownloaded ? .green : .secondary)
+                        .frame(width: 28, height: 28)
+                    if isDownloaded {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white, .green)
+                            .offset(x: 4, y: 4)
+                    }
+                }
                 .frame(width: 28)
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text(firmware.displayName).fontWeight(.medium)
-                    Text(firmware.buildid)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 8) {
+                        Text(firmware.displayName).fontWeight(.medium)
+                        // Build number in monospace chip
+                        Text(firmware.buildid)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, Spacing.xs + 2).padding(.vertical, 2)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: CornerRadius.chip))
+                        if firmware.signed {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.caption2).foregroundStyle(.green)
+                                .help("Currently signed by Apple")
+                        }
+                    }
+                    // Size + date
+                    Text("\(firmware.formattedSize) · \(formattedReleaseDate)")
                         .font(.caption).foregroundStyle(.secondary)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
-                    if firmware.signed {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.caption).foregroundStyle(.green)
-                            .help("Currently signed by Apple")
-                    }
                 }
-                Text("\(firmware.formattedSize) · Released on \(firmware.releasedate.prefix(10))")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
 
-            Spacer()
+                Spacer()
 
-            if let progress = downloadProgress {
-                VStack(alignment: .trailing, spacing: 4) {
-                    ProgressView(value: progress).progressViewStyle(.linear).frame(width: 80)
-                    Text("\(Int(progress * 100))%").font(.caption).foregroundStyle(.secondary)
-                }
-            } else if isDownloaded {
-                HStack(spacing: 8) {
-                    Label("Downloaded", systemImage: "checkmark.circle.fill")
-                        .font(.caption).foregroundStyle(.green)
-                    if let onDelete {
-                        Button(role: .destructive, action: { isPresentingDeleteConfirm = true }) {
-                            Image(systemName: "trash")
+                // Right-side: download progress, status pill, or download button
+                Group {
+                    if let progress = downloadProgress {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            ProgressView(value: progress)
+                                .progressViewStyle(.linear)
+                                .frame(width: 100)
+                            Text("\(Int(progress * 100))%")
                                 .font(.caption)
-                                .foregroundStyle(.red)
+                                .foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.bordered).controlSize(.small)
-                        .help("Delete IPSW file")
-                        .confirmationDialog(
-                            "Delete \"\(firmware.displayName)\"?",
-                            isPresented: $isPresentingDeleteConfirm,
-                            titleVisibility: .visible
-                        ) {
-                            Button("Delete", role: .destructive, action: onDelete)
-                            Button("Cancel", role: .cancel) {}
-                        } message: {
-                            Text("This will permanently delete the IPSW file from disk.")
+                    } else if isDownloaded {
+                        HStack(spacing: 6) {
+                            // "Ready to use" status pill
+                            Text("Ready to use")
+                                .font(.caption2).fontWeight(.medium)
+                                .foregroundStyle(.green)
+                                .padding(.horizontal, Spacing.sm).padding(.vertical, 3)
+                                .background(Color.green.opacity(0.12),
+                                            in: Capsule())
+                                .overlay(Capsule().stroke(Color.green.opacity(0.3), lineWidth: 1))
+
+                            if let onDelete {
+                                Button(role: .destructive,
+                                       action: { isPresentingDeleteConfirm = true }) {
+                                    Image(systemName: "trash")
+                                        .font(.caption)
+                                        .foregroundStyle(.red)
+                                }
+                                .buttonStyle(.bordered).controlSize(.small)
+                                .help("Delete IPSW file")
+                                .confirmationDialog(
+                                    "Delete \"\(firmware.displayName)\"?",
+                                    isPresented: $isPresentingDeleteConfirm,
+                                    titleVisibility: .visible
+                                ) {
+                                    Button("Delete", role: .destructive, action: onDelete)
+                                    Button("Cancel", role: .cancel) {}
+                                } message: {
+                                    Text("This will permanently delete the IPSW file from disk.")
+                                }
+                            }
                         }
+                    } else {
+                        Button(action: onDownload) {
+                            Label("Download", systemImage: "arrow.down.circle")
+                        }
+                        .buttonStyle(.borderedProminent).controlSize(.small)
+                        .help("Download \(firmware.formattedSize) IPSW installer")
                     }
                 }
-            } else {
-                Button(action: onDownload) {
-                    Label("Download", systemImage: "arrow.down.circle")
-                }
-                .buttonStyle(.borderedProminent).controlSize(.small)
-                .help("Download this IPSW installer")
             }
+            .padding(.vertical, 6)
         }
-        .padding(.vertical, 8)
-        .alignmentGuide(.listRowSeparatorLeading) {  $0[.leading] }
+        .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
     }
 }
 
-// MARK: - Local IPSW row (unchanged)
+// MARK: - Local IPSW row (downloaded)
 
 struct LocalIPSWRow: View {
     let url: URL
@@ -415,21 +565,56 @@ struct LocalIPSWRow: View {
 
     @State private var isPresentingDeleteConfirm = false
 
+    private var displayName: String { url.deletingPathExtension().lastPathComponent }
+
+    private var formattedFileSize: String? {
+        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize else { return nil }
+        let gb = Double(size) / 1_073_741_824
+        return String(format: "%.2f GB", gb)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "internaldrive.fill")
-                .font(.title3).foregroundStyle(.green).frame(width: 28)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(url.deletingPathExtension().lastPathComponent).fontWeight(.medium)
-                if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-                    Text(String(format: "%.1f GB", Double(size) / 1_073_741_824))
-                        .font(.caption).foregroundStyle(.secondary)
+            // Drive icon with green checkmark badge
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: "internaldrive.fill")
+                    .font(.title3)
+                    .foregroundStyle(.green)
+                    .frame(width: 28, height: 28)
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white, .green)
+                    .offset(x: 4, y: 4)
+            }
+            .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(displayName).fontWeight(.medium)
+                HStack(spacing: 8) {
+                    // Prominent file size
+                    if let size = formattedFileSize {
+                        Text(size)
+                            .font(.caption).fontWeight(.semibold)
+                            .foregroundStyle(.primary)
+                    }
+                    // "Ready to use" status pill
+                    Text("Ready to use")
+                        .font(.caption2).fontWeight(.medium)
+                        .foregroundStyle(.green)
+                        .padding(.horizontal, Spacing.sm).padding(.vertical, 3)
+                        .background(Color.green.opacity(0.12), in: Capsule())
+                        .overlay(Capsule().stroke(Color.green.opacity(0.3), lineWidth: 1))
                 }
             }
+
             Spacer()
+
             HStack(spacing: 8) {
-                Button("Create Base VM", action: onCreateBaseVM)
-                    .buttonStyle(.borderedProminent).controlSize(.small)
+                Button(action: onCreateBaseVM) {
+                    Label("Create Base VM", systemImage: "plus.circle.fill")
+                }
+                .buttonStyle(.borderedProminent).controlSize(.small)
+
                 if let onDelete {
                     Button(role: .destructive, action: { isPresentingDeleteConfirm = true }) {
                         Image(systemName: "trash")
@@ -439,7 +624,7 @@ struct LocalIPSWRow: View {
                     .buttonStyle(.bordered).controlSize(.small)
                     .help("Delete IPSW file")
                     .confirmationDialog(
-                        "Delete \"\(url.deletingPathExtension().lastPathComponent)\"?",
+                        "Delete \"\(displayName)\"?",
                         isPresented: $isPresentingDeleteConfirm,
                         titleVisibility: .visible
                     ) {
@@ -452,7 +637,7 @@ struct LocalIPSWRow: View {
             }
         }
         .padding(.vertical, 8)
-        .alignmentGuide(.listRowSeparatorLeading) {  $0[.leading] }
+        .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
     }
 }
 

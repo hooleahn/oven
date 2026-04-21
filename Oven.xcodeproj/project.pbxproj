@@ -69,6 +69,8 @@
 		B6539E2F3DF443149F26FB2D /* VMListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B14F8A8C198458999D688B4 /* VMListView.swift */; };
 		B7F2353406F74DA29BC32C98 /* wallpaper-tahoe.jpeg in Resources */ = {isa = PBXBuildFile; fileRef = 67C9D25062A74F2FAB110AC8 /* wallpaper-tahoe.jpeg */; };
 		B90657DD2F96FB4500B426A0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5427CDAA002D4233B481E546 /* Assets.xcassets */; };
+		B97A40AA2F970E3F00FB577C /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40A92F970E3F00FB577C /* OnboardingView.swift */; };
+		B97A40AC2F970FB300FB577C /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40AB2F970FB300FB577C /* DesignSystem.swift */; };
 		B9ADE8C02F7DE64D00B30458 /* SOFAService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9ADE8BF2F7DE64D00B30458 /* SOFAService.swift */; };
 		B9C8AE33CA8A401BBB4E7A90 /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DE3071761A4538AE953FA4 /* ProcessRunner.swift */; };
 		BD83F46D40364D3683D9FF41 /* InstallerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78338E0B4F0D412AA2F4C5AE /* InstallerView.swift */; };
@@ -165,6 +167,8 @@
 		B02BCD21BC2FF6DA5508A215 /* Services/PackerTemplateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/PackerTemplateStore.swift; sourceTree = SOURCE_ROOT; };
 		B605AD8CB894481CA4152C12 /* VMListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMListViewModel.swift; sourceTree = "<group>"; };
 		B79EFA2071E14B4F9BAA4878 /* MDMProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMProfile.swift; sourceTree = "<group>"; };
+		B97A40A92F970E3F00FB577C /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		B97A40AB2F970FB300FB577C /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		B9ADE8BF2F7DE64D00B30458 /* SOFAService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SOFAService.swift; sourceTree = "<group>"; };
 		BE1EC22205AB415CA710630A /* NewVMSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewVMSheet.swift; sourceTree = "<group>"; };
 		BFA2A44AC35F44C3B148332B /* GeneralPrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralPrefsTab.swift; sourceTree = "<group>"; };
@@ -292,6 +296,8 @@
 				8D7CC6B8851E454A81E5D6C7 /* NotificationPrefsTab.swift */,
 				A48BCA5004344B659461399F /* IntegrationsPrefsTab.swift */,
 				82AFD002D57A425686F97AF7 /* TagsPrefsTab.swift */,
+				B97A40A92F970E3F00FB577C /* OnboardingView.swift */,
+				B97A40AB2F970FB300FB577C /* DesignSystem.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -435,6 +441,7 @@
 				E19CD75D7F6C42A9AF80D234 /* BaseVMDetailPane.swift in Sources */,
 				D47681E4C31446C29C356850 /* BaseVMEditSheet.swift in Sources */,
 				95C70AF01F304C9AAB6DDD3C /* BaseVMRow.swift in Sources */,
+				B97A40AA2F970E3F00FB577C /* OnboardingView.swift in Sources */,
 				E0394ED035C447DC8F00D77A /* BaseVMStore.swift in Sources */,
 				1D8FC871ABAC420F8C4D5815 /* BaseVMView.swift in Sources */,
 				50ACC8882A244C0CA52598C0 /* BuildLogView.swift in Sources */,
@@ -443,6 +450,7 @@
 				D52FB5DDC895499D911FA20A /* CirrusCatalogueSheet.swift in Sources */,
 				7B23F5DD1EE24C788EBAEC5B /* CirrusLabsCatalogueRow.swift in Sources */,
 				4643B10B3B364CC2A34AE103 /* CloneVMSheet.swift in Sources */,
+				B97A40AC2F970FB300FB577C /* DesignSystem.swift in Sources */,
 				73054575B317430EBFA56649 /* ContentView.swift in Sources */,
 				B9ADE8C02F7DE64D00B30458 /* SOFAService.swift in Sources */,
 				7C35CBA641854707ABDC0925 /* Dependency.swift in Sources */,

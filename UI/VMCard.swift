@@ -21,7 +21,7 @@ struct VMCard: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // Thumbnail
                     ZStack {
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: CornerRadius.thumbnail)
                             .fill(thumbnailColor)
                             .frame(height: 140)
                         if let wallpaper = osWallpaper,
@@ -30,9 +30,9 @@ struct VMCard: View {
                                 .resizable()
                                 .scaledToFill()
                                 .frame(height: 140)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .clipShape(RoundedRectangle(cornerRadius: CornerRadius.thumbnail))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
+                                    RoundedRectangle(cornerRadius: CornerRadius.thumbnail)
                                         .fill(thumbnailOverlay)
                                 )
                                 .overlay(
@@ -45,7 +45,7 @@ struct VMCard: View {
                                         startPoint: .top,
                                         endPoint: .bottom
                                     )
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    .clipShape(RoundedRectangle(cornerRadius: CornerRadius.thumbnail))
                                 )
                         } else {
                             Image(systemName: osIcon)
@@ -54,31 +54,31 @@ struct VMCard: View {
                         }
                     }
                     .overlay(alignment: .topTrailing) {
-                        StatusDot(status: vm.status).padding(8)
+                        StatusDot(status: vm.status).padding(Spacing.sm)
                     }
 
                     // Info — frame(maxWidth: .infinity) ensures the full card width is
                     // hittable, not just the area directly beneath left-aligned text.
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
                         Text(vm.displayName.isEmpty ? vm.name : vm.displayName)
-                            .font(.body).fontWeight(.bold).lineLimit(1)
+                            .font(.cardTitle).lineLimit(1)
                         Text(showsDisplayName ? vm.name : " ")
-                            .font(.system(.caption2, design: .monospaced))
+                            .font(.cardMono)
                             .foregroundStyle(.tertiary).lineLimit(1)
                         if !vm.osVersion.isEmpty {
                             Text("\(vm.osName.rawValue) \(vm.osVersion)")
-                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                .font(.cardSubtitle).foregroundStyle(.secondary).lineLimit(1)
                         }
                         if vm.osName == .unknown && vm.osVersion.isEmpty {
                             Text("Unknown OS")
-                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                .font(.cardSubtitle).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Text({
                             let disk = vm.actualDiskGB.map { "\(vm.diskGB) GB max · \($0) GB used" } ?? "\(vm.diskGB) GB"
                             return "\(vm.cpuCount) CPU · \(vm.memoryGB) GB · \(disk)"
                         }())
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        HStack(spacing: 4) {
+                        .font(.cardSubtitle).foregroundStyle(.secondary).lineLimit(1)
+                        HStack(spacing: Spacing.xs) {
                             Text("Created \(vm.createdAt.formatted(date: .numeric, time: .omitted))")
                                 .font(.caption2).foregroundStyle(.tertiary)
                             if let last = vm.lastStartedAt {
@@ -89,7 +89,7 @@ struct VMCard: View {
                         }
                         .lineLimit(1)
                         ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 4) {
+                            HStack(spacing: Spacing.xs) {
                                 if vm.tags.isEmpty {
                                     Color.clear
                                 } else {
@@ -104,14 +104,14 @@ struct VMCard: View {
                         .allowsHitTesting(false)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
+                    .padding(Spacing.md - 2) // ≈ 10 pt, matching previous value
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             // ── Action buttons ───────────────────────────────────────────────
-            HStack(spacing: 4) {
+            HStack(spacing: Spacing.xs) {
                 if !vm.effectivelyBase {
                     // Working VM — show Start/Stop
                     if vm.status == .running || vm.status == .suspended {
@@ -133,9 +133,9 @@ struct VMCard: View {
                     Text("Base VM")
                         .font(.caption2).fontWeight(.medium)
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .padding(.horizontal, Spacing.sm).padding(.vertical, Spacing.xs)
                         .background(.quaternary, in: Capsule())
-                        .frame(width: 26 + 4 + 26, height: 26) // same width as two buttons
+                        .frame(width: 26 + 4 + 26, height: 26)
                 }
                 Button(action: onEdit) {
                     Image(systemName: "pencil").frame(width: 26, height: 26)
@@ -150,21 +150,12 @@ struct VMCard: View {
                 }
                 .buttonStyle(.bordered).controlSize(.small).help("Delete")
             }
-            .padding(.horizontal, 10)
-            .padding(.bottom, 10)
+            .padding(.horizontal, Spacing.md - 2) // ≈ 10 pt
+            .padding(.bottom, Spacing.md - 2)
             .zIndex(1)
         }
-        .contentShape(RoundedRectangle(cornerRadius: 12))
-        .background(.background, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(isSelected ? Color.accentColor : Color.primary.opacity(0.08),
-                              lineWidth: isSelected ? 3 : 0.5)
-        )
-        .shadow(color: isSelected ? Color.accentColor.opacity(0.3) : .black.opacity(isSelected ? 0.12 : 0.04),
-                radius: isSelected ? 8 : 2)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .brightness(isHovered ? 0.03 : 0)
+        .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card))
+        .cardStyle(isSelected: isSelected, isHovered: isHovered)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
@@ -181,7 +172,6 @@ struct VMCard: View {
         if v.contains("ventura")  { return "wallpaper-ventura" }
         if v.contains("monterey") { return "wallpaper-monterey" }
         return nil
-        // Note: loaded via Bundle.main.image(forResource:) from Resources/
     }
 
     private var osIcon: String {
@@ -195,39 +185,22 @@ struct VMCard: View {
     /// Tint overlay on wallpaper when VM is running/suspended/building
     private var thumbnailOverlay: Color {
         switch vm.status {
-        case .running:   return Color.accentColor.opacity(0.35)
+        case .running:   return Color.vmRunning.opacity(0.35)
         case .suspended: return .orange.opacity(0.3)
-        case .building:  return .purple.opacity(0.3)
+        case .building:  return Color.vmBuilding.opacity(0.3)
         default:         return .clear
         }
     }
 
-    private var osVersionShort: String {
-        vm.osVersion
-            .replacingOccurrences(of: "macOS ", with: "")
-            .replacingOccurrences(of: "macOS", with: "")
-            .trimmingCharacters(in: .whitespaces)
-    }
-
     private var thumbnailColor: Color {
         switch vm.status {
-        case .running:   return Color.accentColor.opacity(0.75)
+        case .running:   return Color.vmRunning.opacity(0.75)
         case .suspended: return .orange.opacity(0.7)
-        case .building:  return .purple.opacity(0.6)
+        case .building:  return Color.vmBuilding.opacity(0.6)
         default:         return Color.primary.opacity(0.18)
         }
     }
 
-    private var subtitle: String {
-        var parts: [String] = []
-        if !vm.osName.rawValue.isEmpty {
-            parts.append(vm.osName.rawValue.replacingOccurrences(of: "macOS ", with: ""))
-        }
-        parts.append("\(vm.cpuCount) CPU · \(vm.memoryGB) GB")
-        return parts.joined(separator: " · ")
-    }
-    
-    // Show display name below title if it differs from the technical name
     private var showsDisplayName: Bool {
         !vm.displayName.isEmpty && vm.displayName != vm.name
     }

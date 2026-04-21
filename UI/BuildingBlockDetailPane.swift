@@ -17,6 +17,7 @@ struct BuildingBlockDetailPane: View {
     @State private var editedContent: String = ""
     @State private var isDirty = false
     @State private var isContentDirty = false
+    @State private var isLoading = false
 
     private var canEdit: Bool { !block.isBase }
     private var isAnyDirty: Bool { isDirty || isContentDirty }
@@ -28,10 +29,10 @@ struct BuildingBlockDetailPane: View {
             blockHeader
             Divider()
             HCLEditor(
-                text: canEdit ? Binding(get: { editedContent }, set: { editedContent = $0; isContentDirty = true })
+                text: canEdit ? Binding(get: { editedContent }, set: { editedContent = $0; if !isLoading { isContentDirty = true } })
                               : .constant(block.hclContent),
                 isEditable: canEdit,
-                onChange: { isContentDirty = true }
+                onChange: { if !isLoading { isContentDirty = true } }
             )
         }
         .onAppear { syncFromBlock() }
@@ -126,8 +127,31 @@ struct BuildingBlockDetailPane: View {
                 }
                 .buttonStyle(.borderless).foregroundStyle(.red).help("Delete")
             }
+            Divider().frame(height: 16)
+            Menu {
+                Button {
+                    let content = canEdit ? editedContent : block.hclContent
+                    NSWorkspace.shared.open(writeTempHCL(content: content, name: block.displayName))
+                } label: {
+                    Label("Open in Editor", systemImage: "pencil")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("More actions")
         }
         .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
+    }
+
+    // MARK: - Helpers
+
+    private func writeTempHCL(content: String, name: String) -> URL {
+        let safe = name.replacingOccurrences(of: "[^a-zA-Z0-9_-]", with: "_", options: .regularExpression)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(safe).hcl")
+        try? content.write(to: url, atomically: true, encoding: .utf8)
+        return url
     }
 
     // MARK: - Block header (description + metadata)
@@ -140,13 +164,13 @@ struct BuildingBlockDetailPane: View {
                         Text("Display Name").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
                         TextField("", text: $editedDisplayName,
                                   prompt: Text("Block name").foregroundStyle(.tertiary))
-                            .onChange(of: editedDisplayName) { _, _ in isDirty = true }
+                            .onChange(of: editedDisplayName) { _, _ in if !isLoading { isDirty = true } }
                     }
                     GridRow {
                         Text("Description").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
                         TextField("", text: $editedDescription, axis: .vertical)
                             .lineLimit(2...4)
-                            .onChange(of: editedDescription) { _, _ in isDirty = true }
+                            .onChange(of: editedDescription) { _, _ in if !isLoading { isDirty = true } }
                     }
                 }
                 .font(.callout)
@@ -164,12 +188,16 @@ struct BuildingBlockDetailPane: View {
     // MARK: - Helpers
 
     private func syncFromBlock() {
-        editedDisplayName   = block.displayName
-        editedDescription   = block.blockDescription
-        editedProvisioner   = block.provisioner
-        editedContent       = block.hclContent
-        isDirty             = false
-        isContentDirty      = false
+        // Set isLoading before assignments and clear it on the next run loop tick,
+        // so SwiftUI's deferred onChange callbacks are still gated after this returns.
+        isLoading      = true
+        editedDisplayName  = block.displayName
+        editedDescription  = block.blockDescription
+        editedProvisioner  = block.provisioner
+        editedContent      = block.hclContent
+        isDirty            = false
+        isContentDirty     = false
+        Task { @MainActor in self.isLoading = false }
     }
 
     private func commitSave() {

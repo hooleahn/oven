@@ -38,7 +38,6 @@ struct RegistryView: View {
     }
 
     private var registryService: RegistryService? {
-        // Delegated to ViewModel
         let tartPath = AppSettings.defaultLocalStorageRoot
             .appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
         return rvm.makeRegistryService(tartPath: tartPath)
@@ -58,6 +57,11 @@ struct RegistryView: View {
         rvm.credentials.first(where: { $0.registry == rvm.selectedRegistry })
     }
 
+    /// Count of tracked images for a given registry host.
+    private func imageCount(for registry: String) -> Int {
+        rvm.images.filter { $0.registryHost == registry }.count
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // ── Top bar — always visible, always at top ─────────────────────
@@ -67,36 +71,61 @@ struct RegistryView: View {
             // ── Middle: ZStack so banner never shifts content centre ────────
             ZStack(alignment: .top) {
                 // Content fills full height — empty state centres within it
-                if filteredImages.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Images", systemImage: "externaldrive.connected.to.line.below")
-                    } description: {
-                        Text("Add an image reference in the bar below to pull or push images on \(rvm.selectedRegistry).")
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List(filteredImages) { image in
-                        RegistryImageRow(
-                            image: image,
-                            downloadProgress: appState.registryDownloads[image.imageRef],
-                            onPull: { rvm.pendingPull = image },
-                            onCreateVM: { Task { await createVMFromImage(image) } },
-                            onDelete: {
-                                rvm.images.removeAll { $0.id == image.id }
-                                rvm.saveImages()
+                VStack(spacing: 0) {
+                    // "Showing N images on [registry]" context label
+                    if !filteredImages.isEmpty {
+                        HStack {
+                            Text("Showing \(filteredImages.count) image\(filteredImages.count == 1 ? "" : "s") on \(rvm.selectedRegistry)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            if let cred = credentialForSelected {
+                                Label(cred.username, systemImage: "person.badge.key.fill")
+                                    .font(.caption).foregroundStyle(.secondary)
                             }
-                        )
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 6)
+                        .background(Color.primary.opacity(0.02))
+                        Divider()
                     }
-                    .listStyle(.inset)
+
+                    if filteredImages.isEmpty {
+                        ContentUnavailableView {
+                            Label("No Images", systemImage: "externaldrive.connected.to.line.below")
+                        } description: {
+                            Text("Add an image reference in the bar below to pull or push images on \(rvm.selectedRegistry).")
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        List(filteredImages) { image in
+                            RegistryImageRow(
+                                image: image,
+                                downloadProgress: appState.registryDownloads[image.imageRef],
+                                onPull: { rvm.pendingPull = image },
+                                onCreateVM: { Task { await createVMFromImage(image) } },
+                                onDelete: {
+                                    rvm.images.removeAll { $0.id == image.id }
+                                    rvm.saveImages()
+                                }
+                            )
+                        }
+                        .listStyle(.inset)
+                    }
                 }
 
                 // Credentials banner overlaid at top — does not affect layout
                 if credentialForSelected == nil {
                     VStack(spacing: 0) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "lock.slash").foregroundStyle(.orange)
-                            Text("No credentials configured for \(rvm.selectedRegistry). Add them in Preferences to push/pull private images.")
-                                .font(.callout).foregroundStyle(.secondary)
+                        HStack(spacing: 10) {
+                            Image(systemName: "shield.slash.fill")
+                                .foregroundStyle(.orange)
+                                .font(.callout)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("No credentials for \(rvm.selectedRegistry)")
+                                    .font(.callout).fontWeight(.medium)
+                                Text("Add them in Preferences to push or pull private images.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                             Spacer()
                             SettingsLink {
                                 Text("Add credentials")
@@ -105,9 +134,14 @@ struct RegistryView: View {
                             }
                             .buttonStyle(.plain)
                         }
-                        .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(.bar)
-                        Divider()
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .background(Color.orange.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(Color.orange.opacity(0.25), lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .padding(.horizontal, 12).padding(.top, 10)
                     }
                 }
             }
@@ -126,7 +160,7 @@ struct RegistryView: View {
         } message: {
             Text(rvm.errorMessage ?? "")
         }
-        .searchable(text: $searchText, prompt: "Search registry images…")
+        .searchable(text: $searchText, prompt: "Search \(rvm.selectedRegistry) images…")
         .task {
             rvm.load(vmStore: vmStore, baseVMStore: baseVMStore)
             let tartPath = AppSettings.defaultLocalStorageRoot
@@ -158,24 +192,50 @@ struct RegistryView: View {
 
     private var toolbar: some View {
         HStack(spacing: 8) {
-            Picker("Registry", selection: $rvm.selectedRegistry) {
-                ForEach(registries, id: \.self) { Text($0).tag($0) }
+            // Custom registry selector with icon + count badge
+            HStack(spacing: 4) {
+                ForEach(registries, id: \.self) { registry in
+                    let isSelected = registry == rvm.selectedRegistry
+                    let count = imageCount(for: registry)
+                    Button {
+                        rvm.selectedRegistry = registry
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: registryIcon(for: registry))
+                                .font(.system(size: 11))
+                            Text(registryShortName(for: registry))
+                                .font(.caption).fontWeight(.medium)
+                            if count > 0 {
+                                Text("\(count)")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .padding(.horizontal, 5).padding(.vertical, 1)
+                                    .background(
+                                        isSelected
+                                            ? Color.white.opacity(0.25)
+                                            : Color.primary.opacity(0.1),
+                                        in: Capsule()
+                                    )
+                            }
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                    }
+                    .buttonStyle(.plain)
+                    .background(
+                        isSelected
+                            ? Color.accentColor
+                            : Color.primary.opacity(0.06),
+                        in: RoundedRectangle(cornerRadius: 6)
+                    )
+                    .foregroundStyle(isSelected ? .white : .primary)
+                }
             }
-            .pickerStyle(.segmented)
             .onChange(of: registries) { _, newRegs in
                 if !newRegs.contains(rvm.selectedRegistry) {
                     rvm.selectedRegistry = newRegs.first ?? "ghcr.io"
                 }
             }
-            .labelsHidden()
-            .fixedSize()
 
             Spacer()
-
-            if let cred = credentialForSelected {
-                Label(cred.username, systemImage: "person.badge.key.fill")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
 
             Button {
                 let tartPath = AppSettings.defaultLocalStorageRoot
@@ -204,6 +264,27 @@ struct RegistryView: View {
             .help("Browse Cirrus Labs public macOS images")
         }
         .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
+    }
+
+    // MARK: Registry icon + short name helpers
+
+    private func registryIcon(for registry: String) -> String {
+        switch registry {
+        case "ghcr.io":    return "cat.fill"
+        case "docker.io":  return "shippingbox.fill"
+        default:           return "server.rack"
+        }
+    }
+
+    private func registryShortName(for registry: String) -> String {
+        switch registry {
+        case "ghcr.io":   return "GitHub"
+        case "docker.io": return "Docker"
+        default:
+            // Strip common TLDs for brevity: "registry.example.com" → "example"
+            let parts = registry.components(separatedBy: ".")
+            return parts.count >= 2 ? parts[parts.count - 2].capitalized : registry
+        }
     }
 
     // MARK: Cirrus Labs catalogue
@@ -298,9 +379,6 @@ struct RegistryView: View {
 
     @MainActor private func pullImage(_ image: RegistryImage, asBaseVM: Bool = false) async {
         guard let svc = registryService else { return }
-        // For Base VM: tart pull caches the OCI image — localName is the imageRef itself
-        //              (tart list shows it as "OCI  ghcr.io/org/image:tag")
-        // For regular VM: tart clone creates a named local copy
         let rawLocal = image.imageRef
             .components(separatedBy: "/").last?
             .replacingOccurrences(of: ":", with: "-") ?? "pulled-vm"
@@ -312,7 +390,6 @@ struct RegistryView: View {
         let stream = await svc.pull(imageRef: image.imageRef, localName: localName,
                                     asBase: asBaseVM, credentials: rvm.credentials)
 
-        // Track progress from percentage lines; collect all output for error reporting
         let pullResult = await StreamConsumer.consume(stream, onStdout: { line in
             if line.contains("%") {
                 let digits = line.filter { $0.isNumber || $0 == "." }
@@ -345,7 +422,6 @@ struct RegistryView: View {
     /// Route a pulled image to either BaseVMStore (as a base VM) or VMStore (as a regular VM)
     @MainActor private func routePulledImage(_ image: RegistryImage, asBaseVM: Bool) async {
         guard let localName = image.localName else { return }
-        // Use credentials captured during pull (set in PullDestinationSheet)
         let username = rvm.pendingPullUsername
         let password = rvm.pendingPullPassword
         if asBaseVM {
@@ -369,33 +445,26 @@ struct RegistryView: View {
         } else {
             await createVMFromImage(image, username: username, password: password)
         }
-        // Clear pending credentials
         rvm.pendingPullUsername = ""
         rvm.pendingPullPassword = ""
     }
-
-    /// Infer OS name/version from an OCI image reference
 
     @MainActor private func createVMFromImage(_ image: RegistryImage, username: String = "", password: String = "") async {
         guard image.isPulled else {
             await pullImage(image)
             return
         }
-        // Need TartService (not RegistryService) for clone(imageRef:to:)
         let tartBinary = AppSettings.defaultLocalStorageRoot
             .appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
         guard FileManager.default.fileExists(atPath: tartBinary) else { return }
         let tartSvc = TartService(runner: ProcessRunner(), tartPath: tartBinary)
 
-        // Derive a friendly local name from the image ref
-        // e.g. "ghcr.io/cirruslabs/macos-monterey-base:latest" → "monterey-base-latest"
         let tag = image.imageRef.components(separatedBy: ":").last ?? "latest"
         let repoSlug = image.imageRef
             .components(separatedBy: "/").last?
             .components(separatedBy: ":").first ?? "vm"
         let baseName = "\(repoSlug)-\(tag)"
 
-        // Ensure unique name
         var newName = baseName
         var counter = 2
         let existingNames = Set(vmStore.vms.map { $0.name })
@@ -404,9 +473,6 @@ struct RegistryView: View {
             counter += 1
         }
 
-        // Use TartService.clone(imageRef:to:) which runs:
-        //   tart clone <oci-ref> <local-name>
-        // tart resolves the OCI ref from its local cache.
         appState.registryDownloads[image.imageRef] = 0.0
         defer { appState.registryDownloads.removeValue(forKey: image.imageRef) }
 
@@ -427,9 +493,6 @@ struct RegistryView: View {
 
 
 
-    /// Reconcile isPulled for all rvm.images against vmStore (which reflects tart list).
-    /// An image is considered pulled if vmStore has a VM whose name matches the
-    /// expected local name (derived from the imageRef) or whose registryImageRef matches.
     /// Parse tart's structured error format into a human-readable string.
 
 
@@ -462,14 +525,12 @@ func parseTartError(_ raw: String) -> String? {
     }
 
     // Pattern 1: message inside details JSON (possibly double-escaped)
-    // Matches: \"message\":\"value\" or "message":"value"
     let msgPatterns = [
-        #"\\?"message\\?":\s*\\?"([^"\\]+)\\?""#,
+        #"\\"?message\\"?:\s*\\"?([^"\\]+)\\"?"#,
         #""message"\s*:\s*"([^"\]+)""#,
     ]
     for pattern in msgPatterns {
         if let m = errorLine.range(of: pattern, options: .regularExpression) {
-            // Extract the capture group value after the last :
             let matched = String(errorLine[m])
             let parts = matched.components(separatedBy: ":")
             if parts.count >= 2 {
@@ -500,7 +561,7 @@ func parseTartError(_ raw: String) -> String? {
     // Pattern 3: old-style JSON "message":"value"
     let parts = errorLine.components(separatedBy: "message")
     if parts.count >= 2 {
-        for sep in [#"":""#, #"":\"#, #"": ""#] {
+        for sep in [#"":"#, #"":\#"#, #"": "#] {
             let sub = parts[1].components(separatedBy: sep)
             if sub.count >= 2, let end = sub[1].firstIndex(of: "\"") {
                 let val = String(sub[1][..<end])

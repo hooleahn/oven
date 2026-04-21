@@ -17,6 +17,8 @@ struct TemplateDetailPane: View {
     @Binding var isValidating: Bool
     @Binding var validationResult: String?
 
+    @Binding var isLoadingContent: Bool
+
     let onSave: () -> Void
     let onRevert: () -> Void
     let onValidate: () -> Void
@@ -25,6 +27,7 @@ struct TemplateDetailPane: View {
     let onDelete: () -> Void
 
     @EnvironmentObject var theme: AppTheme
+    @State private var copied = false
 
     private var canEdit: Bool { !template.isBase }
     private var isAnyDirty: Bool { isDirty || isMetadataDirty }
@@ -38,7 +41,7 @@ struct TemplateDetailPane: View {
             HCLEditor(
                 text: $editedContent,
                 isEditable: canEdit,
-                onChange: { isDirty = true }
+                onChange: { if !isLoadingContent { isDirty = true } }
             )
             if let result = validationResult {
                 validationBanner(result)
@@ -112,8 +115,41 @@ struct TemplateDetailPane: View {
                 }
                 .buttonStyle(.borderless).foregroundStyle(.red).help("Delete")
             }
+            Divider().frame(height: 16)
+            fileActionsMenu
         }
         .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
+    }
+
+    // MARK: - File actions overflow menu
+
+    private var fileActionsMenu: some View {
+        Menu {
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(editedContent, forType: .string)
+                copied = true
+                Task { try? await Task.sleep(for: .seconds(2)); copied = false }
+            } label: {
+                Label(copied ? "Copied!" : "Copy to Clipboard", systemImage: copied ? "checkmark" : "doc.on.doc")
+            }
+            Divider()
+            Button {
+                NSWorkspace.shared.open(template.url)
+            } label: {
+                Label("Open in Editor", systemImage: "pencil")
+            }
+            Button {
+                NSWorkspace.shared.activateFileViewerSelecting([template.url])
+            } label: {
+                Label("Reveal in Finder", systemImage: "folder")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("More actions")
     }
 
     // MARK: - Metadata header
@@ -125,7 +161,7 @@ struct TemplateDetailPane: View {
                 if canEdit {
                     TextField("", text: $editedDisplayName,
                               prompt: Text(template.filename).foregroundStyle(.tertiary))
-                        .onChange(of: editedDisplayName) { _, _ in isMetadataDirty = true }
+                        .onChange(of: editedDisplayName) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
                 } else {
                     Text(template.displayName.isEmpty ? template.filename : template.displayName)
                 }
@@ -135,7 +171,7 @@ struct TemplateDetailPane: View {
                 if canEdit {
                     TextField("", text: $editedDescription, axis: .vertical)
                         .lineLimit(2...4)
-                        .onChange(of: editedDescription) { _, _ in isMetadataDirty = true }
+                        .onChange(of: editedDescription) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
                 } else {
                     Text(template.templateDescription.isEmpty ? "—" : template.templateDescription)
                         .foregroundStyle(template.templateDescription.isEmpty ? .tertiary : .primary)
@@ -152,7 +188,7 @@ struct TemplateDetailPane: View {
                             }
                         }
                         .labelsHidden().frame(width: 120)
-                        .onChange(of: editedOSName) { _, _ in isMetadataDirty = true }
+                        .onChange(of: editedOSName) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
 
                         if !editedOSName.isEmpty {
                             let versions = MacOSRelease.Name(rawValue: editedOSName)?.fallbackVersions ?? []
@@ -161,7 +197,7 @@ struct TemplateDetailPane: View {
                                 ForEach(versions, id: \.self) { Text($0).tag($0) }
                             }
                             .labelsHidden().frame(width: 120)
-                            .onChange(of: editedOSVersion) { _, _ in isMetadataDirty = true }
+                            .onChange(of: editedOSVersion) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
                         }
                     }
                 } else {

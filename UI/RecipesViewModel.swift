@@ -68,6 +68,9 @@ final class RecipesViewModel {
     // Search
     var searchText: String = ""
 
+    // Guard flag to suppress onChange dirty-marking during programmatic content load
+    var isLoadingContent: Bool = false
+
     // MARK: - Filtered lists
 
     func filteredFullTemplates(from store: PackerTemplateStore) -> [PackerTemplate] {
@@ -117,6 +120,12 @@ final class RecipesViewModel {
         saveError = nil
         validationResult = nil
         isValidating = false
+        // Suppress onChange dirty-marking while we populate the editor fields.
+        // isLoadingContent is cleared on the next run loop tick so SwiftUI's deferred
+        // onChange callbacks (which fire after the current synchronous mutation) are
+        // still gated before they can mark the content as dirty.
+        isLoadingContent = true
+        Task { @MainActor in self.isLoadingContent = false }
         // Restore from draft cache if there are unsaved edits
         if let draft = templateDrafts[id] {
             editedContent = draft.content

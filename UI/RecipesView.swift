@@ -343,6 +343,7 @@ struct RecipesView: View {
                     saveError: bindableModel.saveError,
                     isValidating: bindableModel.isValidating,
                     validationResult: bindableModel.validationResult,
+                    isLoadingContent: bindableModel.isLoadingContent,
                     onSave: { model.save(in: templateStore) },
                     onRevert: { model.revert(from: templateStore) },
                     onValidate: {
@@ -371,6 +372,7 @@ struct RecipesView: View {
                     isMetadataDirty: bindableModel.isMetadataDirty,
                     isSaving: bindableModel.isSaving,
                     saveError: bindableModel.saveError,
+                    isLoadingContent: bindableModel.isLoadingContent,
                     onSave: { model.save(in: templateStore) },
                     onRevert: { model.revert(from: templateStore) },
                     onDuplicate: { _ = templateStore.duplicate(id: id) },

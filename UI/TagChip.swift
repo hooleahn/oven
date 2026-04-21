@@ -34,7 +34,7 @@ struct TagChip: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, Spacing.xs + 2) // 6 pt
         .padding(.vertical, 2)
         .background(tagStore.color(for: tag).opacity(0.18), in: Capsule())
         .foregroundStyle(tagStore.color(for: tag))
@@ -97,7 +97,7 @@ struct TagPickerField: View {
                         .buttonStyle(.bordered).controlSize(.mini)
                     }
                     .padding(8)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: CornerRadius.button))
                 }
             }
 

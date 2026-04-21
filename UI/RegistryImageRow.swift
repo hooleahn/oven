@@ -26,12 +26,25 @@ struct RegistryImageRow: View {
                         Label("Pulled", systemImage: "checkmark.circle.fill")
                             .font(.caption).foregroundStyle(.green)
                         if let date = image.pulledAt {
-                            Text("·").foregroundStyle(.secondary)
-                            Text("on " + date.formatted(date: .numeric, time: .omitted))
+                            Text("·").font(.caption2).foregroundStyle(.tertiary)
+                            Text(date.formatted(date: .abbreviated, time: .omitted))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let bytes = image.sizeBytes, bytes > 0 {
+                            Text("·").font(.caption2).foregroundStyle(.tertiary)
+                            Text(formatBytes(bytes))
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     } else {
-                        Text("Not pulled").font(.caption).foregroundStyle(.secondary)
+                        Label("Not pulled", systemImage: "arrow.down.circle")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let localName = image.localName, localName != image.imageRef {
+                        Text("·").font(.caption2).foregroundStyle(.tertiary)
+                        Text(localName)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
             }
@@ -44,25 +57,40 @@ struct RegistryImageRow: View {
                     Text("\(Int(progress * 100))%").font(.caption).foregroundStyle(.secondary)
                 }
             } else if image.isPulled {
-                Button("Create VM", action: onCreateVM)
-                    .buttonStyle(.borderedProminent).controlSize(.small)
+                Button(action: onCreateVM) {
+                    Label("Create VM", systemImage: "plus.rectangle.on.rectangle")
+                }
+                .buttonStyle(.borderedProminent).controlSize(.small)
                 Menu {
+                    Button("Pull again", action: onPull)
+                    Divider()
                     Button("Remove from list", role: .destructive, action: onDelete)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
                 .buttonStyle(.bordered).controlSize(.small)
+                .help("More actions")
             } else {
-                Button("Pull", action: onPull)
-                    .buttonStyle(.bordered).controlSize(.small)
+                Button(action: onPull) {
+                    Label("Pull", systemImage: "arrow.down.circle")
+                }
+                .buttonStyle(.bordered).controlSize(.small)
                 Menu {
                     Button("Remove from list", role: .destructive, action: onDelete)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
                 .buttonStyle(.bordered).controlSize(.small)
+                .help("More actions")
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private func formatBytes(_ bytes: Int64) -> String {
+        let gb = Double(bytes) / 1_073_741_824
+        if gb >= 1 { return String(format: "%.1f GB", gb) }
+        let mb = Double(bytes) / 1_048_576
+        return String(format: "%.0f MB", mb)
     }
 }

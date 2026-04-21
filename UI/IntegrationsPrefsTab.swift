@@ -15,6 +15,7 @@ struct IntegrationsPrefsTab: View {
                 Toggle(isOn: $theme.mdmEnabled) {
                     Label("MDM features", systemImage: "lock.shield")
                 }
+                .help("When enabled, MDM Servers, MDM Enrollment, and MDM enrollment options appear throughout the app. Disable to hide all MDM-related UI.")
             } header: { Text("MDM") }
               footer: { Text("When disabled, MDM Servers, MDM Enrollment, and MDM enrollment options are hidden throughout the app.") }
 
@@ -31,6 +32,7 @@ struct IntegrationsPrefsTab: View {
                             Spacer()
                             Image(systemName: cred.password != nil ? "lock.fill" : "lock.slash")
                                 .foregroundStyle(cred.password != nil ? .green : .orange)
+                                .help(cred.password != nil ? "Password saved in Keychain" : "No password stored — tart will prompt on push/pull")
                             Button("Edit")   { editingCredential = cred }
                                 .buttonStyle(.bordered).controlSize(.mini)
                             Button("Delete") { deleteCredential(cred) }
@@ -40,8 +42,24 @@ struct IntegrationsPrefsTab: View {
                 }
                 Button("Add Registry Credentials") { isPresentingCredentialSheet = true }
                     .buttonStyle(.bordered)
+                    .help("Add login credentials for a container registry (ghcr.io, docker.io, or a custom host).")
             } header: { Text("Registry credentials") }
               footer: { Text("Credentials are stored in Keychain and used with `tart login` before push/pull operations.") }
+
+            Section {
+                Button(role: .destructive) {
+                    theme.mdmEnabled = true
+                } label: {
+                    Label("Reset Integrations to Defaults", systemImage: "arrow.counterclockwise")
+                }
+                .buttonStyle(.bordered)
+                .help("Restores MDM features to the default (enabled) state. Registry credentials stored in Keychain are not affected.")
+            } header: {
+                Text("Reset")
+            } footer: {
+                Text("This only resets the MDM toggle. Registry credentials stored in Keychain must be removed individually.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .navigationTitle("Integrations")

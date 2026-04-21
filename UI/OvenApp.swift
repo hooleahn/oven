@@ -195,6 +195,12 @@ struct OvenApp: App {
         .defaultSize(width: 1160, height: 720)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(after: .help) {
+                Button("Show Welcome Guide") {
+                    NotificationCenter.default.post(name: .showOnboarding, object: nil)
+                }
+                .keyboardShortcut("w", modifiers: [.command, .shift])
+            }
         }
 
         Settings {
@@ -207,6 +213,12 @@ struct OvenApp: App {
     }
 }
 
+// MARK: - Notification names
+
+extension Notification.Name {
+    static let showOnboarding = Notification.Name("com.oven.showOnboarding")
+}
+
 // MARK: - AppRootView
 
 struct AppRootView: View {
@@ -216,6 +228,9 @@ struct AppRootView: View {
     @EnvironmentObject var vmStore: VMStore
     @EnvironmentObject var baseVMStore: BaseVMStore
     @Environment(RecipesViewModel.self) private var recipesViewModel
+
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @State private var showOnboarding = false
 
     /// Remove leftover oven-ssh-*.command files from previous sessions
     private func cleanupSSHTempFiles() {
@@ -240,7 +255,17 @@ struct AppRootView: View {
                         tagStore.setColor(tagColor(for: tag), for: tag)
                     }
                 }
+                // Show onboarding on first launch
+                if !hasCompletedOnboarding {
+                    showOnboarding = true
+                }
             }
             .task { cleanupSSHTempFiles() }
+            .sheet(isPresented: $showOnboarding) {
+                OnboardingView { showOnboarding = false }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showOnboarding)) { _ in
+                showOnboarding = true
+            }
     }
 }

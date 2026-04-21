@@ -100,6 +100,7 @@ struct NotificationPrefsTab: View {
             Toggle(isOn: $theme.systemNotificationsEnabled) {
                 Label("System notifications", systemImage: "bell.circle")
             }
+            .help("Delivers macOS native banners and alerts for the events you select below. Requires notification permission in System Settings.")
 
             if theme.systemNotificationsEnabled {
                 // OS authorization status row
@@ -160,6 +161,7 @@ struct NotificationPrefsTab: View {
             Toggle(isOn: $theme.pushoverEnabled) {
                 Label("Pushover notifications", systemImage: "bell.badge")
             }
+            .help("Send push notifications to your iPhone or Android device via the Pushover service. Requires a Pushover account and the Pushover app.")
             if theme.pushoverEnabled {
                 credentialRow(label: "App token", text: $pushoverToken,
                               isSaved: hasPushoverCredentials,
@@ -192,6 +194,7 @@ struct NotificationPrefsTab: View {
             Toggle(isOn: $theme.slackEnabled) {
                 Label("Slack notifications", systemImage: "message.badge")
             }
+            .help("Post messages to a Slack channel via an Incoming Webhook URL. Create a webhook at api.slack.com/apps.")
             if theme.slackEnabled {
                 credentialRow(label: "Webhook URL", text: $slackWebhook,
                               isSaved: hasSlackCredentials,
@@ -221,6 +224,7 @@ struct NotificationPrefsTab: View {
             Toggle(isOn: $theme.teamsEnabled) {
                 Label("Microsoft Teams notifications", systemImage: "person.3.sequence")
             }
+            .help("Post messages to a Microsoft Teams channel via an Incoming Webhook URL. Create a webhook in Teams → Channel → Connectors.")
             if theme.teamsEnabled {
                 credentialRow(label: "Webhook URL", text: $teamsWebhook,
                               isSaved: hasTeamsCredentials,
