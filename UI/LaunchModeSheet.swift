@@ -31,7 +31,7 @@ struct LaunchModeSheet: View {
                 ) { onLaunch(.native); dismiss() }
 
                 LaunchOptionButton(
-                    icon: "display.and.arrow.down",
+                    icon:"inset.filled.rectangle.and.person.filled",
                     title: "VNC / Screen Sharing",
                     description: "Start headless and connect via Screen Sharing"
                 ) { onLaunch(.vnc); dismiss() }

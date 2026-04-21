@@ -73,10 +73,7 @@ struct VMCard: View {
                             Text("Unknown OS")
                                 .font(.cardSubtitle).foregroundStyle(.secondary).lineLimit(1)
                         }
-                        Text({
-                            let disk = vm.actualDiskGB.map { "\(vm.diskGB) GB max · \($0) GB used" } ?? "\(vm.diskGB) GB"
-                            return "\(vm.cpuCount) CPU · \(vm.memoryGB) GB · \(disk)"
-                        }())
+                        Text("\(vm.cpuCount) CPU · \(vm.memoryGB) GB RAM · \(vm.diskGB) GB SSD")
                         .font(.cardSubtitle).foregroundStyle(.secondary).lineLimit(1)
                         HStack(spacing: Spacing.xs) {
                             Text("Created \(vm.createdAt.formatted(date: .numeric, time: .omitted))")
