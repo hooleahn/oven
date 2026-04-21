@@ -1,4 +1,6 @@
 # Oven
+![image](https://github.com/hooleahn/oven/blob/cc947c527ae98a2dfaff0d97db1c1afb1cf552fe/Icon%20Exports/Icon-macOS-Default-128x128%402x.png)
+
 
 macOS VM Manager — build and manage macOS VMs using tart, Packer, and mist-cli.
 
