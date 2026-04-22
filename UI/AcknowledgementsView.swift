@@ -72,6 +72,10 @@ struct AcknowledgementsView: View {
                         url: "https://github.com/jqlang/jq",
                         note: "Lightweight and flexible command-line JSON processor."
                     )
+                    AckRow(name: "ipsw.me", author: "Unknown", license: "", url: "https://ipsw.me/", note: "IPSW information lookup API provided by ipsw.me")
+                    SectionHeader(title: "Other Tools")
+                    AckRow(name: "Github", author: "", license: "", url: "https://github.com/", note: "GitHub, the GitHub logo, and the Octocat are trademarks of GitHub, Inc., registered in the U.S. and other countries.")
+                    AckRow(name: "Docker", author: "", license: "", url: "https://docker.com/", note: "Docker® is a trademark or registered trademark of Docker, Inc. in the United States and/or other countries")
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)

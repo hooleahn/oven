@@ -16,9 +16,16 @@ struct SetupView: View {
                 Text("Setting up Oven")
                     .font(.title2)
                     .fontWeight(.medium)
-                Text("Downloading required tools. This only happens once.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                if depManager.mode == .custom {
+                    Text("Custom binary paths are configured but one or more required tools are missing. Set paths in Settings → Tools.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text("Downloading required tools. This only happens once.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(.top, 40)
             .padding(.bottom, 32)
@@ -26,13 +33,13 @@ struct SetupView: View {
             // Dependency rows
             VStack(spacing: 6) {
                 ForEach(depManager.dependencies) { dep in
-                    DependencyRow(dependency: dep)
+                    DependencyRow(dependency: dep, isCustomMode: depManager.mode == .custom)
                 }
             }
             .padding(.horizontal, 40)
 
-            // Install log (collapsed unless there's content)
-            if !depManager.installLog.isEmpty {
+            // Install log (only relevant in managed mode)
+            if depManager.mode == .managed, !depManager.installLog.isEmpty {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(depManager.installLog.indices, id: \.self) { i in
@@ -58,7 +65,7 @@ struct SetupView: View {
             HStack {
                 if depManager.isCheckingVersions {
                     ProgressView().controlSize(.small)
-                    Text("Working…")
+                    Text(depManager.mode == .custom ? "Verifying paths…" : "Working…")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else if depManager.allReady {
@@ -67,6 +74,11 @@ struct SetupView: View {
                     Text("All dependencies ready")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                } else if depManager.mode == .custom {
+                    SettingsLink {
+                        Label("Configure in Settings → Tools", systemImage: "arrow.right.circle")
+                            .font(.subheadline)
+                    }
                 }
             }
             .frame(maxWidth: .infinity)
@@ -80,6 +92,7 @@ struct SetupView: View {
 
 private struct DependencyRow: View {
     let dependency: Dependency
+    let isCustomMode: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -120,7 +133,7 @@ private struct DependencyRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 case .notInstalled:
-                    Text("Not installed")
+                    Text(isCustomMode ? "Path not set" : "Not installed")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 case .updateAvailable:

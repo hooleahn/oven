@@ -161,9 +161,9 @@ struct OvenStatusBar: View {
     var body: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(depManager.allReady ? Color.green : Color.orange)
+                .fill(statusColor)
                 .frame(width: 7, height: 7)
-            Text(depManager.allReady ? "All tools ready" : "Setting up…")
+            Text(statusLabel)
                 .font(.caption).foregroundStyle(.secondary)
             Spacer()
             // Preferences button — opens the ⌘, Settings window
@@ -176,6 +176,22 @@ struct OvenStatusBar: View {
             .help("Preferences (⌘,)")
         }
         .padding(.horizontal, 12).padding(.vertical, 10).background(.bar)
+    }
+
+    private var statusColor: Color {
+        if !depManager.allReady { return .orange }
+        if depManager.hasUpdatesAvailable { return .orange }
+        return .green
+    }
+
+    private var statusLabel: String {
+        if !depManager.allReady { return "Setting up…" }
+        let updates = depManager.dependencies.filter { $0.status == .updateAvailable }
+        if !updates.isEmpty {
+            let names = updates.map(\.displayName).joined(separator: ", ")
+            return "Updates available: \(names)"
+        }
+        return "All tools ready"
     }
 }
 

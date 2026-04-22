@@ -8,9 +8,44 @@ struct AppSettings: Codable {
     var tartHome: String?   // nil = use TART_HOME env var or ~/.tart default
     var ipswDownloadMode: IPSWDownloadMode = .ipswMe
 
+    /// Whether Oven manages (downloads/updates) its own tool binaries, or the
+    /// user supplies their own paths.
+    var dependencyMode: DependencyMode = .managed
+
+    /// Custom binary paths used when dependencyMode == .custom
+    var customPaths: CustomBinaryPaths = CustomBinaryPaths()
+
     enum IPSWDownloadMode: String, Codable {
         case ipswMe  = "ipsw_me"   // default: direct from ipsw.me API
         case mistCli = "mist_cli"  // use mist-cli (must be installed)
+    }
+
+    enum DependencyMode: String, Codable {
+        /// Oven downloads and manages tool binaries automatically.
+        case managed
+        /// User supplies their own binary paths; Oven never checks for updates.
+        case custom
+    }
+
+    struct CustomBinaryPaths: Codable {
+        var tart: String = ""
+        var packer: String = ""
+        var mistCli: String = ""
+        var jq: String = ""
+
+        enum CodingKeys: String, CodingKey {
+            case tart, packer, mistCli = "mist-cli", jq
+        }
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            tart    = (try? c.decodeIfPresent(String.self, forKey: .tart))    ?? ""
+            packer  = (try? c.decodeIfPresent(String.self, forKey: .packer))  ?? ""
+            mistCli = (try? c.decodeIfPresent(String.self, forKey: .mistCli)) ?? ""
+            jq      = (try? c.decodeIfPresent(String.self, forKey: .jq))      ?? ""
+        }
     }
 
     static var defaultLocalStorageRoot: URL {
@@ -60,18 +95,23 @@ struct AppSettings: Codable {
     // Explicit memberwise init (required once we define a custom Decodable init)
     init(vmStorageRoot: URL, ipswStorageRoot: URL, packerTemplatesRoot: URL,
          depsRoot: URL, tartHome: String? = nil,
-         ipswDownloadMode: IPSWDownloadMode = .ipswMe) {
+         ipswDownloadMode: IPSWDownloadMode = .ipswMe,
+         dependencyMode: DependencyMode = .managed,
+         customPaths: CustomBinaryPaths = CustomBinaryPaths()) {
         self.vmStorageRoot       = vmStorageRoot
         self.ipswStorageRoot     = ipswStorageRoot
         self.packerTemplatesRoot = packerTemplatesRoot
         self.depsRoot            = depsRoot
         self.tartHome            = tartHome
         self.ipswDownloadMode    = ipswDownloadMode
+        self.dependencyMode      = dependencyMode
+        self.customPaths         = customPaths
     }
 
     // CodingKeys for custom Decodable init
     enum CodingKeys: String, CodingKey {
         case vmStorageRoot, ipswStorageRoot, packerTemplatesRoot, depsRoot, tartHome, ipswDownloadMode
+        case dependencyMode, customPaths
     }
 
     // Custom Decodable so new fields added in future builds don't wipe existing settings
@@ -84,6 +124,8 @@ struct AppSettings: Codable {
         depsRoot            = (try? c.decodeIfPresent(URL.self, forKey: .depsRoot))            ?? root.appendingPathComponent("deps")
         tartHome            = try? c.decodeIfPresent(String.self, forKey: .tartHome)
         ipswDownloadMode    = (try? c.decodeIfPresent(IPSWDownloadMode.self, forKey: .ipswDownloadMode)) ?? .ipswMe
+        dependencyMode      = (try? c.decodeIfPresent(DependencyMode.self, forKey: .dependencyMode)) ?? .managed
+        customPaths         = (try? c.decodeIfPresent(CustomBinaryPaths.self, forKey: .customPaths)) ?? CustomBinaryPaths()
     }
 
     func save() throws {

@@ -87,6 +87,9 @@ final class AppTheme: ObservableObject {
     @AppStorage("notif.teams.imagePushCompleted")   var teamsNotifImagePushCompleted: Bool = false
     @AppStorage("notif.teams.vmStopped")            var teamsNotifVMStopped: Bool = false
 
+    // Menu bar
+    @AppStorage("menuBarItemEnabled") var menuBarItemEnabled: Bool = true
+
     // MDM features
     @AppStorage("mdmEnabled") var mdmEnabled: Bool = true
 

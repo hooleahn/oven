@@ -80,6 +80,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct OvenApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    // Mirror of AppTheme.menuBarItemEnabled — used as the isInserted binding
+    // for MenuBarExtra. AppTheme's @AppStorage properties don't bridge cleanly
+    // to Scene-level bindings, so we keep a dedicated @AppStorage here that
+    // reads/writes the same UserDefaults key.
+    @AppStorage("menuBarItemEnabled") private var menuBarItemEnabled = true
     @State private var depManager = DependencyManager(
         storageRoot: AppSettings.defaultLocalStorageRoot
     )
@@ -94,6 +99,7 @@ struct OvenApp: App {
     @State private var templateStore = PackerTemplateStore()
     @State private var blockStore = BuildingBlockStore()
     @State private var recipesViewModel = RecipesViewModel()
+    @State private var menuBarViewModel = MenuBarViewModel()
 
     // MARK: - Store factories (called once at app launch)
 
@@ -200,6 +206,10 @@ struct OvenApp: App {
                     NotificationCenter.default.post(name: .showOnboarding, object: nil)
                 }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
+
+                Button("Acknowledgements…") {
+                    NotificationCenter.default.post(name: .showAcknowledgements, object: nil)
+                }
             }
         }
 
@@ -209,14 +219,34 @@ struct OvenApp: App {
                 .environmentObject(tagStore)
                 .environmentObject(vmStore)
                 .environmentObject(baseVMStore)
+                .environmentObject(depManager)
         }
+
+        MenuBarExtra(isInserted: $menuBarItemEnabled) {
+            MenuBarView(model: menuBarViewModel)
+        } label: {
+            // Use the custom oven icon as a template so macOS tints it
+            // correctly in light/dark mode and for active/inactive states.
+            // The badge overlay signals when VMs are running.
+            Image("MenuBarIcon")
+                .overlay(alignment: .topTrailing) {
+                    if menuBarViewModel.cachedHasActiveVMs {
+                        Circle()
+                            .fill(.green)
+                            .frame(width: 6, height: 6)
+                            .offset(x: 2, y: -2)
+                    }
+                }
+        }
+        .menuBarExtraStyle(.menu)
     }
 }
 
 // MARK: - Notification names
 
 extension Notification.Name {
-    static let showOnboarding = Notification.Name("com.oven.showOnboarding")
+    static let showOnboarding      = Notification.Name("com.oven.showOnboarding")
+    static let showAcknowledgements = Notification.Name("com.oven.showAcknowledgements")
 }
 
 // MARK: - AppRootView
@@ -231,6 +261,7 @@ struct AppRootView: View {
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var showOnboarding = false
+    @State private var showAcknowledgements = false
 
     /// Remove leftover oven-ssh-*.command files from previous sessions
     private func cleanupSSHTempFiles() {
@@ -266,6 +297,12 @@ struct AppRootView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .showOnboarding)) { _ in
                 showOnboarding = true
+            }
+            .sheet(isPresented: $showAcknowledgements) {
+                AcknowledgementsView()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showAcknowledgements)) { _ in
+                showAcknowledgements = true
             }
     }
 }

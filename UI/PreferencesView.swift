@@ -20,6 +20,10 @@ struct PreferencesView: View {
 
             IntegrationsPrefsTab()
                 .tabItem { Label("Integrations", systemImage: "puzzlepiece.extension") }
+
+            ToolsPrefsTab()
+                .tabItem { Label("Tools", systemImage: "wrench.and.screwdriver") }
+
             TagsPrefsTab()
                 .tabItem { Label("Tags", systemImage: "tag") }
         }

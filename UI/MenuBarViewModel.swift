@@ -9,6 +9,9 @@ import AppKit
 // Cached properties (cachedDisplayVMs, cachedHasActiveVMs) are stored @Observable
 // properties so SwiftUI can track them correctly. Direct access to
 // SharedStores.vmStore?.vms would not be tracked by SwiftUI observation.
+//
+// Sync is triggered on demand — when the user opens the menu — rather than
+// on a background timer, which avoids unnecessary tart process calls.
 
 @MainActor
 @Observable
@@ -21,43 +24,32 @@ final class MenuBarViewModel {
 
     // MARK: - Private
 
-    private var syncTimer: Timer?
-
     private var vmStore: VMStore? { SharedStores.vmStore }
     private var appState: AppState? { SharedStores.appState }
 
-    // MARK: - Init / Deinit
+    // MARK: - On menu open
 
-    init() {
-        startSyncTimer()
-    }
-
-    deinit {
-        syncTimer?.invalidate()
-    }
-
-    // MARK: - Timer
-
-    private func startSyncTimer() {
-        syncTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                await self.vmStore?.sync()
-                self.refreshCache()
-            }
+    /// Call this from MenuBarView.onAppear — fires each time the menu is opened.
+    func onMenuOpen() {
+        Task {
+            await vmStore?.sync()
+            refreshCache()
         }
-        // Populate immediately so the menu isn't blank while waiting for first tick
-        refreshCache()
     }
 
     // MARK: - Cache refresh
 
     func refreshCache() {
-        let all = (vmStore?.vms ?? [])
-            .filter { !$0.effectivelyBase }
-            .sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
-        cachedDisplayVMs = all
-        cachedHasActiveVMs = all.contains { $0.status == .running || $0.status == .suspended }
+        // Defer mutations to the next run loop turn so they never fire during
+        // a SwiftUI layout pass, which would cause "Publishing changes from
+        // within view updates" warnings.
+        Task { @MainActor in
+            let all = (self.vmStore?.vms ?? [])
+                .filter { !$0.effectivelyBase }
+                .sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+            self.cachedDisplayVMs = all
+            self.cachedHasActiveVMs = all.contains { $0.status == .running || $0.status == .suspended }
+        }
     }
 
     // MARK: - Start
@@ -71,9 +63,9 @@ final class MenuBarViewModel {
             let label = vm.displayName.isEmpty ? vm.name : vm.displayName
             let opID = state.beginOperation(vmName: label, kind: .start)
             let stream = await store.start(vm: vm, mode: mode)
-            await StreamConsumer.consume(stream) { line in
+            await StreamConsumer.consume(stream, onStdout: { line in
                 state.appendLog(operationID: opID, line: line)
-            }
+            })
             state.finishOperation(id: opID)
             await store.sync()
             refreshCache()

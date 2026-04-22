@@ -69,6 +69,10 @@ struct ToolsPrefsTab: View {
                     CustomPathRow(label: "jq", path: $customPaths.jq)
                 } header: { Text("Binary paths") }
                   footer: { Text("Provide absolute paths to each binary. Oven will use these instead of its managed copies and will not check for updates.") }
+                  .onChange(of: customPaths.tart)    { _, _ in saveCustomPaths() }
+                  .onChange(of: customPaths.packer)  { _, _ in saveCustomPaths() }
+                  .onChange(of: customPaths.mistCli) { _, _ in saveCustomPaths() }
+                  .onChange(of: customPaths.jq)      { _, _ in saveCustomPaths() }
             }
         }
         .formStyle(.grouped)

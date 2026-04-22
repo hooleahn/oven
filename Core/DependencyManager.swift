@@ -25,21 +25,40 @@ final class DependencyManager: ObservableObject {
 
     var dependencies: [Dependency] = []
     var isCheckingVersions = false
+    var isCheckingForUpdates = false
     var installLog: [String] = []
+
+    /// When true, Oven manages downloads/updates. When false, user supplies paths.
+    var mode: AppSettings.DependencyMode = .managed
+
+    /// Last time we successfully checked for upstream updates.
+    var lastUpdateCheck: Date? = nil
 
     private let depsDirectory: URL
     private let manifestURL: URL
     private let processRunner = ProcessRunner()
+    private var updateCheckTask: Task<Void, Never>? = nil
 
     init(storageRoot: URL) {
         self.depsDirectory = storageRoot.appendingPathComponent("deps", isDirectory: true)
         self.manifestURL = depsDirectory.appendingPathComponent("versions.json")
-        buildInitialState()
+        let settings = AppSettings.load()
+        self.mode = settings.dependencyMode
+        buildInitialState(settings: settings)
     }
 
     // MARK: - Public API
 
     func bootstrap() async {
+        let settings = AppSettings.load()
+        mode = settings.dependencyMode
+
+        if mode == .custom {
+            // In custom mode just verify the paths exist and read versions
+            await refreshCustomPathStatuses(settings: settings)
+            return
+        }
+
         isCheckingVersions = true
         log("Checking dependencies…")
         AppLogger.shared.log("Checking dependencies…", source: "DependencyManager")
@@ -63,6 +82,56 @@ final class DependencyManager: ObservableObject {
             }
         }
         isCheckingVersions = false
+
+        // Check for updates now, then schedule recurrent checks every 12 hours
+        await checkForUpdates()
+        schedulePeriodicUpdateChecks()
+    }
+
+    /// Re-load settings and refresh dependency state. Called when the user
+    /// changes the dependency mode or custom paths in Preferences.
+    func reloadSettings() async {
+        let settings = AppSettings.load()
+        mode = settings.dependencyMode
+        buildInitialState(settings: settings)
+        if mode == .custom {
+            updateCheckTask?.cancel()
+            updateCheckTask = nil
+            await refreshCustomPathStatuses(settings: settings)
+        } else {
+            await refreshStatuses()
+            await checkForUpdates()
+            schedulePeriodicUpdateChecks()
+        }
+    }
+
+    /// Explicitly check GitHub for the latest versions of all managed tools.
+    func checkForUpdates() async {
+        guard mode == .managed else { return }
+        isCheckingForUpdates = true
+        AppLogger.shared.log("Checking for dependency updates…", source: "DependencyManager")
+        for dep in dependencies where dep.id != "tart-packer-plugin" {
+            guard let (owner, repo) = githubCoords(for: dep.id) else { continue }
+            if let latest = try? await fetchLatestGitHubTag(owner: owner, repo: repo) {
+                // Strip any non-numeric prefix (e.g. "v" in "v0.9", "jq-" in "jq-1.8.1")
+                let latestVersion: String
+                if let r = latest.range(of: #"\d+\.\d+[\.\d]*"#, options: .regularExpression) {
+                    latestVersion = String(latest[r])
+                } else {
+                    latestVersion = latest
+                }
+                updateLatestVersion(id: dep.id, latestVersion: latestVersion)
+                // Mark updateAvailable when installed version differs from latest
+                if let current = dependencies.first(where: { $0.id == dep.id })?.currentVersion,
+                   current != latestVersion,
+                   dependencies.first(where: { $0.id == dep.id })?.status == .installed {
+                    updateStatus(id: dep.id, to: .updateAvailable)
+                }
+            }
+        }
+        lastUpdateCheck = Date()
+        isCheckingForUpdates = false
+        AppLogger.shared.log("Dependency update check complete", source: "DependencyManager")
     }
 
     func install(_ dependency: Dependency) async {
@@ -84,7 +153,18 @@ final class DependencyManager: ObservableObject {
 
     var allReady: Bool { dependencies.filter(\.isRequired).allSatisfy(\.isReady) }
 
+    var hasUpdatesAvailable: Bool {
+        mode == .managed && dependencies.contains { $0.status == .updateAvailable }
+    }
+
     func path(for id: String) throws -> String {
+        // In custom mode, return the user-specified path if set
+        if mode == .custom {
+            let settings = AppSettings.load()
+            let customPath = customPath(for: id, in: settings.customPaths)
+            if !customPath.isEmpty { return customPath }
+        }
+
         if id == "tart-packer-plugin" {
             // packer plugins install puts it here; packer finds it automatically
             let pluginDir = FileManager.default.homeDirectoryForCurrentUser
@@ -99,6 +179,62 @@ final class DependencyManager: ObservableObject {
             throw ProcessError.binaryNotFound("\(depsDirectory.path)/\(id)")
         }
         return dep.binaryPath.path
+    }
+
+    // MARK: - Private helpers: custom mode
+
+    private func customPath(for id: String, in paths: AppSettings.CustomBinaryPaths) -> String {
+        switch id {
+        case "tart":     return paths.tart
+        case "packer":   return paths.packer
+        case "mist-cli": return paths.mistCli
+        case "jq":       return paths.jq
+        default:         return ""
+        }
+    }
+
+    private func refreshCustomPathStatuses(settings: AppSettings) async {
+        for i in dependencies.indices {
+            let dep = dependencies[i]
+            let p = customPath(for: dep.id, in: settings.customPaths)
+            guard !p.isEmpty, FileManager.default.fileExists(atPath: p) else {
+                dependencies[i] = Dependency(id: dep.id, displayName: dep.displayName,
+                                             currentVersion: nil, latestVersion: nil,
+                                             binaryPath: URL(fileURLWithPath: p.isEmpty ? dep.binaryPath.path : p),
+                                             isRequired: dep.isRequired, status: .notInstalled)
+                continue
+            }
+            let version = try? await readVersion(binaryPath: p, id: dep.id)
+            dependencies[i] = Dependency(id: dep.id, displayName: dep.displayName,
+                                         currentVersion: version, latestVersion: nil,
+                                         binaryPath: URL(fileURLWithPath: p),
+                                         isRequired: dep.isRequired, status: .installed)
+        }
+    }
+
+    // MARK: - Periodic update checks
+
+    private func schedulePeriodicUpdateChecks() {
+        updateCheckTask?.cancel()
+        updateCheckTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(12 * 60 * 60))
+                guard !Task.isCancelled else { break }
+                await self?.checkForUpdates()
+            }
+        }
+    }
+
+    // MARK: - GitHub coordinate map
+
+    private func githubCoords(for id: String) -> (owner: String, repo: String)? {
+        switch id {
+        case "tart":     return ("cirruslabs", "tart")
+        case "packer":   return ("hashicorp", "packer")
+        case "mist-cli": return ("ninxsoft", "mist-cli")
+        case "jq":       return ("jqlang", "jq")
+        default:         return nil
+        }
     }
 
     // MARK: - Per-tool install logic
@@ -335,7 +471,28 @@ final class DependencyManager: ObservableObject {
 
     // MARK: - State
 
-    private func buildInitialState() {
+    private func buildInitialState(settings: AppSettings) {
+        if settings.dependencyMode == .custom {
+            let paths = settings.customPaths
+            func customDep(_ id: String, _ displayName: String, _ path: String, required: Bool) -> Dependency {
+                let p = path.isEmpty ? "" : path
+                let exists = !p.isEmpty && FileManager.default.fileExists(atPath: p)
+                return Dependency(id: id, displayName: displayName,
+                                  currentVersion: nil, latestVersion: nil,
+                                  binaryPath: URL(fileURLWithPath: p.isEmpty ? depsDirectory.appendingPathComponent(id).path : p),
+                                  isRequired: required,
+                                  status: exists ? .installed : .notInstalled)
+            }
+            dependencies = [
+                customDep("tart",               "tart",               paths.tart,    required: true),
+                customDep("packer",             "packer",             paths.packer,  required: true),
+                customDep("mist-cli",           "mist-cli",           paths.mistCli, required: false),
+                customDep("tart-packer-plugin", "packer-plugin-tart", "",            required: true),
+                customDep("jq",                 "jq",                 paths.jq,      required: true),
+            ]
+            return
+        }
+
         let m = loadManifest()
         func st(_ id: String, _ ver: String?) -> Dependency.Status {
             ver != nil && fileExists(id) ? .installed : .notInstalled
@@ -393,6 +550,15 @@ final class DependencyManager: ObservableObject {
                                       binaryPath: d.binaryPath, isRequired: d.isRequired,
                                       status: version != nil ? .installed : d.status)
         saveManifest()
+    }
+
+    private func updateLatestVersion(id: String, latestVersion: String?) {
+        guard let i = dependencies.firstIndex(where: { $0.id == id }) else { return }
+        let d = dependencies[i]
+        dependencies[i] = Dependency(id: d.id, displayName: d.displayName,
+                                      currentVersion: d.currentVersion, latestVersion: latestVersion,
+                                      binaryPath: d.binaryPath, isRequired: d.isRequired,
+                                      status: d.status)
     }
 
     private func fileExists(_ name: String) -> Bool {

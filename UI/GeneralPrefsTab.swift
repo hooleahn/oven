@@ -33,14 +33,24 @@ struct GeneralPrefsTab: View {
             }
 
             Section {
+                Toggle(isOn: $theme.menuBarItemEnabled) {
+                    Label("Show Menu Bar Item", systemImage: "menubar.rectangle")
+                }
+                .help("Shows an Oven icon in the menu bar for quick access to running VMs without opening the main window.")
+            } header: {
+                Text("Menu Bar")
+            }
+
+            Section {
                 Button(role: .destructive) {
                     theme.funModeEnabled = false
                     theme.debugModeEnabled = false
+                    theme.menuBarItemEnabled = true
                 } label: {
                     Label("Reset General Settings to Defaults", systemImage: "arrow.counterclockwise")
                 }
                 .buttonStyle(.bordered)
-                .help("Restores Fun Mode and Debug Mode to their default (off) state.")
+                .help("Restores Fun Mode, Debug Mode, and Menu Bar Item to their default state.")
             } header: {
                 Text("Reset")
             } footer: {

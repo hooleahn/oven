@@ -127,6 +127,15 @@ struct RecipesView: View {
             .environmentObject(theme)
             .environment(templateStore)
         }
+        // Cirrus Labs vanilla templates sheet
+        .sheet(isPresented: bindableModel.isPresentingCirrusSheet) {
+            CirrusLabsTemplateSheet { id in
+                model.selectedTemplateID = id
+                model.loadTemplateContent(id, from: templateStore)
+                model.selectedTab = .templates
+            }
+            .environmentObject(templateStore)
+        }
     }
 
     // MARK: - Sidebar
@@ -159,15 +168,22 @@ struct RecipesView: View {
 
             Spacer()
 
+            if model.selectedTab == .templates {
+                Button { model.isPresentingCirrusSheet = true } label: {
+                    Image(systemName: "arrow.down.circle")
+                }
+                .buttonStyle(.bordered).controlSize(.small)
+                .help("Import from Cirrus Labs")
+            }
+
             Button { templateStore.load() } label: {
                 Image(systemName: "arrow.clockwise")
             }
             .buttonStyle(.bordered).controlSize(.small)
-            .help("Refresh VM list")
+            .help("Refresh templates")
 
             Button { model.isPresentingNewSheet = true } label: {
                 Image(systemName: "plus")
-//                Label("", systemImage: "plus")
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)

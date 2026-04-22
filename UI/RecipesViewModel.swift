@@ -58,6 +58,7 @@ final class RecipesViewModel {
 
     // Sheet / dialog state
     var isPresentingNewSheet: Bool = false
+    var isPresentingCirrusSheet: Bool = false
     var confirmDeleteTemplateID: UUID? = nil
     var confirmDeleteBlockID: UUID? = nil
     var renamingTemplateID: UUID? = nil

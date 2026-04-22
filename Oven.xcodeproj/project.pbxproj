@@ -69,6 +69,12 @@
 		B6539E2F3DF443149F26FB2D /* VMListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B14F8A8C198458999D688B4 /* VMListView.swift */; };
 		B7F2353406F74DA29BC32C98 /* wallpaper-tahoe.jpeg in Resources */ = {isa = PBXBuildFile; fileRef = 67C9D25062A74F2FAB110AC8 /* wallpaper-tahoe.jpeg */; };
 		B90657DD2F96FB4500B426A0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5427CDAA002D4233B481E546 /* Assets.xcassets */; };
+		B91426BD2F983AEE00F13968 /* AcknowledgementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426BC2F983AEE00F13968 /* AcknowledgementsView.swift */; };
+		B91426BF2F98420B00F13968 /* MenuBarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426BE2F98420B00F13968 /* MenuBarViewModel.swift */; };
+		B91426C12F98421D00F13968 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426C02F98421D00F13968 /* MenuBarView.swift */; };
+		B91426C32F98497C00F13968 /* ToolsPrefsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426C22F98497C00F13968 /* ToolsPrefsTab.swift */; };
+		B91426C52F98546100F13968 /* CirrusLabsTemplateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426C42F98546100F13968 /* CirrusLabsTemplateStore.swift */; };
+		B91426C72F9854C100F13968 /* CirrusLabsTemplateSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426C62F9854C100F13968 /* CirrusLabsTemplateSheet.swift */; };
 		B97A40AA2F970E3F00FB577C /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40A92F970E3F00FB577C /* OnboardingView.swift */; };
 		B97A40AC2F970FB300FB577C /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40AB2F970FB300FB577C /* DesignSystem.swift */; };
 		B97A40B02F971CF000FB577C /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = B97A40AF2F971CF000FB577C /* AppIcon.icon */; };
@@ -168,6 +174,12 @@
 		B02BCD21BC2FF6DA5508A215 /* Services/PackerTemplateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/PackerTemplateStore.swift; sourceTree = SOURCE_ROOT; };
 		B605AD8CB894481CA4152C12 /* VMListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMListViewModel.swift; sourceTree = "<group>"; };
 		B79EFA2071E14B4F9BAA4878 /* MDMProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMProfile.swift; sourceTree = "<group>"; };
+		B91426BC2F983AEE00F13968 /* AcknowledgementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AcknowledgementsView.swift; sourceTree = "<group>"; };
+		B91426BE2F98420B00F13968 /* MenuBarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarViewModel.swift; sourceTree = "<group>"; };
+		B91426C02F98421D00F13968 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
+		B91426C22F98497C00F13968 /* ToolsPrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolsPrefsTab.swift; sourceTree = "<group>"; };
+		B91426C42F98546100F13968 /* CirrusLabsTemplateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirrusLabsTemplateStore.swift; sourceTree = "<group>"; };
+		B91426C62F9854C100F13968 /* CirrusLabsTemplateSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirrusLabsTemplateSheet.swift; sourceTree = "<group>"; };
 		B97A40A92F970E3F00FB577C /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		B97A40AB2F970FB300FB577C /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		B97A40AF2F971CF000FB577C /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
@@ -300,6 +312,11 @@
 				82AFD002D57A425686F97AF7 /* TagsPrefsTab.swift */,
 				B97A40A92F970E3F00FB577C /* OnboardingView.swift */,
 				B97A40AB2F970FB300FB577C /* DesignSystem.swift */,
+				B91426BC2F983AEE00F13968 /* AcknowledgementsView.swift */,
+				B91426BE2F98420B00F13968 /* MenuBarViewModel.swift */,
+				B91426C02F98421D00F13968 /* MenuBarView.swift */,
+				B91426C22F98497C00F13968 /* ToolsPrefsTab.swift */,
+				B91426C62F9854C100F13968 /* CirrusLabsTemplateSheet.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -342,6 +359,7 @@
 				8E22A8EF924A4E6AA6AE3FC5 /* RegistryService.swift */,
 				038B00DC3027437E8A11A2F9 /* TartService.swift */,
 				AA3407A9972E4871AB9375EB /* VMStore.swift */,
+				B91426C42F98546100F13968 /* CirrusLabsTemplateStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -458,6 +476,7 @@
 				73054575B317430EBFA56649 /* ContentView.swift in Sources */,
 				B9ADE8C02F7DE64D00B30458 /* SOFAService.swift in Sources */,
 				7C35CBA641854707ABDC0925 /* Dependency.swift in Sources */,
+				B91426C72F9854C100F13968 /* CirrusLabsTemplateSheet.swift in Sources */,
 				F991657C3B6A417FA9F35F32 /* DependencyManager.swift in Sources */,
 				B39FD500255442D793F5D6E4 /* EmptyStateView.swift in Sources */,
 				2F9BC3605FE441F9AB5BFB0B /* IPSWService.swift in Sources */,
@@ -465,10 +484,12 @@
 				BD83F46D40364D3683D9FF41 /* InstallerView.swift in Sources */,
 				C0463FF8C7C44D91AE30213E /* JamfService.swift in Sources */,
 				4D0FCA38B8D74F2ABAD31CFD /* KeychainService.swift in Sources */,
+				B91426C52F98546100F13968 /* CirrusLabsTemplateStore.swift in Sources */,
 				31EFAC40E69947489E42DF23 /* LaunchModeSheet.swift in Sources */,
 				65B477599B59464FB5E5C380 /* LiveBuildLogPanel.swift in Sources */,
 				D457657148CA47B3BB9E84EF /* LogView.swift in Sources */,
 				C50AFE686F2C42E9916951F2 /* MDMProfile.swift in Sources */,
+				B91426C12F98421D00F13968 /* MenuBarView.swift in Sources */,
 				93636E15E6E847419710A257 /* MDMProfileView.swift in Sources */,
 				3245D697DD9E40D7B815104C /* MDMServer.swift in Sources */,
 				4099E881D0A14D4E800362A1 /* MDMServersView.swift in Sources */,
@@ -482,9 +503,11 @@
 				6BD2AFE8F9784129A4BA4380 /* PreflightCheck.swift in Sources */,
 				B9C8AE33CA8A401BBB4E7A90 /* ProcessRunner.swift in Sources */,
 				F8813317A2EA47C492C824B1 /* PullDestinationSheet.swift in Sources */,
+				B91426BF2F98420B00F13968 /* MenuBarViewModel.swift in Sources */,
 				788E2C888D194CFD896B87C7 /* PushToRegistrySheet.swift in Sources */,
 				FD553859E6C84FE2ABD46F7F /* RecipesView.swift in Sources */,
 				9DDA46FCB2B94A9801B36C2B /* PackerTemplate.swift in Sources */,
+				B91426BD2F983AEE00F13968 /* AcknowledgementsView.swift in Sources */,
 				FD31881B18A20CE7D501B422 /* HCLEditor.swift in Sources */,
 				33A88016FDFCA1505226CD55 /* BuildingBlock.swift in Sources */,
 				0710E86F4880421F7A082349 /* BuildingBlockDetailPane.swift in Sources */,
@@ -500,6 +523,7 @@
 				96EC6A01B9BD4129869AB92B /* RegistryService.swift in Sources */,
 				BFB8A48BC686468691CA5658 /* RegistryView.swift in Sources */,
 				C3D8415537B744118F8E6C2C /* SetupView.swift in Sources */,
+				B91426C32F98497C00F13968 /* ToolsPrefsTab.swift in Sources */,
 				150BA21AC538496989BF9EB6 /* TagChip.swift in Sources */,
 				4E609391533F4F59A312D26B /* TagStore.swift in Sources */,
 				51A38B8AFD8C4536A8EC2C55 /* TartService.swift in Sources */,

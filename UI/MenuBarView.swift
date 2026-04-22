@@ -14,6 +14,12 @@ struct MenuBarView: View {
     var model: MenuBarViewModel
 
     var body: some View {
+        // Sync VM state each time the menu is opened.
+        // .task fires on onAppear, which the .menu style triggers on every open.
+        Color.clear
+            .frame(width: 0, height: 0)
+            .task { model.onMenuOpen() }
+
         if model.cachedDisplayVMs.isEmpty {
             Text("No Virtual Machines")
         } else {

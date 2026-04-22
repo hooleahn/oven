@@ -213,4 +213,22 @@ final class PackerTemplateStore: ObservableObject {
     }
 
     func forkBase(id: UUID) -> UUID? { duplicate(id: id) }
+
+    // MARK: - Create from Cirrus Labs vanilla template
+
+    /// Downloads the HCL content from GitHub and saves it as a new custom template.
+    /// Returns the UUID of the created template, or throws on failure.
+    @discardableResult
+    func createFromCirrus(_ cirrusTemplate: CirrusLabsVanillaTemplate) async throws -> UUID {
+        let content = try await CirrusLabsTemplateStore.fetchContent(for: cirrusTemplate)
+        return try create(
+            kind: .fullTemplate,
+            displayName: cirrusTemplate.displayName,
+            description: cirrusTemplate.description,
+            osName: cirrusTemplate.osName,
+            osVersion: cirrusTemplate.osVersion,
+            filename: cirrusTemplate.defaultFilename,
+            starterContent: content
+        )
+    }
 }
