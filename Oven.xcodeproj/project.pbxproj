@@ -75,6 +75,10 @@
 		B91426C32F98497C00F13968 /* ToolsPrefsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426C22F98497C00F13968 /* ToolsPrefsTab.swift */; };
 		B91426C52F98546100F13968 /* CirrusLabsTemplateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426C42F98546100F13968 /* CirrusLabsTemplateStore.swift */; };
 		B91426C72F9854C100F13968 /* CirrusLabsTemplateSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426C62F9854C100F13968 /* CirrusLabsTemplateSheet.swift */; };
+		B91426C92F99704900F13968 /* BootCommandBlock+Seeds.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426C82F99704900F13968 /* BootCommandBlock+Seeds.swift */; };
+		B91426CB2F99709700F13968 /* ManualBuildConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426CA2F99709700F13968 /* ManualBuildConfig.swift */; };
+		B91426CD2F9970CA00F13968 /* ManualBuildHCLGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426CC2F9970CA00F13968 /* ManualBuildHCLGenerator.swift */; };
+		B91426CF2F997C2000F13968 /* BootCommandEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426CE2F997C2000F13968 /* BootCommandEditor.swift */; };
 		B97A40AA2F970E3F00FB577C /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40A92F970E3F00FB577C /* OnboardingView.swift */; };
 		B97A40AC2F970FB300FB577C /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40AB2F970FB300FB577C /* DesignSystem.swift */; };
 		B97A40B02F971CF000FB577C /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = B97A40AF2F971CF000FB577C /* AppIcon.icon */; };
@@ -180,6 +184,10 @@
 		B91426C22F98497C00F13968 /* ToolsPrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolsPrefsTab.swift; sourceTree = "<group>"; };
 		B91426C42F98546100F13968 /* CirrusLabsTemplateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirrusLabsTemplateStore.swift; sourceTree = "<group>"; };
 		B91426C62F9854C100F13968 /* CirrusLabsTemplateSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirrusLabsTemplateSheet.swift; sourceTree = "<group>"; };
+		B91426C82F99704900F13968 /* BootCommandBlock+Seeds.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BootCommandBlock+Seeds.swift"; sourceTree = "<group>"; };
+		B91426CA2F99709700F13968 /* ManualBuildConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualBuildConfig.swift; sourceTree = "<group>"; };
+		B91426CC2F9970CA00F13968 /* ManualBuildHCLGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualBuildHCLGenerator.swift; sourceTree = "<group>"; };
+		B91426CE2F997C2000F13968 /* BootCommandEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootCommandEditor.swift; sourceTree = "<group>"; };
 		B97A40A92F970E3F00FB577C /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		B97A40AB2F970FB300FB577C /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		B97A40AF2F971CF000FB577C /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
@@ -317,6 +325,8 @@
 				B91426C02F98421D00F13968 /* MenuBarView.swift */,
 				B91426C22F98497C00F13968 /* ToolsPrefsTab.swift */,
 				B91426C62F9854C100F13968 /* CirrusLabsTemplateSheet.swift */,
+				B91426C82F99704900F13968 /* BootCommandBlock+Seeds.swift */,
+				B91426CE2F997C2000F13968 /* BootCommandEditor.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -329,6 +339,7 @@
 				69B97A9DF99E4EED99FCED17 /* MDMServer.swift */,
 				732D124B57634F13BF633500 /* RegistryCredential.swift */,
 				CB765F10A5F2414F9124B081 /* VirtualMachine.swift */,
+				B91426CA2F99709700F13968 /* ManualBuildConfig.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -360,6 +371,7 @@
 				038B00DC3027437E8A11A2F9 /* TartService.swift */,
 				AA3407A9972E4871AB9375EB /* VMStore.swift */,
 				B91426C42F98546100F13968 /* CirrusLabsTemplateStore.swift */,
+				B91426CC2F9970CA00F13968 /* ManualBuildHCLGenerator.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -504,6 +516,7 @@
 				B9C8AE33CA8A401BBB4E7A90 /* ProcessRunner.swift in Sources */,
 				F8813317A2EA47C492C824B1 /* PullDestinationSheet.swift in Sources */,
 				B91426BF2F98420B00F13968 /* MenuBarViewModel.swift in Sources */,
+				B91426CD2F9970CA00F13968 /* ManualBuildHCLGenerator.swift in Sources */,
 				788E2C888D194CFD896B87C7 /* PushToRegistrySheet.swift in Sources */,
 				FD553859E6C84FE2ABD46F7F /* RecipesView.swift in Sources */,
 				9DDA46FCB2B94A9801B36C2B /* PackerTemplate.swift in Sources */,
@@ -520,7 +533,9 @@
 				542CCC4E31BEF50B1A871918 /* Services/PackerTemplateStore.swift in Sources */,
 				AAC69E7A339449BD9EAB580E /* RegistryCredential.swift in Sources */,
 				EA6F4FE3BD644AC686E0F328 /* RegistryImageRow.swift in Sources */,
+				B91426C92F99704900F13968 /* BootCommandBlock+Seeds.swift in Sources */,
 				96EC6A01B9BD4129869AB92B /* RegistryService.swift in Sources */,
+				B91426CB2F99709700F13968 /* ManualBuildConfig.swift in Sources */,
 				BFB8A48BC686468691CA5658 /* RegistryView.swift in Sources */,
 				C3D8415537B744118F8E6C2C /* SetupView.swift in Sources */,
 				B91426C32F98497C00F13968 /* ToolsPrefsTab.swift in Sources */,
@@ -538,6 +553,7 @@
 				7C5758A01C8F4AFA8D09C21D /* BaseVMViewModel.swift in Sources */,
 				C2374D01732841E6838CCC53 /* RegistryViewModel.swift in Sources */,
 				56FBE82476DC4C36A23E5110 /* StreamConsumer.swift in Sources */,
+				B91426CF2F997C2000F13968 /* BootCommandEditor.swift in Sources */,
 				AB10C071951741DE9B85D648 /* AppDatabase.swift in Sources */,
 				4F5AE2957A23433FABAE7233 /* GeneralPrefsTab.swift in Sources */,
 				1DE30F1412084C618E30E457 /* BuildPrefsTab.swift in Sources */,

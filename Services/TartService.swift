@@ -184,6 +184,14 @@ actor TartService {
         return try JSONDecoder().decode(TartVMConfig.self, from: data)
     }
 
+    // MARK: - Create from IPSW
+
+    /// Create a new VM from a local IPSW file. Streams progress output.
+    func create(name: String, fromIPSW ipswPath: String, diskGB: Int) async -> AsyncStream<ProcessEvent> {
+        let args = ["create", name, "--from-ipsw", ipswPath, "--disk-size", "\(diskGB)"]
+        return await runner.stream(tartPath, arguments: args, environment: tartEnv)
+    }
+
     // MARK: - Pull / Push (registry)
 
     /// Pull an OCI image into tart's cache (no local name — appears as OCI source in tart list).

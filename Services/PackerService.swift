@@ -113,6 +113,75 @@ actor PackerService {
         }
     }
 
+    /// Builds a template at an absolute URL (used by the manual build path).
+    /// Like buildWithInit but accepts a pre-generated HCL file at any location.
+    /// No vars file is used — all variable defaults are embedded in the generated HCL.
+    func buildWithInitURL(templateURL: URL,
+                          username: String, password: String,
+                          showGraphics: Bool = false) async -> AsyncStream<ProcessEvent> {
+        AsyncStream { continuation in
+            Task {
+                let depsDir = URL(fileURLWithPath: packerPath).deletingLastPathComponent().path
+                let parentEnv = ProcessInfo.processInfo.environment
+                let debug = UserDefaults.standard.bool(forKey: "debugModeEnabled")
+                var env: [String: String] = [
+                    "PACKER_PLUGIN_PATH": pluginDir,
+                    "PATH":   "\(depsDir):/usr/bin:/bin:/usr/sbin:/sbin",
+                    "HOME":   parentEnv["HOME"]   ?? NSHomeDirectory(),
+                    "TMPDIR": parentEnv["TMPDIR"] ?? "/tmp",
+                    "USER":   parentEnv["USER"]   ?? "unknown",
+                    "SHELL":  "/bin/zsh",
+                ]
+                let tartHome = AppSettings.load().resolvedTartHome.path
+                env["TART_HOME"] = tartHome
+                if debug { env["PACKER_LOG"] = "1" }
+
+                // Write temp credentials vars file
+                let credVarsURL = URL(fileURLWithPath: NSTemporaryDirectory())
+                    .appendingPathComponent("oven-creds-\(UUID().uuidString).pkrvars.hcl")
+                let credContent = "account_userName = \"\(username)\"\naccount_password = \"\(password)\"\n"
+                do {
+                    try credContent.write(to: credVarsURL, atomically: true, encoding: .utf8)
+                } catch {
+                    continuation.yield(.exit(1)); continuation.finish(); return
+                }
+                defer { try? FileManager.default.removeItem(at: credVarsURL) }
+
+                continuation.yield(.stdout("==> packer init \(templateURL.lastPathComponent)"))
+                if debug {
+                    continuation.yield(.stdout("[debug] Binary: \(packerPath)"))
+                    continuation.yield(.stdout("[debug] Template: \(templateURL.path)"))
+                    continuation.yield(.stdout("[debug] Plugin dir: \(pluginDir)"))
+                }
+                do {
+                    try await runner.run(packerPath, arguments: ["init", templateURL.path], environment: env)
+                    continuation.yield(.stdout("==> Init complete"))
+                } catch {
+                    continuation.yield(.stderr("Init failed: \(error.localizedDescription)"))
+                    continuation.yield(.exit(1))
+                    continuation.finish()
+                    return
+                }
+
+                continuation.yield(.stdout("==> packer build \(templateURL.lastPathComponent)"))
+                continuation.yield(.stdout("[cmd] \"\(packerPath)\" build -color=false -var-file=<creds> \"\(templateURL.path)\""))
+
+                let stream = await runner.stream(
+                    packerPath,
+                    arguments: ["build", "-color=false",
+                                "-var-file=\(credVarsURL.path)",
+                                templateURL.path],
+                    environment: env
+                )
+                for await event in stream {
+                    continuation.yield(event)
+                    if case .exit = event { break }
+                }
+                continuation.finish()
+            }
+        }
+    }
+
     /// Validates a full template standalone (no vars file — uses variable defaults).
     /// Runs packer init first, then packer validate. Yields status strings for UI display.
     func validateStandalone(at url: URL) -> AsyncStream<String> {

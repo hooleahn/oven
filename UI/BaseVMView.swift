@@ -7,6 +7,7 @@ struct BaseVMView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var theme: AppTheme
     @EnvironmentObject var templateStore: PackerTemplateStore
+    @EnvironmentObject var blockStore: BuildingBlockStore
     @State private var lastRefreshedAt: Date? = nil
 
     private func coarseAge(of date: Date) -> String {
@@ -91,6 +92,7 @@ struct BaseVMView: View {
                 .environmentObject(baseVMStore)
                 .environmentObject(theme)
                 .environmentObject(templateStore)
+                .environmentObject(blockStore)
         }
         .sheet(item: $model.createVMFromBase) { base in
             NewVMFromBaseSheet(baseVM: base)

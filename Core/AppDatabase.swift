@@ -26,19 +26,21 @@ final class AppDatabase {
         case mdmProfiles       = "mdm-profiles.json"
         case mdmServers        = "mdm-servers.json"
         case packerBlocks      = "packer-blocks.json"
+        case packerBootCommands = "packer-boot-commands.json"
 
         /// Schema version — bump when the model gains non-optional fields
         /// that can't be decoded from older files via decodeIfPresent.
         var schemaVersion: Int {
             switch self {
-            case .vms:               return 5   // v5: customTemplateID/customVarsFileID (UUID) replace customTemplatePath (String)
+            case .vms:               return 6   // v6: manualBuildConfig added for manual-build-path VMs
             case .baseVMs:           return 2   // legacy — data migrated into vms in v4
             case .tagColors:         return 1
             case .registryImages:    return 1
             case .registryCredentials: return 1
             case .mdmProfiles:       return 1
             case .mdmServers:        return 1
-            case .packerBlocks:      return 1
+            case .packerBlocks:      return 2   // v2: added osName, osVersion fields
+            case .packerBootCommands: return 1
             }
         }
     }

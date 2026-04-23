@@ -26,6 +26,7 @@ final class RecipesViewModel {
     var selectedTab: RecipesTab = .templates
     var selectedTemplateID: UUID? = nil
     var selectedBlockID: UUID? = nil
+    var selectedBootCommandID: UUID? = nil
 
     // Editor state
     var editedContent: String = ""
@@ -61,6 +62,7 @@ final class RecipesViewModel {
     var isPresentingCirrusSheet: Bool = false
     var confirmDeleteTemplateID: UUID? = nil
     var confirmDeleteBlockID: UUID? = nil
+    var confirmDeleteBootCommandID: UUID? = nil
     var renamingTemplateID: UUID? = nil
     var renameText: String = ""
     var showForkConfirmation: Bool = false
@@ -105,6 +107,17 @@ final class RecipesViewModel {
             $0.displayName.lowercased().contains(q) ||
             $0.blockDescription.lowercased().contains(q) ||
             $0.provisioner.label.lowercased().contains(q)
+        }
+    }
+
+    func filteredBootCommands(from store: BuildingBlockStore) -> [BootCommandBlock] {
+        let all = store.bootCommands
+        guard !searchText.isEmpty else { return all }
+        let q = searchText.lowercased()
+        return all.filter {
+            $0.displayName.lowercased().contains(q) ||
+            $0.blockDescription.lowercased().contains(q) ||
+            $0.osName.lowercased().contains(q)
         }
     }
 

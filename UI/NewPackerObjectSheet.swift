@@ -12,6 +12,7 @@ struct NewPackerObjectSheet: View {
         case fullTemplate = "Full Template"
         case varsFile     = "Template Variables"
         case block        = "Building Block"
+        case bootCommand  = "Boot Command Block"
         var id: String { rawValue }
 
         var systemImage: String {
@@ -19,6 +20,7 @@ struct NewPackerObjectSheet: View {
             case .fullTemplate: return "doc.text"
             case .varsFile:     return "slider.horizontal.3"
             case .block:        return "puzzlepiece"
+            case .bootCommand:  return "command"
             }
         }
 
@@ -30,12 +32,15 @@ struct NewPackerObjectSheet: View {
                 return "A .pkrvars.hcl file that overrides variables in a Full Template — hardware, names, and more. Avoid storing passwords here; use Keychain credentials instead."
             case .block:
                 return "A reusable HCL provisioner snippet to copy-paste into Full Templates. Building Blocks are not built directly."
+            case .bootCommand:
+                return "A sequence of key-press commands that automate the macOS Setup Assistant. Used in the manual Base VM build path to bring the VM to a logged-in state."
             }
         }
     }
 
     let onCreatedTemplate: (UUID) -> Void
     let onCreatedBlock: (BuildingBlock) -> Void
+    let onCreatedBootCommand: (BootCommandBlock) -> Void
 
     @State private var selectedKind: ObjectKind = .fullTemplate
     @State private var page: Page = .typePicker
@@ -51,7 +56,7 @@ struct NewPackerObjectSheet: View {
             case .details:    detailsPage
             }
         }
-        .frame(minWidth: 500, idealWidth: 540, minHeight: 400)
+        .frame(minWidth: 560, idealWidth: 620, minHeight: 400)
     }
 
     // MARK: - Header
@@ -123,6 +128,8 @@ struct NewPackerObjectSheet: View {
             VarsFileCreationForm(onCreated: { id in onCreatedTemplate(id); dismiss() })
         case .block:
             BuildingBlockEditSheet(block: nil) { block in onCreatedBlock(block); dismiss() }
+        case .bootCommand:
+            BootCommandEditSheet(cmd: nil) { cmd in onCreatedBootCommand(cmd); dismiss() }
         }
     }
 }

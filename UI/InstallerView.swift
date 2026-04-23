@@ -642,48 +642,15 @@ struct LocalIPSWRow: View {
 }
 
 // MARK: - NewBaseVMSheetWithIPSW (bridge)
+// Passes the real app-wide BaseVMStore through the environment so that VMs
+// created here appear immediately in the Base VMs list.
 
 struct NewBaseVMSheetWithIPSW: View {
     let preselectedIPSW: URL?
-    @Environment(\.dismiss) var dismiss
-
-    @State private var baseVMStore: BaseVMStore = {
-        let settings = AppSettings.load()
-        let runner   = ProcessRunner()
-        let depsRoot = AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps")
-        let tartSvc  = TartService(runner: runner,
-                                   tartPath: depsRoot.appendingPathComponent("tart").path)
-        let packerSvc = PackerService(
-            runner: runner,
-            packerPath: depsRoot.appendingPathComponent("packer").path,
-            pluginDir: FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".packer.d/plugins/github.com/cirruslabs/tart").path,
-            templatesRoot: settings.packerTemplatesRoot
-        )
-        return BaseVMStore(packerService: packerSvc, tartService: tartSvc,
-                           storageRoot: settings.packerTemplatesRoot)
-    }()
-    @State private var theme = AppTheme()
-    @State private var templateStore = PackerTemplateStore()
 
     var body: some View {
-        NewBaseVMSheetPreloaded(preselectedIPSW: preselectedIPSW)
-            .environmentObject(baseVMStore)
-            .environmentObject(theme)
-            .environmentObject(templateStore)
-    }
-}
-
-struct NewBaseVMSheetPreloaded: View {
-    let preselectedIPSW: URL?
-    @EnvironmentObject var baseVMStore: BaseVMStore
-    @EnvironmentObject var theme: AppTheme
-    @EnvironmentObject var templateStore: PackerTemplateStore
-    @Environment(\.dismiss) var dismiss
-
-    var body: some View {
-        // Delegate to the full sheet which has all options.
-        // Pre-select the IPSW source so it auto-populates OS/version.
+        // Environment objects (BaseVMStore, AppTheme, PackerTemplateStore, BuildingBlockStore)
+        // are already injected by the presenting view via the app-level environment chain.
         NewBaseVMSheet(preselectedIPSWURL: preselectedIPSW)
     }
 }

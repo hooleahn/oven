@@ -33,6 +33,7 @@ struct RecipesView: View {
             if let id = model.selectedTemplateID { model.saveDraft(for: id) }
             model.selectedTemplateID = nil
             model.selectedBlockID = nil
+            model.selectedBootCommandID = nil
             model.editedContent = ""
         }
         // Fork base confirmation
@@ -89,6 +90,25 @@ struct RecipesView: View {
                 Button("Cancel", role: .cancel) { model.confirmDeleteBlockID = nil }
             }
         } message: { Text("This building block will be permanently removed.") }
+        // Delete boot command confirmation
+        .confirmationDialog(
+            blockStore.bootCommands.first(where: { $0.id == model.confirmDeleteBootCommandID })
+                .map { "Delete \"\($0.displayName)\"?" } ?? "Delete boot command?",
+            isPresented: Binding(
+                get: { model.confirmDeleteBootCommandID != nil },
+                set: { if !$0 { model.confirmDeleteBootCommandID = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let id = model.confirmDeleteBootCommandID {
+                Button("Delete", role: .destructive) {
+                    if model.selectedBootCommandID == id { model.selectedBootCommandID = nil }
+                    blockStore.deleteBootCommand(id: id)
+                    model.confirmDeleteBootCommandID = nil
+                }
+                Button("Cancel", role: .cancel) { model.confirmDeleteBootCommandID = nil }
+            }
+        } message: { Text("This boot command block will be permanently removed.") }
         // Rename template
         .alert("Rename Template", isPresented: Binding(
             get: { model.renamingTemplateID != nil },
@@ -121,6 +141,12 @@ struct RecipesView: View {
                 onCreatedBlock: { block in
                     blockStore.add(block)
                     model.selectedBlockID = block.id
+                    model.selectedTab = .blocks
+                },
+                onCreatedBootCommand: { cmd in
+                    blockStore.addBootCommand(cmd)
+                    model.selectedBootCommandID = cmd.id
+                    model.selectedBlockID = nil
                     model.selectedTab = .blocks
                 }
             )
@@ -293,27 +319,98 @@ struct RecipesView: View {
     // MARK: - Blocks list
 
     private var blocksList: some View {
-        let filtered = model.filteredBlocks(from: blockStore)
-        let bases    = filtered.filter {  $0.isBase }
-        let customs  = filtered.filter { !$0.isBase }
+        let filteredBlocks = model.filteredBlocks(from: blockStore)
+        let baseBlocks     = filteredBlocks.filter {  $0.isBase }
+        let customBlocks   = filteredBlocks.filter { !$0.isBase }
+        let filteredCmds   = model.filteredBootCommands(from: blockStore)
+        let baseCmds       = filteredCmds.filter {  $0.isBase }
+        let customCmds     = filteredCmds.filter { !$0.isBase }
+        let hasAny = !blockStore.blocks.isEmpty || !blockStore.bootCommands.isEmpty
+        let hasFiltered = !filteredBlocks.isEmpty || !filteredCmds.isEmpty
         return Group {
-            if blockStore.blocks.isEmpty {
+            if !hasAny {
                 emptyState("No Building Blocks", image: "puzzlepiece", description: "")
-            } else if filtered.isEmpty {
+            } else if !hasFiltered {
                 ContentUnavailableView.search
             } else {
-                List(selection: bindableModel.selectedBlockID) {
-                    if !customs.isEmpty {
-                        Section("Custom") {
-                            ForEach(customs) { block in
-                                BuildingBlockRow(block: block).tag(block.id)
+                // Two parallel selections: one for provisioner blocks, one for boot command blocks.
+                // We drive them manually via onTapGesture so we can clear the other on selection.
+                List {
+                    // Provisioner building blocks
+                    if !customBlocks.isEmpty {
+                        Section("Custom Building Blocks") {
+                            ForEach(customBlocks) { block in
+                                BuildingBlockRow(block: block)
+                                    .listRowBackground(model.selectedBlockID == block.id
+                                        ? Color.accentColor.opacity(0.15) : Color.clear)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        model.selectedBlockID = block.id
+                                        model.selectedBootCommandID = nil
+                                    }
+                                    .contextMenu {
+                                        Button("Duplicate") {
+                                            let copy = blockStore.duplicate(block)
+                                            model.selectedBlockID = copy.id
+                                            model.selectedBootCommandID = nil
+                                        }
+                                        Button("Delete", role: .destructive) {
+                                            model.confirmDeleteBlockID = block.id
+                                        }
+                                    }
                             }
                         }
                     }
-                    if !bases.isEmpty {
+                    if !baseBlocks.isEmpty {
                         Section("Base Building Blocks") {
-                            ForEach(bases) { block in
-                                BuildingBlockRow(block: block).tag(block.id)
+                            ForEach(baseBlocks) { block in
+                                BuildingBlockRow(block: block)
+                                    .listRowBackground(model.selectedBlockID == block.id
+                                        ? Color.accentColor.opacity(0.15) : Color.clear)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        model.selectedBlockID = block.id
+                                        model.selectedBootCommandID = nil
+                                    }
+                            }
+                        }
+                    }
+                    // Boot command blocks
+                    if !customCmds.isEmpty {
+                        Section("Custom Boot Commands") {
+                            ForEach(customCmds) { cmd in
+                                BootCommandRow(cmd: cmd)
+                                    .listRowBackground(model.selectedBootCommandID == cmd.id
+                                        ? Color.accentColor.opacity(0.15) : Color.clear)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        model.selectedBootCommandID = cmd.id
+                                        model.selectedBlockID = nil
+                                    }
+                                    .contextMenu {
+                                        Button("Duplicate") {
+                                            let copy = blockStore.duplicateBootCommand(cmd)
+                                            model.selectedBootCommandID = copy.id
+                                            model.selectedBlockID = nil
+                                        }
+                                        Button("Delete", role: .destructive) {
+                                            model.confirmDeleteBootCommandID = cmd.id
+                                        }
+                                    }
+                            }
+                        }
+                    }
+                    if !baseCmds.isEmpty {
+                        Section("Base Boot Commands") {
+                            ForEach(baseCmds) { cmd in
+                                BootCommandRow(cmd: cmd)
+                                    .listRowBackground(model.selectedBootCommandID == cmd.id
+                                        ? Color.accentColor.opacity(0.15) : Color.clear)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        model.selectedBootCommandID = cmd.id
+                                        model.selectedBlockID = nil
+                                    }
                             }
                         }
                     }
@@ -339,9 +436,20 @@ struct RecipesView: View {
                     onDelete: { model.confirmDeleteBlockID = id },
                     onSave: { updated in blockStore.update(id: updated.id) { $0 = updated } }
                 )
+            } else if let id = model.selectedBootCommandID,
+                      let cmd = blockStore.bootCommands.first(where: { $0.id == id }) {
+                BootCommandDetailPane(
+                    cmd: cmd,
+                    onDuplicate: {
+                        let copy = blockStore.duplicateBootCommand(cmd)
+                        model.selectedBootCommandID = copy.id
+                    },
+                    onDelete: { model.confirmDeleteBootCommandID = id },
+                    onSave: { updated in blockStore.updateBootCommand(id: updated.id) { $0 = updated } }
+                )
             } else {
                 emptyDetail("No Block Selected", image: "puzzlepiece",
-                            description: "Select a building block to view its HCL snippet.")
+                            description: "Select a building block or boot command to view details.")
             }
         } else if let id = model.selectedTemplateID,
                   let tmpl = templateStore.template(id: id) {
@@ -474,6 +582,26 @@ struct BuildingBlockRow: View {
             Text(block.displayName).bold().lineLimit(1)
             Label(block.provisioner.label, systemImage: block.provisioner.systemImage)
                 .font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+// MARK: - BootCommandRow
+
+struct BootCommandRow: View {
+    let cmd: BootCommandBlock
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(cmd.displayName).bold().lineLimit(1)
+            HStack(spacing: 6) {
+                Label("\(cmd.commandLines.count) lines", systemImage: "command")
+                    .font(.caption).foregroundStyle(.secondary)
+                if !cmd.osName.isEmpty {
+                    Text(cmd.osName + (cmd.osVersion.isEmpty ? "" : " \(cmd.osVersion)"))
+                        .font(.caption).foregroundStyle(.tertiary)
+                }
+            }
         }
         .padding(.vertical, 2)
     }

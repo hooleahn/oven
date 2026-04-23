@@ -13,6 +13,9 @@ struct BuildingBlock: Identifiable, Codable, Hashable, Sendable {
     var hclContent: String
     var isBase: Bool          // true = seeded by Oven, read-only
     var createdAt: Date
+    /// OS compatibility filter. Empty string = compatible with any OS / version.
+    var osName: String        // MacOSRelease.Name.rawValue or ""
+    var osVersion: String     // e.g. "15.6", "" = any version
 
     enum ProvisionerType: String, Codable, CaseIterable {
         case shell       = "shell"
@@ -43,7 +46,8 @@ struct BuildingBlock: Identifiable, Codable, Hashable, Sendable {
 
     init(id: UUID = UUID(), displayName: String, blockDescription: String,
          provisioner: ProvisionerType, hclContent: String,
-         isBase: Bool = false, createdAt: Date = Date()) {
+         isBase: Bool = false, createdAt: Date = Date(),
+         osName: String = "", osVersion: String = "") {
         self.id = id
         self.displayName = displayName
         self.blockDescription = blockDescription
@@ -51,6 +55,42 @@ struct BuildingBlock: Identifiable, Codable, Hashable, Sendable {
         self.hclContent = hclContent
         self.isBase = isBase
         self.createdAt = createdAt
+        self.osName = osName
+        self.osVersion = osVersion
+    }
+}
+
+// MARK: - BootCommandBlock
+
+/// A reusable boot_command sequence for the Tart source block.
+/// Encodes the key-presses that automate the macOS Setup Assistant.
+/// Like BuildingBlock, base entries are seeded by Oven; users can fork
+/// and customise them to handle OS-specific Setup Assistant variations.
+struct BootCommandBlock: Identifiable, Codable, Hashable, Sendable {
+    let id: UUID
+    var displayName: String
+    var blockDescription: String
+    /// Raw HCL lines that appear inside boot_command = [ ... ].
+    /// Each string is one entry in the array, already quoted and escaped
+    /// for HCL — the generator joins them with ",\n" and wraps the block.
+    var commandLines: [String]
+    var isBase: Bool
+    var createdAt: Date
+    /// OS compatibility. Empty = any OS / version.
+    var osName: String
+    var osVersion: String
+
+    init(id: UUID = UUID(), displayName: String, blockDescription: String,
+         commandLines: [String], isBase: Bool = false, createdAt: Date = Date(),
+         osName: String = "", osVersion: String = "") {
+        self.id = id
+        self.displayName = displayName
+        self.blockDescription = blockDescription
+        self.commandLines = commandLines
+        self.isBase = isBase
+        self.createdAt = createdAt
+        self.osName = osName
+        self.osVersion = osVersion
     }
 }
 

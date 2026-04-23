@@ -105,6 +105,16 @@ final class BaseVMStore: ObservableObject {
     }
 
     func build(baseVM: VirtualMachine) async {
+        // If this VM was created via the manual build path, re-use the stored config
+        if let config = baseVM.manualBuildConfig {
+            let bootCmd: BootCommandBlock? = config.bootCommandBlockID.flatMap { id in
+                let stored: [BootCommandBlock] = AppDatabase.shared.readOrDefault(.packerBootCommands, default: [])
+                return stored.first { $0.id == id }
+            }
+            await buildManual(baseVM: baseVM, config: config, bootCommandBlock: bootCmd)
+            return
+        }
+
         guard !isBuilding else { return }
         guard !isBuilding else { return }
         AppLogger.shared.log("Build queued: \(baseVM.name) — macOS \(baseVM.osName.rawValue) \(baseVM.osVersion)", source: "BaseVMStore")
@@ -464,6 +474,244 @@ final class BaseVMStore: ObservableObject {
 }
 
 
+
+// MARK: - Manual build (generated HCL path)
+
+extension BaseVMStore {
+    /// Builds a base VM from a ManualBuildConfig by generating the HCL, writing it to
+    /// a temp file, then running the same build pipeline as the template path.
+    func buildManual(baseVM: VirtualMachine, config: ManualBuildConfig,
+                     bootCommandBlock: BootCommandBlock?) async {
+        guard !isBuilding else { return }
+        AppLogger.shared.log("Manual build queued: \(baseVM.name) — macOS \(baseVM.osName.rawValue) \(baseVM.osVersion)", source: "BaseVMStore")
+        guard !baseVM.osVersion.isEmpty else {
+            AppLogger.shared.error("Manual build aborted: osVersion is empty on '\(baseVM.name)'.", source: "BaseVMStore")
+            lastError = "Build aborted: OS version not set."
+            return
+        }
+        isBuilding = true; lastError = nil
+        update(id: baseVM.id) { $0.buildStatus = .building; $0.buildLog = [] }
+
+        activeBuildTask = Task {
+            // Preflight
+            let ipswAlreadyLocal: Bool = {
+                switch config.ipswSource {
+                case .filePath(let u): return FileManager.default.fileExists(atPath: u.path)
+                case .url:            return false
+                case .auto:           return false
+                }
+            }()
+            let preflight = await PreflightCheck.shared.runAll(baseVM: baseVM, ipswAlreadyLocal: ipswAlreadyLocal)
+            if !preflight.passed {
+                let msgs = preflight.failures.map { "• \($0.title): \($0.detail)" }.joined(separator: "\n")
+                update(id: baseVM.id) { $0.buildStatus = .error; $0.buildLog = ["Preflight failed:\n\(msgs)"] }
+                lastError = preflight.failures.first?.title ?? "Preflight check failed"
+                isBuilding = false; return
+            }
+            for w in preflight.warnings {
+                update(id: baseVM.id) { $0.buildLog.append("⚠️ \(w)") }
+            }
+
+            let preventSleep = UserDefaults.standard.bool(forKey: "preventSleepDuringBuild")
+            let lockInput    = UserDefaults.standard.bool(forKey: "lockInputDuringBuild")
+            BuildSessionManager.shared.beginBuildSession(preventSleep: preventSleep, lockInput: lockInput)
+            defer { BuildSessionManager.shared.endBuildSession() }
+
+            do {
+                // Resolve IPSW path
+                var ipswPath = ""
+                switch config.ipswSource {
+                case .filePath(let u):
+                    ipswPath = u.path
+                    AppLogger.shared.log("Using local IPSW: \(u.lastPathComponent)", source: "BaseVMStore")
+                case .url(let s):
+                    guard let url = URL(string: s) else {
+                        throw BuildError.ipswDownloadFailed("Invalid IPSW URL: \(s)")
+                    }
+                    let settings = AppSettings.load()
+                    let destURL = settings.ipswStorageRoot.appendingPathComponent(url.lastPathComponent)
+                    if !FileManager.default.fileExists(atPath: destURL.path) {
+                        update(id: baseVM.id) { $0.buildLog.append("==> Downloading IPSW from \(s)…") }
+                        let (tmp, _) = try await URLSession.shared.download(from: url)
+                        try FileManager.default.createDirectory(at: settings.ipswStorageRoot, withIntermediateDirectories: true)
+                        try FileManager.default.moveItem(at: tmp, to: destURL)
+                    }
+                    ipswPath = destURL.path
+                    update(id: baseVM.id) { $0.buildLog.append("==> IPSW downloaded: \(destURL.lastPathComponent)") }
+                case .auto:
+                    // Same auto-download logic as the template path
+                    let settings = AppSettings.load()
+                    let ipswRoot = settings.ipswStorageRoot
+                    if settings.ipswDownloadMode == .mistCli {
+                        try await downloadWithMistCLI(baseVM: baseVM, ipswRoot: ipswRoot, ipswPath: &ipswPath)
+                    } else {
+                        update(id: baseVM.id) { $0.buildLog.append("==> Looking up IPSW for macOS \(baseVM.osVersion) via ipsw.me…") }
+                        let cached = (try? FileManager.default.contentsOfDirectory(at: ipswRoot, includingPropertiesForKeys: nil))?
+                            .first { $0.pathExtension == "ipsw" && $0.lastPathComponent.contains(baseVM.osVersion) }
+                        if let found = cached {
+                            ipswPath = found.path
+                            update(id: baseVM.id) { $0.buildLog.append("==> Using cached IPSW: \(found.lastPathComponent)") }
+                        } else {
+                            let firmwares = try await IPSWService.shared.listFirmware()
+                            guard let firmware = firmwares.first(where: { $0.version == baseVM.osVersion }) else {
+                                throw BuildError.ipswDownloadFailed(baseVM.osVersion)
+                            }
+                            let standardName = "macOS \(baseVM.osVersion).ipsw"
+                            update(id: baseVM.id) { $0.buildLog.append("==> Downloading \(firmware.displayName) (\(firmware.formattedSize)) → \(standardName)") }
+                            var lastPct = -1
+                            for await event in await IPSWService.shared.download(firmware, to: ipswRoot) {
+                                switch event {
+                                case .progress(let fraction, let written, let total):
+                                    let pct = Int(fraction * 100)
+                                    if pct / 5 > lastPct / 5 {
+                                        lastPct = pct
+                                        let wGB = String(format: "%.1f", Double(written) / 1_000_000_000)
+                                        let tGB = String(format: "%.1f", Double(total) / 1_000_000_000)
+                                        update(id: baseVM.id) { $0.buildLog.append("==> \(pct)%  \(wGB) / \(tGB) GB") }
+                                        BuildMonitor.shared.ping()
+                                    }
+                                case .completed(let url):
+                                    let dest = url.deletingLastPathComponent().appendingPathComponent(standardName)
+                                    if url != dest { try? FileManager.default.moveItem(at: url, to: dest) }
+                                    ipswPath = dest.path
+                                    update(id: baseVM.id) { $0.buildLog.append("==> Download complete: \(standardName)") }
+                                case .failed(let error):
+                                    throw BuildError.ipswDownloadFailed("\(baseVM.osVersion): \(error.localizedDescription)")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                AppLogger.shared.log("Starting manual build: \(baseVM.name)", source: "BaseVMStore")
+                await NotificationService.shared.notifyBuildStarted(vmName: baseVM.name)
+                update(id: baseVM.id) { $0.buildLog.append("==> IPSW: \(ipswPath)") }
+                update(id: baseVM.id) { $0.buildLog.append("==> OS: macOS \(baseVM.osName.rawValue) \(baseVM.osVersion)") }
+                update(id: baseVM.id) { $0.buildLog.append("==> Hardware: \(config.cpuCount) CPU · \(config.memoryGB) GB RAM · \(config.diskGB) GB disk") }
+
+                BuildMonitor.shared.start(
+                    onTimeout: {
+                        Task { @MainActor in
+                            self.cancelBuild()
+                            self.lastError = "Build timed out — tart was taking too long"
+                        }
+                    },
+                    onHeartbeatWarning: { minutes in
+                        Task { @MainActor in
+                            self.update(id: baseVM.id) {
+                                $0.buildLog.append("⚠️ No output for \(minutes) minutes — build may be stuck")
+                            }
+                        }
+                    },
+                    onLowDisk: { _ in
+                        Task { @MainActor in
+                            self.cancelBuild()
+                            self.lastError = "Build aborted: disk space critically low"
+                        }
+                    }
+                )
+                defer { BuildMonitor.shared.stop() }
+
+                let buildSucceeded: Bool
+
+                if !config.automateSetupAssistant {
+                    // ── Simple path: tart create directly from IPSW ─────────────────
+                    // No boot command / Setup Assistant automation needed.
+                    update(id: baseVM.id) { $0.buildLog.append("==> Creating VM with tart (no automation)") }
+                    let stream = await tartService.create(
+                        name: baseVM.name,
+                        fromIPSW: ipswPath,
+                        diskGB: config.diskGB
+                    )
+                    let result = await StreamConsumer.buildLog(stream, source: "Tart") { [self] line in
+                        update(id: baseVM.id) { $0.buildLog.append(line) }
+                    }
+                    buildSucceeded = result.succeeded
+                    if !buildSucceeded {
+                        lastError = "tart exited with code \(result.exitCode)"
+                        AppLogger.shared.error("tart create failed (\(result.exitCode)): \(baseVM.name)", source: "BaseVMStore")
+                    }
+                } else {
+                    // ── Full path: generate HCL, run Packer ─────────────────────────
+                    // Resolve MDM profile if configured
+                    var resolvedJamfURL: String? = nil
+                    var resolvedMDMInvitationID: String? = nil
+                    if let profileID = config.mdmProfileID {
+                        let mdmProfiles = AppDatabase.shared.readOrDefault(.mdmProfiles, default: [MDMProfile]())
+                        if let profile = mdmProfiles.first(where: { $0.id == profileID }) {
+                            if let sid = profile.serverID {
+                                let mdmServers = AppDatabase.shared.readOrDefault(.mdmServers, default: [MDMServer]())
+                                if let server = mdmServers.first(where: { $0.id == sid }) {
+                                    resolvedJamfURL = server.serverURL.absoluteString
+                                }
+                            } else if !profile.customServerURL.isEmpty {
+                                resolvedJamfURL = profile.customServerURL
+                            }
+                            resolvedMDMInvitationID = profile.invitationID.isEmpty ? nil : profile.invitationID
+                        }
+                    }
+
+                    let hclContent = ManualBuildHCLGenerator.generate(
+                        config: config,
+                        bootCommand: bootCommandBlock,
+                        resolvedIPSW: ipswPath,
+                        jamfURL: resolvedJamfURL,
+                        mdmInvitationID: resolvedMDMInvitationID
+                    )
+                    let tempDir = URL(fileURLWithPath: NSTemporaryDirectory())
+                    let hclURL = tempDir.appendingPathComponent("oven-manual-\(UUID().uuidString).pkr.hcl")
+                    try hclContent.write(to: hclURL, atomically: true, encoding: .utf8)
+                    defer { try? FileManager.default.removeItem(at: hclURL) }
+
+                    update(id: baseVM.id) {
+                        $0.packerTemplateName = hclURL.lastPathComponent
+                        $0.packerVarsName = ""
+                    }
+
+                    let debug = UserDefaults.standard.bool(forKey: "debugModeEnabled")
+                    if debug {
+                        AppLogger.shared.log("[debug] Generated HCL: \(hclURL.path)", source: "BaseVMStore")
+                    }
+
+                    let stream = await packerService.buildWithInitURL(
+                        templateURL: hclURL,
+                        username: config.credentials.username,
+                        password: config.credentials.password,
+                        showGraphics: UserDefaults.standard.bool(forKey: "showGraphicsDuringBuild")
+                    )
+                    let buildResult = await StreamConsumer.buildLog(stream, source: "Packer") { [self] line in
+                        update(id: baseVM.id) { $0.buildLog.append(line) }
+                    }
+                    buildSucceeded = buildResult.succeeded
+                    if !buildSucceeded {
+                        lastError = "Packer exited with code \(buildResult.exitCode)"
+                        AppLogger.shared.error("Manual build failed (\(buildResult.exitCode)): \(baseVM.name)", source: "PackerService")
+                    }
+                }
+
+                if buildSucceeded {
+                    update(id: baseVM.id) { $0.buildStatus = .ready; $0.builtAt = Date() }
+                    AppLogger.shared.success("Manual build complete: \(baseVM.name)", source: "BaseVMStore")
+                    await NotificationService.shared.notifyBuildComplete(vmName: baseVM.name, success: true)
+                    BuildSessionManager.shared.performBuildCompletionAction()
+                } else {
+                    update(id: baseVM.id) { $0.buildStatus = .error }
+                    await NotificationService.shared.notifyBuildComplete(vmName: baseVM.name, success: false, detail: lastError ?? "Build failed")
+                    BuildSessionManager.shared.performBuildCompletionAction()
+                }
+            } catch {
+                update(id: baseVM.id) { $0.buildStatus = .error }
+                lastError = error.localizedDescription
+                AppLogger.shared.error(error.localizedDescription, source: "BaseVMStore")
+                await NotificationService.shared.notifyBuildComplete(
+                    vmName: baseVM.name, success: false, detail: error.localizedDescription)
+                BuildSessionManager.shared.performBuildCompletionAction()
+            }
+            isBuilding = false
+            vmStore?.saveToDisk()
+        }
+    }
+}
 
 // MARK: - mist-cli download helper
 

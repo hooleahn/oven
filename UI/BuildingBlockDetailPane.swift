@@ -293,3 +293,273 @@ struct BuildingBlockEditSheet: View {
         dismiss()
     }
 }
+
+// MARK: - BootCommandEditSheet
+
+/// Modal sheet for creating or editing a BootCommandBlock.
+/// Each command line is one HCL string entry in the boot_command array.
+struct BootCommandEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let cmd: BootCommandBlock?
+    let onSave: (BootCommandBlock) -> Void
+
+    @State private var displayName: String
+    @State private var description: String
+    @State private var osName: MacOSRelease.Name
+    @State private var osVersion: String
+    @State private var commandText: String   // newline-separated for editing
+    @State private var diagnostics: [BootCommandLinter.Diagnostic] = []
+
+    init(cmd: BootCommandBlock? = nil, onSave: @escaping (BootCommandBlock) -> Void) {
+        self.cmd = cmd
+        self.onSave = onSave
+        _displayName = State(initialValue: cmd?.displayName ?? "")
+        _description = State(initialValue: cmd?.blockDescription ?? "")
+        let name = cmd.flatMap { MacOSRelease.Name(rawValue: $0.osName) } ?? .sequoia
+        _osName = State(initialValue: name)
+        _osVersion = State(initialValue: cmd?.osVersion ?? "")
+        _commandText = State(initialValue: cmd?.commandLines.joined(separator: "\n") ?? Self.placeholder)
+    }
+
+    private static let placeholder = #""""<wait60s><spacebar>""""#
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text(cmd == nil ? "New Boot Command Block" : "Edit Boot Command Block").bold()
+                Spacer()
+                if !diagnostics.isEmpty {
+                    Label("\(diagnostics.count) issue\(diagnostics.count == 1 ? "" : "s")",
+                          systemImage: diagnostics.contains(where: { $0.severity == .error })
+                            ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .font(.caption).fontWeight(.medium)
+                        .foregroundStyle(diagnostics.contains(where: { $0.severity == .error })
+                            ? .red : .orange)
+                }
+                Button("Cancel") { dismiss() }.keyboardShortcut(.escape)
+                Button("Save") { saveCmd() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(displayName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding(16).background(.bar)
+            Divider()
+
+            Form {
+                Section("Details") {
+                    LabeledContent("Name") {
+                        TextField("", text: $displayName,
+                                  prompt: Text("e.g. macOS 15 Setup Assistant").foregroundStyle(.tertiary))
+                    }
+                    LabeledContent("Description") {
+                        TextField("", text: $description, axis: .vertical).lineLimit(2...5)
+                    }
+                }
+                Section("OS Compatibility") {
+                    Picker("OS", selection: $osName) {
+                        ForEach(MacOSRelease.Name.allCases, id: \.self) {
+                            Text($0.displayLabel).tag($0)
+                        }
+                    }
+                    LabeledContent("Version") {
+                        TextField("", text: $osVersion,
+                                  prompt: Text("Leave empty to match any version").foregroundStyle(.tertiary))
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .frame(height: 240)
+
+            Divider()
+
+            // Syntax-highlighted command lines editor
+            BootCommandEditor(text: $commandText, isEditable: true, onChange: { runLinter() })
+                .onChange(of: commandText, initial: true) { _, _ in runLinter() }
+
+            // Diagnostics panel
+            if !diagnostics.isEmpty {
+                Divider()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(diagnostics) { d in
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Image(systemName: d.severity == .error
+                                      ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
+                                    .foregroundStyle(d.severity == .error ? .red : .orange)
+                                    .font(.caption)
+                                Text("Line \(d.line): \(d.message)")
+                                    .font(.caption)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                            }
+                        }
+                    }
+                    .padding(10)
+                }
+                .frame(maxHeight: 120)
+                .background(Color(nsColor: .controlBackgroundColor))
+            }
+        }
+        .frame(minWidth: 600, idealWidth: 660, minHeight: 560)
+    }
+
+    private func runLinter() {
+        let lines = commandText
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        diagnostics = BootCommandLinter.lint(lines: lines)
+    }
+
+    private func saveCmd() {
+        let lines = commandText
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let b = BootCommandBlock(
+            id: cmd?.id ?? UUID(),
+            displayName: displayName.trimmingCharacters(in: .whitespaces),
+            blockDescription: description,
+            commandLines: lines,
+            isBase: false,
+            createdAt: cmd?.createdAt ?? Date(),
+            osName: osName.rawValue,
+            osVersion: osVersion.trimmingCharacters(in: .whitespaces)
+        )
+        onSave(b)
+        dismiss()
+    }
+}
+
+// MARK: - BootCommandDetailPane
+
+struct BootCommandDetailPane: View {
+    let cmd: BootCommandBlock
+    let onDuplicate: () -> Void
+    let onDelete: () -> Void
+    let onSave: (BootCommandBlock) -> Void
+
+    @State private var showingEditSheet = false
+    @State private var copied = false
+    @State private var diagnostics: [BootCommandLinter.Diagnostic] = []
+
+    // Read-only text binding for the editor
+    private var commandText: String { cmd.commandLines.joined(separator: "\n") }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            toolbar
+            Divider()
+            cmdHeader
+            Divider()
+            // Syntax-highlighted read-only display
+            BootCommandEditor(text: .constant(commandText), isEditable: false, onChange: {})
+            // Diagnostics panel (read-only view of linter results)
+            if !diagnostics.isEmpty {
+                Divider()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(diagnostics) { d in
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Image(systemName: d.severity == .error
+                                      ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
+                                    .foregroundStyle(d.severity == .error ? .red : .orange)
+                                    .font(.caption)
+                                Text("Line \(d.line): \(d.message)")
+                                    .font(.caption)
+                                Spacer()
+                            }
+                        }
+                    }
+                    .padding(10)
+                }
+                .frame(maxHeight: 100)
+                .background(Color(nsColor: .controlBackgroundColor))
+            }
+        }
+        .onAppear { diagnostics = BootCommandLinter.lint(lines: cmd.commandLines) }
+        .onChange(of: cmd.id) { _, _ in diagnostics = BootCommandLinter.lint(lines: cmd.commandLines) }
+        .sheet(isPresented: $showingEditSheet) {
+            BootCommandEditSheet(cmd: cmd) { updated in onSave(updated) }
+        }
+    }
+
+    private var toolbar: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(cmd.displayName).bold()
+                    if cmd.isBase {
+                        Text("Base Block")
+                            .font(.caption).fontWeight(.medium)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Color.secondary.opacity(0.15), in: Capsule())
+                            .foregroundStyle(.secondary)
+                    }
+                    if !cmd.osName.isEmpty {
+                        Text(cmd.osName + (cmd.osVersion.isEmpty ? "" : " \(cmd.osVersion)"))
+                            .font(.caption).fontWeight(.medium)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.1), in: Capsule())
+                            .foregroundStyle(.blue)
+                    }
+                    if !diagnostics.isEmpty {
+                        let hasError = diagnostics.contains(where: { $0.severity == .error })
+                        Label("\(diagnostics.count)", systemImage: hasError
+                              ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .font(.caption).fontWeight(.medium)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background((hasError ? Color.red : Color.orange).opacity(0.1), in: Capsule())
+                            .foregroundStyle(hasError ? .red : .orange)
+                            .help("\(diagnostics.count) linting issue\(diagnostics.count == 1 ? "" : "s") found")
+                    }
+                }
+                if !cmd.isBase {
+                    Text("Created " + cmd.createdAt.formatted(date: .numeric, time: .omitted))
+                        .font(.caption).foregroundStyle(.tertiary)
+                }
+            }
+            Spacer()
+
+            Button {
+                let text = cmd.commandLines.joined(separator: "\n")
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+                copied = true
+                Task { try? await Task.sleep(for: .seconds(2)); copied = false }
+            } label: {
+                Label(copied ? "Copied!" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+            }
+            .buttonStyle(.bordered).controlSize(.small)
+            .foregroundStyle(copied ? .green : .primary)
+
+            if cmd.isBase {
+                Button("Create Custom Copy", action: onDuplicate)
+                    .buttonStyle(.bordered)
+            } else {
+                Button("Edit") { showingEditSheet = true }
+                    .buttonStyle(.bordered)
+                Divider().frame(height: 16)
+                Button(action: onDuplicate) { Image(systemName: "doc.on.doc") }
+                    .buttonStyle(.borderless).help("Duplicate")
+                Button(role: .destructive, action: onDelete) { Image(systemName: "trash") }
+                    .buttonStyle(.borderless).foregroundStyle(.red).help("Delete")
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
+    }
+
+    private var cmdHeader: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !cmd.blockDescription.isEmpty {
+                Text(cmd.blockDescription).foregroundStyle(.secondary)
+            }
+            Text("\(cmd.commandLines.count) command line\(cmd.commandLines.count == 1 ? "" : "s")")
+                .font(.caption).foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(.background)
+    }
+}

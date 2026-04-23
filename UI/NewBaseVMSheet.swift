@@ -1,289 +1,560 @@
 import SwiftUI
 
+// MARK: - NewBaseVMSheet
+//
+// Two-path Base VM creation sheet:
+//   Path A — From Template: pick a library or custom-path template, build.
+//   Path B — Build Manually: IPSW source → hardware → (optional) Setup Assistant
+//            automation → Review generated HCL → build.
 
 struct NewBaseVMSheet: View {
-    var preselectedIPSWURL: URL? = nil   // pre-populate from macOS Installers
+    var preselectedIPSWURL: URL? = nil
 
     @EnvironmentObject var baseVMStore: BaseVMStore
     @EnvironmentObject var theme: AppTheme
     @EnvironmentObject var templateStore: PackerTemplateStore
+    @EnvironmentObject var blockStore: BuildingBlockStore
     @Environment(\.dismiss) var dismiss
 
-    // MDM enrollment profiles loaded from disk
-    @State private var mdmProfiles: [MDMProfile] = []
-    @State private var mdmServers:  [MDMServer]  = []
+    // MARK: - Top-level path selection
+    enum BuildPath { case fromTemplate, manually }
+    @State private var buildPath: BuildPath = .manually
 
-    // Template selection (v5: UUID-based)
-    enum TemplateSource { case none, library, customPath }
-    @State private var templateSource: TemplateSource = .none
-    @State private var selectedTemplateID: UUID? = nil
-    @State private var externalTemplatePath: String = ""
-    @State private var isPresentingExternalTemplatePicker = false
-
-    // Vars file selection
-    @State private var selectedVarsFileID: UUID? = nil
-
-    @State private var osName:   MacOSRelease.Name = .sequoia
-    @State private var osVersion = ""
-    @State private var customIPSWPath = ""       // manual file path
-    @State private var customIPSWURL  = ""       // remote URL
-    @State private var isPresentingIPSWPicker = false
+    // MARK: - Common fields
+    @State private var displayName   = ""
+    @State private var osName: MacOSRelease.Name = .sequoia
+    @State private var osVersion     = ""
     @State private var liveFirmwares: [IPSWFirmware] = []
     @State private var isFetchingVersions = false
-    enum IPSWSource { case auto, customPath, remoteURL }
-    @State private var ipswSource: IPSWSource = .auto
-    // Hardware — seeded from Preferences defaults on appear
-    @State private var settings = AppSettings.load()
-    @AppStorage("defaultCPUCount")       private var defaultCPU: Int = 4
-    @AppStorage("defaultMemoryGB")       private var defaultMemory: Int = 8
-    @AppStorage("defaultDiskGB")         private var defaultDisk: Int = 80
-    @AppStorage("defaultPackerUsername") private var defaultUsername: String = "baker"
-    @State private var username = "baker"
-    @State private var password = "baker"
-    @State private var cpuCount  = 4
-    @State private var memoryGB  = 8
-    @State private var diskGB    = 80
-    @State private var installRosetta         = true
-    @State private var installHomebrew        = true
-    @State private var enableSSHDaemon        = true
-    @State private var enableAutoLogin        = true
-    @State private var enablePasswordlessSudo = true
-    @State private var xcodeVersion  = ""
-    @State private var enableXcode   = false
+
+    // MARK: - From-template path
+    enum TemplateSource { case library, customPath }
+    @State private var templateSource: TemplateSource = .library
+    @State private var selectedTemplateID: UUID? = nil
+    @State private var externalTemplatePath = ""
+    @State private var isPresentingExternalTemplatePicker = false
+    @State private var selectedVarsFileID: UUID? = nil
+    // Template-path credentials (stored as VM metadata)
+    @State private var tmplUsername = "admin"
+    @State private var tmplPassword = "admin"
+    @State private var tmplCPU = 4
+    @State private var tmplMemory = 8
+    @State private var tmplDisk = 80
+    // MDM
+    @State private var mdmProfiles: [MDMProfile] = []
+    @State private var mdmServers:  [MDMServer]  = []
     @State private var selectedMDMProfileID: UUID? = nil
+
+    // MARK: - Manual-build path (multi-step)
+    enum ManualStep { case ipsw, hardware, automation, review }
+    @State private var manualStep: ManualStep = .ipsw
+
+    // IPSW source
+    enum IPSWSourceChoice { case auto, filePath, remoteURL }
+    @State private var ipswChoice: IPSWSourceChoice = .auto
+    @State private var customIPSWPath = ""
+    @State private var customIPSWURL  = ""
+    @State private var isPresentingIPSWPicker = false
+    @State private var settings = AppSettings.load()
+
+    // Hardware
+    @AppStorage("defaultCPUCount")  private var defaultCPU: Int = 4
+    @AppStorage("defaultMemoryGB")  private var defaultMemory: Int = 8
+    @AppStorage("defaultDiskGB")    private var defaultDisk: Int = 80
+    @State private var cpuCount = 4
+    @State private var memoryGB = 8
+    @State private var diskGB   = 80
+
+    // Setup Assistant automation
+    @State private var automateSetupAssistant = false
+    @State private var bootCommandID: UUID? = nil
+    @State private var manualUsername = "admin"
+    @State private var manualPassword = "admin"
+    @State private var provisioning = ProvisioningOptions()
+    // MDM enrollment for manual path (separate from template path's selectedMDMProfileID)
+    @State private var manualMDMProfileID: UUID? = nil
+
+    // Review
+    @State private var saveToTemplates = false
+    @State private var generatedHCL    = ""
+
+    // MARK: - AppStorage for defaults
+    @AppStorage("defaultPackerUsername") private var defaultUsername: String = "admin"
 
     private let cpuOptions  = [2, 4, 6, 8, 10, 12, 16]
     private let memOptions  = [4, 8, 12, 16, 24, 32, 48, 64]
     private let diskOptions = [40, 60, 80, 100, 120, 150, 200, 250, 500]
 
-    var previewName: String { VirtualMachine.uniqueAutoName(osName: osName, version: osVersion, existing: baseVMStore.baseVMs) }
+    // MARK: - Computed helpers
 
-    var resolvedIPSWPath: String? {
-        switch ipswSource {
-        case .auto:         return nil
-        case .customPath:   return customIPSWPath.isEmpty ? nil : customIPSWPath
-        case .remoteURL:    return nil   // passed as ipswURL override separately
-        }
+    private var versionList: [String] {
+        let major = osName.majorVersion
+        let live = liveFirmwares.filter { $0.majorVersion == major }.map { $0.version }
+        if live.isEmpty { return osName.fallbackVersions }
+        var seen = Set<String>()
+        return live.filter { seen.insert($0).inserted }
     }
 
-    var resolvedIPSWURL: String? {
-        guard ipswSource == .remoteURL, !customIPSWURL.isEmpty else { return nil }
-        return customIPSWURL
+    private var tartName: String {
+        VirtualMachine.uniqueAutoName(osName: osName, version: osVersion,
+                                     existing: baseVMStore.baseVMs)
     }
 
-    var canCreate: Bool {
+    private var canProceedFromTemplate: Bool {
         guard !osVersion.isEmpty else { return false }
-        switch ipswSource {
-        case .auto:         return true
-        case .customPath:   return !customIPSWPath.isEmpty
-        case .remoteURL:    return !customIPSWURL.isEmpty
+        switch templateSource {
+        case .library:    return selectedTemplateID != nil
+        case .customPath: return !externalTemplatePath.isEmpty
         }
     }
 
-    var selectedMDMProfile: MDMProfile? {
-        mdmProfiles.first(where: { $0.id == selectedMDMProfileID })
+    private var canProceedIPSW: Bool {
+        switch ipswChoice {
+        case .auto:      return !osVersion.isEmpty
+        case .filePath:  return !customIPSWPath.isEmpty && !osVersion.isEmpty
+        case .remoteURL: return !customIPSWURL.isEmpty && !osVersion.isEmpty
+        }
     }
-    var selectedMDMServer: MDMServer? {
-        guard let profile = selectedMDMProfile, let sid = profile.serverID else { return nil }
-        return mdmServers.first(where: { $0.id == sid })
+
+    private var resolvedIPSWSource: IPSWSource {
+        switch ipswChoice {
+        case .auto:      return .auto
+        case .filePath:  return .filePath(URL(fileURLWithPath: customIPSWPath))
+        case .remoteURL: return .url(customIPSWURL)
+        }
     }
+
+    private var selectedBootCommandBlock: BootCommandBlock? {
+        guard let id = bootCommandID else { return nil }
+        return blockStore.bootCommand(id: id)
+    }
+
+    private var selectedMDMProfile: MDMProfile? {
+        mdmProfiles.first { $0.id == selectedMDMProfileID }
+    }
+    private var selectedMDMServer: MDMServer? {
+        guard let p = selectedMDMProfile, let sid = p.serverID else { return nil }
+        return mdmServers.first { $0.id == sid }
+    }
+
+    // MARK: - Body
 
     var body: some View {
         VStack(spacing: 0) {
-        sheetToolbar
-        Divider()
+            sheetToolbar
+            Divider()
+            contentArea
+        }
+        .frame(minWidth: 540, idealWidth: 580, minHeight: 540)
+        .task {
+            cpuCount  = defaultCPU
+            memoryGB  = defaultMemory
+            diskGB    = defaultDisk
+            tmplCPU   = defaultCPU
+            tmplMemory = defaultMemory
+            tmplDisk  = defaultDisk
+            manualUsername = defaultUsername
+            tmplUsername   = defaultUsername
+            manualPassword = KeychainService.retrieve(key: "defaults.packer.password") ?? "admin"
+            tmplPassword   = KeychainService.retrieve(key: "defaults.packer.password") ?? "admin"
+            loadMDMData()
+            await fetchLiveVersions()
+            let versions = versionList
+            if osVersion.isEmpty || !versions.contains(osVersion), let first = versions.first {
+                osVersion = first
+            }
+            if let url = preselectedIPSWURL { detectOS(from: url) }
+        }
+        .onChange(of: liveFirmwares) { _, _ in
+            let versions = versionList
+            if !versions.isEmpty && !versions.contains(osVersion) { osVersion = versions[0] }
+        }
+    }
 
-            Form {
-                // Name preview
-                Section {
-                    LabeledContent("Name preview") {
-                        Text(previewName)
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
-                } header: { Text("Generated name") }
-                  footer: { Text("Names are generated automatically and cannot be customised.") }
+    // MARK: - Toolbar
 
-                // macOS version
-                Section("macOS version") {
-                    Picker("OS", selection: $osName) {
-                        ForEach(MacOSRelease.Name.allCases, id: \.self) {
-                            Text($0.displayLabel).tag($0)
-                        }
-                    }
-                    HStack {
-                        Picker("Version", selection: $osVersion) {
-                            Text("Select a version…").tag("")
-                            ForEach(versionList, id: \.self) { Text($0).tag($0) }
-                        }
-                        if isFetchingVersions {
-                            ProgressView().controlSize(.mini)
-                        }
-                    }
-                    .onChange(of: osName) { _, _ in osVersion = ""; customIPSWPath = ""; customIPSWURL = ""; selectedTemplateID = nil; Task { await fetchLiveVersions() } }
-                    .onChange(of: osVersion) { _, _ in
-                        selectedTemplateID = nil  // reset when OS version changes
-                    }
+    @ViewBuilder private var sheetToolbar: some View {
+        HStack {
+            Text(theme.newBaseVM).font(.headline)
+            Spacer()
+            Button("Cancel") { dismiss() }.keyboardShortcut(.escape)
+            if buildPath == .fromTemplate {
+                Button(theme.build) { createFromTemplate() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canProceedFromTemplate)
+            } else {
+                manualNavButtons
+            }
+        }
+        .padding(16).background(.bar)
+    }
+
+    @ViewBuilder private var manualNavButtons: some View {
+        switch manualStep {
+        case .ipsw:
+            Button("Next: Hardware") { manualStep = .hardware }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canProceedIPSW)
+        case .hardware:
+            Button("Back") { manualStep = .ipsw }
+            Button("Next: Automation") { manualStep = .automation }
+                .buttonStyle(.borderedProminent)
+        case .automation:
+            Button("Back") { manualStep = .hardware }
+            Button("Review") { buildReviewHCL(); manualStep = .review }
+                .buttonStyle(.borderedProminent)
+        case .review:
+            Button("Back") { manualStep = .automation }
+            Button(theme.build) { createManual() }
+                .buttonStyle(.borderedProminent)
+        }
+    }
+
+    // MARK: - Content area
+
+    @ViewBuilder private var contentArea: some View {
+        Form {
+            // Path picker + common OS/version fields — shown at the top of all steps
+            pathAndOSSection
+
+            switch buildPath {
+            case .fromTemplate:
+                templatePathContent
+            case .manually:
+                manualContent
+            }
+        }
+        .formStyle(.grouped)
+        .animation(.easeInOut(duration: 0.2), value: buildPath)
+        .animation(.easeInOut(duration: 0.2), value: manualStep)
+    }
+
+    // MARK: - Shared top section
+
+    @ViewBuilder private var pathAndOSSection: some View {
+        Section {
+            Picker("Build from", selection: $buildPath) {
+                Text("Build manually").tag(BuildPath.manually)
+                Text("Template").tag(BuildPath.fromTemplate)
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: buildPath) { _, _ in manualStep = .ipsw }
+        }
+
+        Section("macOS version") {
+            Picker("OS", selection: $osName) {
+                ForEach(MacOSRelease.Name.allCases.filter { $0 != .unknown }, id: \.self) {
+                    Text($0.displayLabel).tag($0)
                 }
-
-                // IPSW source
-                Section("IPSW source") {
-                    Picker("Source", selection: $ipswSource) {
-                        Text("Download automatically (via \(settings.ipswDownloadMode == .mistCli ? "mist-cli" : "ipsw.me"))").tag(IPSWSource.auto)
-                        Text("Custom file path").tag(IPSWSource.customPath)
-                        Text("Download from URL").tag(IPSWSource.remoteURL)
-                    }
-                    .pickerStyle(.radioGroup)
-                    .onChange(of: ipswSource) { _, _ in
-                        customIPSWPath = ""; customIPSWURL = ""
-                    }
-
-                    switch ipswSource {
-                    case .auto:
-                        Text("If the IPSW has already been downloaded to the Installers library it won't be downloaded again.")
-                            .font(.caption).foregroundStyle(.secondary)
-
-                    case .customPath:
-                        HStack(spacing: 6) {
-                            TextField("", text: $customIPSWPath,
-                                      prompt: Text("/path/to/macOS.ipsw").foregroundColor(.secondary))
-                            Button("Browse…") { isPresentingIPSWPicker = true }
-                                .controlSize(.small)
-                        }
-                        .fileImporter(isPresented: $isPresentingIPSWPicker,
-                                      allowedContentTypes: [.init(filenameExtension: "ipsw") ?? .data]) { result in
-                            if let url = try? result.get() { customIPSWPath = url.path }
-                        }
-                    case .remoteURL:
-                        TextField("", text: $customIPSWURL,
-                                  prompt: Text("https://example.com/macOS.ipsw").foregroundColor(.secondary))
-                        Text("Oven will download the IPSW to the configured IPSW storage folder before building.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+            }
+            HStack {
+                Picker("Version", selection: $osVersion) {
+                    Text("Select a version…").tag("")
+                    ForEach(versionList, id: \.self) { Text($0).tag($0) }
                 }
+                if isFetchingVersions { ProgressView().controlSize(.mini) }
+            }
+            .onChange(of: osName) { _, _ in
+                osVersion = ""; customIPSWPath = ""; customIPSWURL = ""
+                selectedTemplateID = nil
+                Task { await fetchLiveVersions() }
+            }
+            .onChange(of: osVersion) { _, _ in selectedTemplateID = nil }
+        }
+    }
 
-                // Credentials
-                Section("Default credentials") {
-                    LabeledContent("Username") {
-                        TextField("", text: $username, prompt: Text("e.g. baker").foregroundColor(.secondary))
-                    }
-                    LabeledContent("Password") {
-                        SecureField("baker", text: $password)
-                    }
-                }
+    // MARK: - From-template content
 
-                // Hardware
-                Section("Hardware") {
-                    Picker("CPU cores", selection: $cpuCount) {
-                        ForEach(cpuOptions, id: \.self) { Text("\($0) cores").tag($0) }
-                    }
-                    Picker("Memory", selection: $memoryGB) {
-                        ForEach(memOptions, id: \.self) { Text("\($0) GB").tag($0) }
-                    }
-                    Picker("Disk size", selection: $diskGB) {
-                        ForEach(diskOptions, id: \.self) { Text("\($0) GB").tag($0) }
-                    }
-                }
+    @ViewBuilder private var templatePathContent: some View {
+        // Display name
+        Section("Display name") {
+            TextField("", text: $displayName,
+                      prompt: Text("e.g. Sequoia 15.4 CI").foregroundStyle(.secondary))
+        }
 
-                // Provisioning
-                Section("Post-build provisioning") {
-                    Toggle("Install Rosetta 2",    isOn: $installRosetta)
-                    Toggle("Install Homebrew",     isOn: $installHomebrew)
-                    Toggle("Enable SSH",           isOn: $enableSSHDaemon)
-                    Toggle("Enable auto-login",    isOn: $enableAutoLogin)
-                    Toggle("Passwordless sudo",    isOn: $enablePasswordlessSudo)
-                    Toggle("Install Xcode",        isOn: $enableXcode)
-                    if enableXcode {
-                        LabeledContent("Xcode version") {
-                            TextField("", text: $xcodeVersion, prompt: Text("e.g. 16.3").foregroundColor(.secondary))
-                        }
-                    }
-                }
+        // Template source
+        Section {
+            Picker("Template source", selection: $templateSource) {
+                Text("From library").tag(TemplateSource.library)
+                Text("Custom file path").tag(TemplateSource.customPath)
+            }
+            .pickerStyle(.radioGroup)
 
-                // Packer template
-                Section {
-                    Picker("Template", selection: $templateSource) {
-                        Text("None (auto-generate)").tag(TemplateSource.none)
-                        Text("From library").tag(TemplateSource.library)
-                        Text("Custom file path").tag(TemplateSource.customPath)
-                    }
-                    .pickerStyle(.radioGroup)
-
-                    switch templateSource {
-                    case .none:
-                        Text("Oven will generate a Base Template for \(osName.rawValue) \(osVersion).")
-                            .foregroundStyle(.secondary)
-                    case .library:
-                        let matching = templateStore.fullTemplates(for: osName.rawValue, version: osVersion)
-                        let all      = templateStore.customFullTemplates
-                        let options  = matching.isEmpty ? all : matching
-                        if options.isEmpty {
-                            Text("No templates in library. Create one in \(theme.recipes).")
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Picker("Template", selection: $selectedTemplateID) {
-                                Text("Select…").tag(Optional<UUID>.none)
-                                ForEach(options) { tmpl in
-                                    VStack(alignment: .leading) {
-                                        Text(tmpl.displayName.isEmpty ? tmpl.filename : tmpl.displayName)
-                                        if !tmpl.osVersion.isEmpty {
-                                            Text(tmpl.osName + " " + tmpl.osVersion)
-                                                .font(.caption).foregroundStyle(.secondary)
-                                        }
-                                    }
-                                    .tag(Optional(tmpl.id))
+            switch templateSource {
+            case .library:
+                let matching = templateStore.fullTemplates(for: osName.rawValue, version: osVersion)
+                let all      = templateStore.customFullTemplates
+                let options  = matching.isEmpty ? all : matching
+                if options.isEmpty {
+                    Text("No templates in library. Create one in \(theme.recipes).")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Picker("Template", selection: $selectedTemplateID) {
+                        Text("Select…").tag(Optional<UUID>.none)
+                        ForEach(options) { tmpl in
+                            VStack(alignment: .leading) {
+                                Text(tmpl.displayName.isEmpty ? tmpl.filename : tmpl.displayName)
+                                if !tmpl.osVersion.isEmpty {
+                                    Text(tmpl.osName + " " + tmpl.osVersion)
+                                        .font(.caption).foregroundStyle(.secondary)
                                 }
-                            }
-                        }
-                    case .customPath:
-                        HStack(spacing: 6) {
-                            TextField("", text: $externalTemplatePath,
-                                      prompt: Text("/path/to/template.pkr.hcl").foregroundStyle(.secondary))
-                            Button("Browse…") { isPresentingExternalTemplatePicker = true }
-                                .controlSize(.small)
-                        }
-                        .fileImporter(isPresented: $isPresentingExternalTemplatePicker,
-                                      allowedContentTypes: [.init(filenameExtension: "hcl") ?? .data]) { result in
-                            if let url = try? result.get() { externalTemplatePath = url.path }
+                            }.tag(Optional(tmpl.id))
                         }
                     }
-                } header: { Text("Packer Template") }
-                  footer: { Text("Templates filtered to \(osName.rawValue) \(osVersion). Change OS/version above to see more.") }
+                }
+            case .customPath:
+                HStack(spacing: 6) {
+                    TextField("", text: $externalTemplatePath,
+                              prompt: Text("/path/to/template.pkr.hcl").foregroundStyle(.secondary))
+                    Button("Browse…") { isPresentingExternalTemplatePicker = true }
+                        .controlSize(.small)
+                }
+                .fileImporter(isPresented: $isPresentingExternalTemplatePicker,
+                              allowedContentTypes: [.init(filenameExtension: "hcl") ?? .data]) { result in
+                    if let url = try? result.get() { externalTemplatePath = url.path }
+                }
+            }
+        } header: { Text("Packer template") }
+          footer: { Text("Templates filtered to \(osName.rawValue) \(osVersion). Change OS/version above to see more.") }
 
-                // Template Variables
-                Section {
-                    let varsFiles = templateStore.varsFiles
-                    Picker("Variables file", selection: $selectedVarsFileID) {
-                        Text("None").tag(Optional<UUID>.none)
-                        ForEach(varsFiles) { tmpl in
-                            Text(tmpl.displayName.isEmpty ? tmpl.filename : tmpl.displayName)
-                                .tag(Optional(tmpl.id))
-                        }
+        // Vars file
+        Section {
+            let varsFiles = templateStore.varsFiles
+            Picker("Variables file", selection: $selectedVarsFileID) {
+                Text("None").tag(Optional<UUID>.none)
+                ForEach(varsFiles) { tmpl in
+                    Text(tmpl.displayName.isEmpty ? tmpl.filename : tmpl.displayName).tag(Optional(tmpl.id))
+                }
+            }
+        } header: { Text("Template variables") }
+          footer: { Text("Optional. A vars file can override CPU, memory, disk, and other settings in the template.") }
+
+        // Credentials
+        Section("Default credentials") {
+            LabeledContent("Username") {
+                TextField("", text: $tmplUsername, prompt: Text("e.g. admin").foregroundStyle(.secondary))
+            }
+            LabeledContent("Password") {
+                SecureField("admin", text: $tmplPassword)
+            }
+        }
+
+        // Hardware
+        Section("Hardware") {
+            Picker("CPU cores", selection: $tmplCPU) {
+                ForEach(cpuOptions, id: \.self) { Text("\($0) cores").tag($0) }
+            }
+            Picker("Memory", selection: $tmplMemory) {
+                ForEach(memOptions, id: \.self) { Text("\($0) GB").tag($0) }
+            }
+            Picker("Disk size", selection: $tmplDisk) {
+                ForEach(diskOptions, id: \.self) { Text("\($0) GB").tag($0) }
+            }
+        }
+
+        // MDM
+        if theme.mdmEnabled {
+            Section {
+                Picker("Enrollment profile", selection: $selectedMDMProfileID) {
+                    Text("None").tag(Optional<UUID>.none)
+                    ForEach(mdmProfiles) { p in Text(p.displayName).tag(Optional(p.id)) }
+                }
+                if let server = selectedMDMServer, let profile = selectedMDMProfile {
+                    LabeledContent("Server") { Text(server.friendlyName).foregroundStyle(.secondary) }
+                    LabeledContent("Invitation ID") {
+                        Text(profile.invitationID.isEmpty ? "Not set" : profile.invitationID)
+                            .foregroundStyle(profile.invitationID.isEmpty ? .red : .secondary)
                     }
-                    if selectedVarsFileID != nil {
-                        Label("Vars files can override hardware and credentials set above. Keychain credentials are always injected securely at build time.",
-                              systemImage: "lock.shield")
+                    if profile.invitationID.isEmpty {
+                        Label("Set an Invitation ID in MDM Enrollment first.", systemImage: "exclamationmark.triangle")
                             .font(.caption).foregroundStyle(.orange)
                     }
-                } header: { Text("Template Variables") }
-                  footer: { Text("Optional. A vars file can override CPU, memory, disk, VM name, and other settings defined in the template.") }
+                }
+                if mdmProfiles.isEmpty {
+                    Text("No enrollment profiles configured. Add one in MDM Enrollment.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } header: { Text("MDM enrollment") }
+              footer: { Text("If selected, the enrollment profile and invitation ID will be baked into the Packer template.") }
+        }
 
-                // MDM enrollment
+        // Tart name preview
+        Section {
+            LabeledContent("Tart name") {
+                Text(tartName)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+        } footer: { Text("Names are generated automatically.") }
+    }
+
+    // MARK: - Manual build content (step-based)
+
+    @ViewBuilder private var manualContent: some View {
+        switch manualStep {
+        case .ipsw:     manualIPSWStep
+        case .hardware: manualHardwareStep
+        case .automation: manualAutomationStep
+        case .review:   manualReviewStep
+        }
+    }
+
+    // MARK: Manual step 1 — IPSW source
+
+    @ViewBuilder private var manualIPSWStep: some View {
+        Section("Display name") {
+            TextField("", text: $displayName,
+                      prompt: Text("e.g. Sequoia 15.4 CI").foregroundStyle(.secondary))
+        }
+
+        Section {
+            Picker("Source", selection: $ipswChoice) {
+                Text("Download automatically (via \(settings.ipswDownloadMode == .mistCli ? "mist-cli" : "ipsw.me"))").tag(IPSWSourceChoice.auto)
+                Text("Custom file path").tag(IPSWSourceChoice.filePath)
+                Text("Download from URL").tag(IPSWSourceChoice.remoteURL)
+            }
+            .pickerStyle(.radioGroup)
+            .onChange(of: ipswChoice) { _, _ in customIPSWPath = ""; customIPSWURL = "" }
+
+            switch ipswChoice {
+            case .auto:
+                Text("If the IPSW has already been downloaded to the Installers library it won't be downloaded again.")
+                    .font(.caption).foregroundStyle(.secondary)
+            case .filePath:
+                HStack(spacing: 6) {
+                    TextField("", text: $customIPSWPath,
+                              prompt: Text("/path/to/macOS.ipsw").foregroundColor(.secondary))
+                    Button("Browse…") { isPresentingIPSWPicker = true }.controlSize(.small)
+                }
+                .fileImporter(isPresented: $isPresentingIPSWPicker,
+                              allowedContentTypes: [.init(filenameExtension: "ipsw") ?? .data]) { result in
+                    if let url = try? result.get() {
+                        customIPSWPath = url.path
+                        detectOS(from: url)
+                    }
+                }
+            case .remoteURL:
+                TextField("", text: $customIPSWURL,
+                          prompt: Text("https://example.com/macOS.ipsw").foregroundColor(.secondary))
+                Text("Oven will download the IPSW to the configured IPSW storage folder before building.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        } header: { Text("IPSW source") }
+          footer: { Text("Select a macOS version above. The IPSW download mode can be changed in Preferences.") }
+
+        Section {
+            LabeledContent("Tart name") {
+                Text(tartName)
+                    .font(.system(.body, design: .monospaced)).foregroundStyle(.secondary)
+            }
+        } footer: { Text("Names are generated automatically.") }
+    }
+
+    // MARK: Manual step 2 — Hardware
+
+    @ViewBuilder private var manualHardwareStep: some View {
+        Section("Hardware") {
+            Picker("CPU cores", selection: $cpuCount) {
+                ForEach(cpuOptions, id: \.self) { Text("\($0) cores").tag($0) }
+            }
+            Picker("Memory", selection: $memoryGB) {
+                ForEach(memOptions, id: \.self) { Text("\($0) GB").tag($0) }
+            }
+            Picker("Disk size", selection: $diskGB) {
+                ForEach(diskOptions, id: \.self) { Text("\($0) GB").tag($0) }
+            }
+        }
+    }
+
+    // MARK: Manual step 3 — Automation
+
+    @ViewBuilder private var manualAutomationStep: some View {
+        Section {
+            Toggle("Automate Setup Assistant", isOn: $automateSetupAssistant)
+        } header: { Text("Setup Assistant") }
+          footer: {
+            Text(automateSetupAssistant
+                 ? "Oven will automate the macOS Setup Assistant using boot commands and then run the provisioners below."
+                 : "The VM will start at the Setup Assistant. You can complete it manually and use the VM as-is.")
+          }
+
+        if automateSetupAssistant {
+            // Boot command block picker
+            let compatibleCmds = blockStore.bootCommands(for: osName.rawValue, version: osVersion)
+            Section {
+                Picker("Boot command", selection: $bootCommandID) {
+                    Text("None").tag(Optional<UUID>.none)
+                    ForEach(compatibleCmds) { cmd in
+                        VStack(alignment: .leading) {
+                            Text(cmd.displayName)
+                            if !cmd.osVersion.isEmpty {
+                                Text(cmd.osName + " " + cmd.osVersion)
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }.tag(Optional(cmd.id))
+                    }
+                }
+                if compatibleCmds.isEmpty {
+                    Text("No boot command blocks for \(osName.rawValue) \(osVersion). Add one in \(theme.recipes).")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+            } header: { Text("Boot command") }
+              footer: { Text("Automates key-presses through the macOS Setup Assistant. Blocks are filtered to the selected OS version.") }
+
+            // Credentials, provisioning, and MDM are only reachable when a boot
+            // command is selected — without one the VM never reaches a logged-in
+            // state so these provisioners would have nothing to connect to.
+            if bootCommandID != nil {
+                // Credentials
+                Section("Credentials") {
+                    LabeledContent("Username") {
+                        TextField("", text: $manualUsername,
+                                  prompt: Text("e.g. admin").foregroundStyle(.secondary))
+                    }
+                    LabeledContent("Password") {
+                        SecureField("admin", text: $manualPassword)
+                    }
+                }
+
+                // Provisioning options
+                Section("Provisioning") {
+                    Toggle("Passwordless sudo", isOn: provToggle(\.passwordlessSudo))
+                    Toggle("Auto-login", isOn: provToggle(\.autoLogin))
+                    Toggle("Disable sleep", isOn: provToggle(\.disableSleep))
+                    Toggle("Disable screen lock", isOn: provToggle(\.disableScreenLock))
+                    Toggle("Disable Spotlight indexing", isOn: provToggle(\.disableSpotlight))
+                    Divider()
+                    Toggle("Xcode Command Line Tools", isOn: provToggle(\.installCLITools))
+                    Toggle("Homebrew", isOn: provToggle(\.installHomebrew))
+                        .disabled(!provisioning.installCLITools)
+                    Toggle("Xcode (via Homebrew cask)", isOn: provToggle(\.installXcode))
+                        .disabled(!provisioning.installHomebrew)
+                    Toggle("Safari automation", isOn: provToggle(\.safariAutomation))
+                    Toggle("Tart guest agent", isOn: provToggle(\.tartGuestAgent))
+                        .disabled(!provisioning.installHomebrew)
+                }
+
+                // MDM enrollment (last — runs after all other provisioning)
                 if theme.mdmEnabled {
                     Section {
-                        Picker("Enrollment profile", selection: $selectedMDMProfileID) {
+                        Picker("Enrollment profile", selection: $manualMDMProfileID) {
                             Text("None").tag(Optional<UUID>.none)
-                            ForEach(mdmProfiles) { profile in
-                                Text(profile.displayName).tag(Optional(profile.id))
+                            ForEach(mdmProfiles) { p in
+                                Text(p.displayName).tag(Optional(p.id))
                             }
                         }
-                        if let server = selectedMDMServer, let profile = selectedMDMProfile {
-                            LabeledContent("Server") { Text(server.friendlyName).foregroundStyle(.secondary) }
-                            LabeledContent("Invitation ID") {
-                                Text(profile.invitationID.isEmpty ? "Not set" : profile.invitationID)
-                                    .foregroundStyle(profile.invitationID.isEmpty ? .red : .secondary)
+                        if let p = mdmProfiles.first(where: { $0.id == manualMDMProfileID }) {
+                            if let sid = p.serverID,
+                               let server = mdmServers.first(where: { $0.id == sid }) {
+                                LabeledContent("Server") {
+                                    Text(server.friendlyName).foregroundStyle(.secondary)
+                                }
                             }
-                            if profile.invitationID.isEmpty {
+                            LabeledContent("Invitation ID") {
+                                Text(p.invitationID.isEmpty ? "Not set" : p.invitationID)
+                                    .foregroundStyle(p.invitationID.isEmpty ? .red : .secondary)
+                            }
+                            if p.invitationID.isEmpty {
                                 Label("Set an Invitation ID in MDM Enrollment first.",
                                       systemImage: "exclamationmark.triangle")
                                     .font(.caption).foregroundStyle(.orange)
@@ -294,66 +565,195 @@ struct NewBaseVMSheet: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     } header: { Text("MDM enrollment") }
-                      footer: { Text("If selected, the enrollment profile and invitation ID will be baked into the Packer template.") }
+                      footer: { Text("If selected, a .mobileconfig enrollment file will be generated and opened after provisioning completes.") }
+                }
+            } else {
+                // Hint when no boot command is selected yet
+                Section {
+                    Label("Select a boot command above to enable credentials, provisioning, and MDM enrollment.",
+                          systemImage: "info.circle")
+                        .font(.callout).foregroundStyle(.secondary)
                 }
             }
-            .formStyle(.grouped)
         }
-        .frame(minWidth: 520, idealWidth: 560, minHeight: 580)
-        .task {
-            // Seed hardware + credentials from Preferences defaults
-            cpuCount = defaultCPU
-            memoryGB = defaultMemory
-            diskGB   = defaultDisk
-            username = defaultUsername
-            password = KeychainService.retrieve(key: "defaults.packer.password") ?? "baker"
-            loadMDMData()
-            await fetchLiveVersions()
-            // Snap version picker to first valid value after versions load
-            let versions = versionList
-            if osVersion.isEmpty || !versions.contains(osVersion), let first = versions.first {
-                osVersion = first
+    }
+
+    private func provToggle(_ kp: WritableKeyPath<ProvisioningOptions, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { provisioning[keyPath: kp] },
+            set: { provisioning[keyPath: kp] = $0; provisioning.enforceDependencies() }
+        )
+    }
+
+    // MARK: Manual step 4 — Review
+
+    @ViewBuilder private var manualReviewStep: some View {
+        Section {
+            LabeledContent("Tart name") {
+                Text(tartName)
+                    .font(.system(.body, design: .monospaced)).foregroundStyle(.secondary)
             }
-            if let url = preselectedIPSWURL { detectOS(from: url) }
-        }
-        .onChange(of: liveFirmwares) { _, _ in
-            // After versions load, snap any invalid/empty selection to the first available
-            let versions = versionList
-            if !versions.isEmpty && !versions.contains(osVersion) {
-                osVersion = versions[0]
+            LabeledContent("OS") {
+                Text("\(osName.rawValue) \(osVersion)").foregroundStyle(.secondary)
+            }
+            LabeledContent("Hardware") {
+                Text("\(cpuCount) CPU · \(memoryGB) GB RAM · \(diskGB) GB disk")
+                    .foregroundStyle(.secondary)
+            }
+            if automateSetupAssistant && bootCommandID != nil {
+                LabeledContent("Username") { Text(manualUsername).foregroundStyle(.secondary) }
+                if let cmd = selectedBootCommandBlock {
+                    LabeledContent("Boot command") { Text(cmd.displayName).foregroundStyle(.secondary) }
+                }
+                if let p = mdmProfiles.first(where: { $0.id == manualMDMProfileID }) {
+                    LabeledContent("MDM enrollment") { Text(p.displayName).foregroundStyle(.secondary) }
+                }
+            }
+        } header: { Text("Build summary") }
+
+        Section {
+            Toggle("Save to templates library", isOn: $saveToTemplates)
+        } footer: { Text("Saves the generated HCL to your Packer templates folder so you can customise and reuse it.") }
+
+        if !generatedHCL.isEmpty {
+            Section("Generated HCL") {
+                ScrollView {
+                    Text(generatedHCL)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                }
+                .frame(maxHeight: 220)
+                .background(Color.primary.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
     }
 
-    private var versionList: [String] {
-        let major = osName.majorVersion
-        let live = liveFirmwares
-            .filter { $0.majorVersion == major }
-            .map { $0.version }
-        if live.isEmpty { return osName.fallbackVersions }
-        // Deduplicate (API may list multiple builds per version string)
-        var seen = Set<String>()
-        return live.filter { seen.insert($0).inserted }
+    // MARK: - Actions
+
+    private func buildReviewHCL() {
+        let config = buildManualConfig()
+        generatedHCL = ManualBuildHCLGenerator.generate(
+            config: config,
+            bootCommand: selectedBootCommandBlock,
+            resolvedIPSW: config.ipswSource.hclValue.isEmpty ? "<resolved-at-build-time>" : config.ipswSource.hclValue
+        )
     }
 
+    private func buildManualConfig() -> ManualBuildConfig {
+        // Only carry credentials, provisioning, and MDM when a boot command is selected.
+        // Without a boot command the VM never reaches a logged-in state.
+        let hasBootCmd = bootCommandID != nil
+        var config = ManualBuildConfig(
+            displayName: displayName.isEmpty ? tartName : displayName,
+            tartName: tartName,
+            osName: osName.rawValue,
+            osVersion: osVersion,
+            ipswSource: resolvedIPSWSource,
+            cpuCount: cpuCount,
+            memoryGB: memoryGB,
+            diskGB: diskGB,
+            automateSetupAssistant: automateSetupAssistant && hasBootCmd,
+            bootCommandBlockID: bootCommandID,
+            credentials: VMCredentials(username: manualUsername, password: manualPassword),
+            provisioning: hasBootCmd ? provisioning : ProvisioningOptions()
+        )
+        config.mdmProfileID = hasBootCmd ? manualMDMProfileID : nil
+        return config
+    }
 
-    // MARK: - Subviews
+    private func createFromTemplate() {
+        var vm = VirtualMachine(
+            name: tartName,
+            isBaseVM: true
+        )
+        vm.displayName         = displayName.isEmpty ? tartName : displayName
+        vm.osName              = osName
+        vm.osVersion           = osVersion
+        vm.macOSVersion        = "macOS \(osName.rawValue) \(osVersion)"
+        vm.sshUsername         = tmplUsername
+        vm.sshPassword         = tmplPassword.isEmpty ? nil : tmplPassword
+        vm.cpuCount            = tmplCPU
+        vm.memoryGB            = tmplMemory
+        vm.diskGB              = tmplDisk
+        vm.vmSource            = .local
+        vm.buildStatus         = .notBuilt
+        vm.mdmProfileID        = selectedMDMProfileID
 
-    @ViewBuilder private var sheetToolbar: some View {
-        HStack {
-            Text(theme.newBaseVM).font(.headline)
-            Spacer()
-            Button("Cancel") { dismiss() }.keyboardShortcut(.escape)
-            Button(theme.build) { create() }
-                .buttonStyle(.borderedProminent).disabled(!canCreate)
+        switch templateSource {
+        case .library:
+            vm.customTemplateID   = selectedTemplateID
+            vm.customTemplatePath = nil
+        case .customPath:
+            vm.customTemplateID   = nil
+            vm.customTemplatePath = externalTemplatePath.isEmpty ? nil : externalTemplatePath
         }
-        .padding(16).background(.bar)
+        vm.customVarsFileID = selectedVarsFileID
+
+        if saveToTemplates {
+            // For template path, saving to templates isn't relevant (already using one)
+        }
+
+        baseVMStore.add(vm)
+        dismiss()
+        Task { await baseVMStore.build(baseVM: vm) }
     }
 
-    private func fetchLiveVersions(force: Bool = false) async {
-        // Only hit the network when cache is stale (>24h) or force-refreshed
+    private func createManual() {
+        let config = buildManualConfig()
+        let effectivelyAutomates = config.automateSetupAssistant
+        var vm = VirtualMachine(name: tartName, isBaseVM: true)
+        vm.displayName  = config.displayName
+        vm.osName       = osName
+        vm.osVersion    = osVersion
+        vm.macOSVersion = "macOS \(osName.rawValue) \(osVersion)"
+        vm.sshUsername  = effectivelyAutomates ? manualUsername : "admin"
+        vm.sshPassword  = effectivelyAutomates ? (manualPassword.isEmpty ? nil : manualPassword) : nil
+        vm.cpuCount     = cpuCount
+        vm.memoryGB     = memoryGB
+        vm.diskGB       = diskGB
+        vm.vmSource     = .local
+        vm.buildStatus  = .notBuilt
+        vm.mdmProfileID = config.mdmProfileID
+
+        switch config.ipswSource {
+        case .filePath(let u): vm.ipswLocalPath = u.path
+        case .url(let s):      vm.ipswRemoteURL = s
+        case .auto:            break
+        }
+
+        let bootCmd = selectedBootCommandBlock
+
+        if saveToTemplates {
+            // Save the generated HCL as a new custom template
+            Task {
+                let fname = "\(tartName).pkr.hcl"
+                _ = try? templateStore.create(
+                    kind: .fullTemplate,
+                    displayName: config.displayName,
+                    description: "Generated by Oven for \(osName.rawValue) \(osVersion)",
+                    osName: osName.rawValue,
+                    osVersion: osVersion,
+                    filename: fname,
+                    starterContent: generatedHCL
+                )
+            }
+        }
+
+        vm.manualBuildConfig = config
+
+        baseVMStore.add(vm)
+        dismiss()
+        Task { await baseVMStore.buildManual(baseVM: vm, config: config, bootCommandBlock: bootCmd) }
+    }
+
+    // MARK: - Helpers
+
+    private func fetchLiveVersions() async {
         let fresh = await IPSWService.shared.isCacheFresh
-        if !force && fresh && !liveFirmwares.isEmpty { return }
+        if fresh && !liveFirmwares.isEmpty { return }
         isFetchingVersions = true
         if let results = try? await IPSWService.shared.listFirmware() {
             liveFirmwares = results
@@ -361,52 +761,7 @@ struct NewBaseVMSheet: View {
         isFetchingVersions = false
     }
 
-    private func create() {
-        var vm = VirtualMachine(
-            name: VirtualMachine.uniqueAutoName(osName: osName, version: osVersion,
-                                                existing: baseVMStore.baseVMs),
-            isBaseVM: true
-        )
-        vm.osName              = osName
-        vm.osVersion           = osVersion
-        vm.macOSVersion        = "macOS \(osName.rawValue) \(osVersion)"
-        vm.ipswLocalPath       = resolvedIPSWPath
-        vm.ipswRemoteURL       = resolvedIPSWURL
-        vm.sshUsername         = username
-        vm.cpuCount            = cpuCount
-        vm.memoryGB            = memoryGB
-        vm.diskGB              = diskGB
-        vm.installRosetta      = installRosetta
-        vm.installHomebrew     = installHomebrew
-        vm.enableSSHDaemon     = enableSSHDaemon
-        vm.enableAutoLogin     = enableAutoLogin
-        vm.enablePasswordlessSudo = enablePasswordlessSudo
-        vm.xcodeVersion        = enableXcode && !xcodeVersion.isEmpty ? xcodeVersion : nil
-        vm.mdmProfileID        = selectedMDMProfileID
-        vm.sshPassword         = password.isEmpty ? nil : password
-        vm.vmSource            = .local
-        vm.buildStatus         = .notBuilt
-        // Template selection (v5: UUID or raw path)
-        switch templateSource {
-        case .none:
-            vm.customTemplateID = nil
-            vm.customTemplatePath = nil
-        case .library:
-            vm.customTemplateID = selectedTemplateID
-            vm.customTemplatePath = nil
-        case .customPath:
-            vm.customTemplateID = nil
-            vm.customTemplatePath = externalTemplatePath.isEmpty ? nil : externalTemplatePath
-        }
-        vm.customVarsFileID = selectedVarsFileID
-        baseVMStore.add(vm)
-        dismiss()
-        Task { await baseVMStore.build(baseVM: vm) }
-    }
-
     private func detectOS(from url: URL) {
-        ipswSource = .customPath
-        customIPSWPath = url.path
         let filename = url.deletingPathExtension().lastPathComponent
         let parts = filename.components(separatedBy: CharacterSet(charactersIn: "-_"))
         for part in parts {
@@ -427,15 +782,9 @@ struct NewBaseVMSheet: View {
     }
 
     private func loadMDMData() {
-        _ = AppSettings.defaultLocalStorageRoot
         let loaded = AppDatabase.shared.readOrDefault(.mdmProfiles, default: [MDMProfile]())
-        if !loaded.isEmpty {
-            mdmProfiles = loaded
-        }
+        if !loaded.isEmpty { mdmProfiles = loaded }
         let sloaded = AppDatabase.shared.readOrDefault(.mdmServers, default: [MDMServer]())
-        if !sloaded.isEmpty {
-            mdmServers = sloaded
-        }
+        if !sloaded.isEmpty { mdmServers = sloaded }
     }
-
 }

@@ -42,6 +42,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
     var customTemplatePath: String?   // legacy — kept for migration from v4
     var customTemplateID: UUID?       // v5+: references PackerTemplate by metadata ID
     var customVarsFileID: UUID?       // v5+: references a .pkrvars.hcl by metadata ID
+    var manualBuildConfig: ManualBuildConfig?  // non-nil = was created via manual build path
     var vmSource: VMSource = .local   // avoids clash with SwiftUI .local
 
     enum VMSource: String, Codable, Hashable {
@@ -239,6 +240,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         mdmServerID      = try c.decodeIfPresent(UUID.self,           forKey: .mdmServerID)
         sharedFolders    = try c.decodeIfPresent([SharedFolder].self,  forKey: .sharedFolders)   ?? []
         sshUsername      = try c.decodeIfPresent(String.self,         forKey: .sshUsername)      ?? "baker"
+        manualBuildConfig = try c.decodeIfPresent(ManualBuildConfig.self, forKey: .manualBuildConfig)
         isResolvingIP    = false  // always reset on load — never persisted
         isStopping       = false
     }
