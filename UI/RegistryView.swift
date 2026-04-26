@@ -7,6 +7,8 @@ struct RegistryView: View {
     @State private var rvm = RegistryViewModel()
     @State private var searchText: String = ""
     @State private var lastRefreshedAt: Date? = nil
+    @State private var isRefreshing: Bool = false
+    @State private var refreshRotation: Double = 0
 
     private func coarseAge(of date: Date) -> String {
         let s = Int(Date().timeIntervalSince(date))
@@ -64,10 +66,6 @@ struct RegistryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Top bar — always visible, always at top ─────────────────────
-            toolbar
-            Divider()
-
             // ── Middle: ZStack so banner never shifts content centre ────────
             ZStack(alignment: .top) {
                 // Content fills full height — empty state centres within it
@@ -161,6 +159,110 @@ struct RegistryView: View {
             Text(rvm.errorMessage ?? "")
         }
         .searchable(text: $searchText, prompt: "Search \(rvm.selectedRegistry) images…")
+        .toolbar {
+            // 1. Navigation group — registry selector acts as a segment-picker for navigation context
+            ToolbarItemGroup(placement: .navigation) {
+                HStack(spacing: 4) {
+                    ForEach(registries, id: \.self) { registry in
+                        let isSelected = registry == rvm.selectedRegistry
+                        let count = imageCount(for: registry)
+                        Button {
+                            rvm.selectedRegistry = registry
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: registryIcon(for: registry))
+                                    .font(.system(size: 11))
+                                Text(registryShortName(for: registry))
+                                    .font(.caption).fontWeight(.medium)
+                                if count > 0 {
+                                    Text("\(count)")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .padding(.horizontal, 5).padding(.vertical, 1)
+                                        .background(
+                                            isSelected
+                                                ? Color.white.opacity(0.25)
+                                                : Color.primary.opacity(0.1),
+                                            in: Capsule()
+                                        )
+                                }
+                            }
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                        }
+                        .buttonStyle(.plain)
+                        .background(
+                            isSelected
+                                ? Color.accentColor
+                                : Color.primary.opacity(0.06),
+                            in: RoundedRectangle(cornerRadius: 6)
+                        )
+                        .foregroundStyle(isSelected ? .white : .primary)
+                    }
+                }
+                .onChange(of: registries) { _, newRegs in
+                    if !newRegs.contains(rvm.selectedRegistry) {
+                        rvm.selectedRegistry = newRegs.first ?? "ghcr.io"
+                    }
+                }
+            }
+
+            // 2. Primary action — Browse Cirrus Labs catalogue (⌘N)
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    rvm.showCirrusCatalogue = true
+                } label: {
+                    Label("Cirrus Labs", systemImage: "building.columns")
+                }
+                .keyboardShortcut("n", modifiers: .command)
+                .help("Browse Cirrus Labs public macOS images (⌘N)")
+            }
+
+            // 3. Secondary actions — delete selected image (⌘⌫)
+            ToolbarItemGroup(placement: .secondaryAction) {
+                // RegistryView has no concept of a selected-item state in the toolbar
+                // (row-level actions are in the row itself). No secondary actions here.
+            }
+
+            // 4. Flexible space
+            ToolbarItem(placement: .automatic) {
+                Spacer()
+            }
+
+            // 5. Search provided by .searchable
+
+            // 6. Last-synced label (no sort menu)
+            ToolbarItem(placement: .automatic) {
+                if let refreshed = lastRefreshedAt {
+                    Text("Synced " + coarseAge(of: refreshed))
+                        .font(.caption).foregroundStyle(.secondary)
+                        .padding(8)
+                }
+            }
+
+            // 7. Refresh (⌘R)
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    guard !isRefreshing else { return }
+                    isRefreshing = true
+                    withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                        refreshRotation = 360
+                    }
+                    let tartPath = AppSettings.defaultLocalStorageRoot
+                        .appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
+                    Task {
+                        await rvm.syncFromTart(tartPath: tartPath, vmStore: vmStore, baseVMStore: baseVMStore)
+                        lastRefreshedAt = Date()
+                        isRefreshing = false
+                        refreshRotation = 0
+                    }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .help("Sync images from tart (⌘R)")
+            }
+        }
+        .task { updateWindowTitle() }
+        .onChange(of: rvm.selectedRegistry) { _, _ in updateWindowTitle() }
         .task {
             rvm.load(vmStore: vmStore, baseVMStore: baseVMStore)
             let tartPath = AppSettings.defaultLocalStorageRoot
@@ -188,82 +290,11 @@ struct RegistryView: View {
         }
     }
 
-    // MARK: Toolbar
+    // MARK: Window title
 
-    private var toolbar: some View {
-        HStack(spacing: 8) {
-            // Custom registry selector with icon + count badge
-            HStack(spacing: 4) {
-                ForEach(registries, id: \.self) { registry in
-                    let isSelected = registry == rvm.selectedRegistry
-                    let count = imageCount(for: registry)
-                    Button {
-                        rvm.selectedRegistry = registry
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: registryIcon(for: registry))
-                                .font(.system(size: 11))
-                            Text(registryShortName(for: registry))
-                                .font(.caption).fontWeight(.medium)
-                            if count > 0 {
-                                Text("\(count)")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .padding(.horizontal, 5).padding(.vertical, 1)
-                                    .background(
-                                        isSelected
-                                            ? Color.white.opacity(0.25)
-                                            : Color.primary.opacity(0.1),
-                                        in: Capsule()
-                                    )
-                            }
-                        }
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                    }
-                    .buttonStyle(.plain)
-                    .background(
-                        isSelected
-                            ? Color.accentColor
-                            : Color.primary.opacity(0.06),
-                        in: RoundedRectangle(cornerRadius: 6)
-                    )
-                    .foregroundStyle(isSelected ? .white : .primary)
-                }
-            }
-            .onChange(of: registries) { _, newRegs in
-                if !newRegs.contains(rvm.selectedRegistry) {
-                    rvm.selectedRegistry = newRegs.first ?? "ghcr.io"
-                }
-            }
-
-            Spacer()
-
-            Button {
-                let tartPath = AppSettings.defaultLocalStorageRoot
-                    .appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
-                Task {
-                    await rvm.syncFromTart(tartPath: tartPath, vmStore: vmStore, baseVMStore: baseVMStore)
-                    lastRefreshedAt = Date()
-                }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .buttonStyle(.bordered).controlSize(.small)
-            .help("Sync images from tart")
-            if let refreshed = lastRefreshedAt {
-                Text("Synced · " + coarseAge(of: refreshed))
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
-            Button {
-                rvm.showCirrusCatalogue = true
-            } label: {
-                Label("Cirrus Labs", systemImage: "building.columns")
-                    .font(.caption)
-            }
-            .buttonStyle(.bordered).controlSize(.small)
-            .help("Browse Cirrus Labs public macOS images")
-        }
-        .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
+    private func updateWindowTitle() {
+        appState.windowTitle = "Registry — \(rvm.selectedRegistry)"
+        appState.windowSubtitle = ""
     }
 
     // MARK: Registry icon + short name helpers

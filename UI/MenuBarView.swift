@@ -12,6 +12,7 @@ struct MenuBarView: View {
     // Passed in from OvenApp — cannot use @EnvironmentObject because
     // MenuBarExtra content runs outside the main environment hierarchy.
     var model: MenuBarViewModel
+    var monitor = BuildMonitor.shared
 
     var body: some View {
         // Sync VM state each time the menu is opened.
@@ -20,6 +21,16 @@ struct MenuBarView: View {
             .frame(width: 0, height: 0)
             .task { model.onMenuOpen() }
 
+        // ── Active Builds section ────────────────────────────────────────────
+        if !model.cachedActiveBuilds.isEmpty {
+            Text("Builds")
+            ForEach(model.cachedActiveBuilds) { vm in
+                buildEntry(vm)
+            }
+            Divider()
+        }
+
+        // ── Virtual Machines section ─────────────────────────────────────────
         if model.cachedDisplayVMs.isEmpty {
             Text("No Virtual Machines")
         } else {
@@ -39,6 +50,25 @@ struct MenuBarView: View {
 
         Button("Open Oven") {
             model.openMainWindow()
+        }
+    }
+
+    // MARK: - Per-build entry
+
+    @ViewBuilder
+    private func buildEntry(_ vm: VirtualMachine) -> some View {
+        let label = vm.displayName.isEmpty ? vm.name : vm.displayName
+        let phase = monitor.phase.label
+        let pct   = Int(monitor.progress * 100)
+        Button {
+            model.focusBaseVM(vm)
+        } label: {
+            // Native NSMenu renders Label/Text; we compose a readable string
+            // since layout views are not available in .menu style.
+            Label(
+                "\(label)  [\(phase)]  \(pct)%",
+                systemImage: "arrow.triangle.2.circlepath"
+            )
         }
     }
 

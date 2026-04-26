@@ -8,21 +8,17 @@ struct LiveBuildLogPanel: View {
     @State private var vncURL: String? = nil
     @State private var vncPassword: String? = nil
     @State private var didAutoConnect = false
+    @State private var logExpanded = false
     @AppStorage("showGraphicsDuringBuild") private var showGraphics: Bool = false
     @AppStorage("debugModeEnabled") private var debugMode: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header bar
+            // Name + VNC button bar
             HStack(spacing: 8) {
-                ProgressView().controlSize(.mini)
                 Text("Building \(baseVM.name)")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.primary)
-                Text(monitor.elapsedFormatted)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
                 Spacer()
                 if let vnc = vncURL {
                     Button {
@@ -42,41 +38,57 @@ struct LiveBuildLogPanel: View {
 
             Divider()
 
-            // Log output
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(baseVM.buildLog.enumerated()), id: \.offset) { idx, line in
-                            Text(line)
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(logLineColor(line))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 1)
-                                .id(idx)
+            // Phase tracker + progress bar
+            BuildProgressHeader()
+
+            Divider()
+
+            // Log output inside a collapsible DisclosureGroup
+            DisclosureGroup(isExpanded: $logExpanded) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(baseVM.buildLog.enumerated()), id: \.offset) { idx, line in
+                                Text(line)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundStyle(logLineColor(line))
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 1)
+                                    .id(idx)
+                            }
                         }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
-                }
-                .frame(height: 160)
-                .background(Color(nsColor: .textBackgroundColor))
-                .onChange(of: baseVM.buildLog.count) { _, _ in
-                    if let last = baseVM.buildLog.indices.last {
-                        withAnimation(nil) { proxy.scrollTo(last, anchor: .bottom) }
+                    .frame(height: 160)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .onChange(of: baseVM.buildLog.count) { _, _ in
+                        if let last = baseVM.buildLog.indices.last {
+                            withAnimation(nil) { proxy.scrollTo(last, anchor: .bottom) }
+                        }
+                        // Parse VNC URL from log output, then auto-connect if appropriate
+                        detectVNC(in: baseVM.buildLog)
+                        autoConnectIfReady()
+                        // Auto-expand on first error or failure line
+                        autoExpandOnError(in: baseVM.buildLog)
                     }
-                    // Parse VNC URL from log output, then auto-connect if appropriate
-                    detectVNC(in: baseVM.buildLog)
-                    autoConnectIfReady()
-                }
-                .onAppear {
-                    if let last = baseVM.buildLog.indices.last {
-                        proxy.scrollTo(last, anchor: .bottom)
+                    .onAppear {
+                        if let last = baseVM.buildLog.indices.last {
+                            proxy.scrollTo(last, anchor: .bottom)
+                        }
+                        detectVNC(in: baseVM.buildLog)
+                        autoConnectIfReady()
                     }
-                    detectVNC(in: baseVM.buildLog)
-                    autoConnectIfReady()
                 }
+            } label: {
+                Text("Show build log")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
             }
+            .disclosureGroupStyle(FlatDisclosureGroupStyle())
         }
         .onDisappear {
             // Build ended — close VNC if it was auto-opened
@@ -88,6 +100,14 @@ struct LiveBuildLogPanel: View {
 
     private func logLineColor(_ line: String) -> Color {
         buildLogLineColor(line)
+    }
+
+    private func autoExpandOnError(in log: [String]) {
+        guard !logExpanded, let last = log.last else { return }
+        let l = last.lowercased()
+        if l.contains("error") || l.contains("fail") {
+            withAnimation { logExpanded = true }
+        }
     }
 
     private func detectVNC(in log: [String]) {
@@ -143,6 +163,35 @@ struct LiveBuildLogPanel: View {
         }
         if let u = URL(string: urlWithCreds) {
             NSWorkspace.shared.open(u)
+        }
+    }
+}
+
+// MARK: - FlatDisclosureGroupStyle
+// Removes the default indentation so the log view fills the full width.
+
+private struct FlatDisclosureGroupStyle: DisclosureGroupStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    configuration.isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: configuration.isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                    configuration.label
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if configuration.isExpanded {
+                configuration.content
+            }
         }
     }
 }

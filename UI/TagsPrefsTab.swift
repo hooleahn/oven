@@ -7,7 +7,7 @@ struct TagsPrefsTab: View {
     @State private var newName: String = ""
     @State private var showNewTag = false
     @State private var newTagName = ""
-    @State private var newTagColor = Color.blue
+    @State private var newTagColorIndex: Int = 0
     @State private var confirmDeleteTag: String? = nil
 
     private var allTags: [String] { tagStore.managedTags }
@@ -69,7 +69,7 @@ struct TagsPrefsTab: View {
                     Button("Cancel") { showNewTag = false }.keyboardShortcut(.escape)
                     Button("Add") {
                         let t = newTagName.trimmingCharacters(in: .whitespaces)
-                        if !t.isEmpty { tagStore.setColor(newTagColor, for: t) }
+                        if !t.isEmpty { tagStore.setPaletteIndex(newTagColorIndex, for: t) }
                         showNewTag = false
                     }
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
@@ -84,24 +84,24 @@ struct TagsPrefsTab: View {
                                       prompt: Text("e.g. production").foregroundColor(.secondary))
                         }
                         LabeledContent("Color") {
-                            ColorPicker("", selection: $newTagColor, supportsOpacity: false)
-                                .labelsHidden()
+                            PaletteSwatchGrid(selectedIndex: $newTagColorIndex)
                         }
                         if !newTagName.isEmpty {
                             LabeledContent("Preview") {
+                                let color = TagStore.paletteColor(at: newTagColorIndex)
                                 Text(newTagName)
                                     .font(.caption).fontWeight(.medium)
                                     .padding(.horizontal, 8).padding(.vertical, 3)
-                                    .background(newTagColor.opacity(0.25), in: Capsule())
-                                    .overlay(Capsule().stroke(newTagColor.opacity(0.5), lineWidth: 1))
-                                    .foregroundStyle(newTagColor)
+                                    .background(color.opacity(0.25), in: Capsule())
+                                    .overlay(Capsule().stroke(color.opacity(0.5), lineWidth: 1))
+                                    .foregroundStyle(color)
                             }
                         }
                     }
                 }
                 .formStyle(.grouped)
             }
-            .frame(minWidth: 320, idealWidth: 360, minHeight: 220)
+            .frame(minWidth: 360, idealWidth: 400, minHeight: 220)
         }
     }
 
@@ -121,7 +121,6 @@ struct TagsPrefsTab: View {
         let t = newName.trimmingCharacters(in: .whitespaces)
         guard !t.isEmpty, t != old else { editingTag = nil; return }
         tagStore.rename(tag: old, to: t)
-        // Propagate rename to all VMs that had the old tag
         for vm in vmStore.vms where vm.tags.contains(old) {
             vmStore.update(id: vm.id) { v in
                 v.tags = v.tags.map { $0 == old ? t : $0 }
@@ -138,7 +137,9 @@ struct TagsPrefsTab: View {
                 .font(.caption).foregroundStyle(.secondary)
             Spacer()
             Button {
-                newTagName = ""; newTagColor = .blue; showNewTag = true
+                newTagName = ""
+                newTagColorIndex = 0
+                showNewTag = true
             } label: {
                 Label("New Tag", systemImage: "plus")
             }
@@ -152,28 +153,39 @@ struct TagsPrefsTab: View {
     @ViewBuilder private func tagRow(_ tag: String) -> some View {
         VStack(spacing: 0) {
             if editingTag == tag {
-                HStack(spacing: 8) {
-                    ColorPicker("", selection: Binding(
-                        get: { tagStore.color(for: tag) },
-                        set: { tagStore.setColor($0, for: tag) }
-                    ), supportsOpacity: false)
-                    .labelsHidden().frame(width: 28)
+                VStack(alignment: .leading, spacing: 8) {
                     TextField("Tag name", text: $newName)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { commitRename(tag) }
-                    Button("Save") { commitRename(tag) }
-                        .buttonStyle(.borderedProminent).controlSize(.small)
-                    Button("Cancel") { editingTag = nil }
-                        .buttonStyle(.bordered).controlSize(.small)
+                    PaletteSwatchGrid(
+                        selectedIndex: Binding(
+                            get: { tagStore.colorIndex(for: tag) },
+                            set: { tagStore.setPaletteIndex($0, for: tag) }
+                        )
+                    )
+                    HStack {
+                        Button("Save") { commitRename(tag) }
+                            .buttonStyle(.borderedProminent).controlSize(.small)
+                        Button("Cancel") { editingTag = nil }
+                            .buttonStyle(.bordered).controlSize(.small)
+                    }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 10)
             } else {
                 HStack(spacing: 10) {
-                    ColorPicker("", selection: Binding(
-                        get: { tagStore.color(for: tag) },
-                        set: { tagStore.setColor($0, for: tag) }
-                    ), supportsOpacity: false)
-                    .labelsHidden().frame(width: 28)
+                    // Color swatch (click cycles to next palette color)
+                    Button {
+                        let current = tagStore.colorIndex(for: tag)
+                        tagStore.setPaletteIndex((current + 1) % TagStore.palette.count, for: tag)
+                    } label: {
+                        Circle()
+                            .fill(tagStore.color(for: tag))
+                            .frame(width: 18, height: 18)
+                            .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Click to cycle color; edit row for full palette")
+
                     HStack(spacing: 4) {
                         TagChip(tag: tag)
                         Button {

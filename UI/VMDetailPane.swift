@@ -16,6 +16,7 @@ struct VMDetailPane: View {
     @State private var liveConfig: TartService.TartVMConfig? = nil
     @State private var isLoadingConfig = false
     @State private var confirmStop: VirtualMachine? = nil
+    @SceneStorage("vmDetailPane.logInspectorOpen") private var logInspectorOpen = false
 
     // MDM enrollment status
     @State private var enrollmentStatus: JamfEnrollmentStatus? = nil
@@ -30,147 +31,289 @@ struct VMDetailPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // ── Compact header ──────────────────────────────────────────────
             headerSection
+
             Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    DetailSection("Configuration") {
-                        HStack(spacing: 4) {
-                            Spacer()
-                            if isLoadingConfig {
-                                ProgressView().controlSize(.mini)
-                            } else {
-                                Button { Task { await loadLiveConfig() } } label: {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.caption2).foregroundStyle(.secondary)
-                                }
-                                .buttonStyle(.plain)
-                                .help("Refresh from tart")
+
+            // ── Grouped form ────────────────────────────────────────────────
+            Form {
+                Section("Configuration") {
+                    // Refresh row
+                    HStack(spacing: 4) {
+                        Spacer()
+                        if isLoadingConfig {
+                            ProgressView().controlSize(.mini)
+                        } else {
+                            Button { Task { await loadLiveConfig() } } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.caption2).foregroundStyle(.secondary)
                             }
+                            .buttonStyle(.plain)
+                            .help("Refresh from tart")
                         }
-                        .padding(.horizontal, 14)
-                        let cpu = liveConfig?.cpu.map { "\($0) vCPU" } ?? "\(vm.cpuCount) vCPU"
-                        let mem = liveConfig?.memory.map { "\($0 / 1024) GB" } ?? "\(vm.memoryGB) GB"
-                        let diskMax = liveConfig?.disk.map { "\($0) GB" } ?? "\(vm.diskGB) GB"
-                        let disk = vm.actualDiskGB.map { "\(diskMax) max · \($0) GB used" } ?? diskMax
-                        DetailRow("CPU", cpu)
-                        DetailRow("Memory", mem)
-                        DetailRow("Disk", disk)
-                        DetailRow("macOS", vm.osName == .unknown && vm.osVersion.isEmpty ? "—"
-                            : vm.osName == .unknown ? vm.osVersion
-                            : vm.osVersion.isEmpty  ? vm.osName.rawValue
-                            : "\(vm.osName.rawValue) \(vm.osVersion)")
-                        if let display = liveConfig?.display {
-                            DetailRow("Display", display)
-                        }
-                        DetailRow("S/N", vm.serialNumber.isEmpty ? "—" : vm.serialNumber)
                     }
-                    DetailSection("Network") {
-                        DetailRow("IP Address", vm.ipAddress ?? "—", monospaced: true, copyable: vm.ipAddress != nil)
+
+                    let cpu = liveConfig?.cpu.map { "\($0) vCPU" } ?? "\(vm.cpuCount) vCPU"
+                    let mem = liveConfig?.memory.map { "\($0 / 1024) GB" } ?? "\(vm.memoryGB) GB"
+                    let diskMax = liveConfig?.disk.map { "\($0) GB" } ?? "\(vm.diskGB) GB"
+                    let disk = vm.actualDiskGB.map { "\(diskMax) max · \($0) GB used" } ?? diskMax
+                    let osLabel: String = {
+                        if vm.osName == .unknown && vm.osVersion.isEmpty { return "—" }
+                        if vm.osName == .unknown { return vm.osVersion }
+                        if vm.osVersion.isEmpty  { return vm.osName.rawValue }
+                        return "\(vm.osName.rawValue) \(vm.osVersion)"
+                    }()
+
+                    LabeledContent("CPU")    { Text(cpu).foregroundStyle(.secondary) }
+                    LabeledContent("Memory") { Text(mem).foregroundStyle(.secondary) }
+                    LabeledContent("Disk")   { Text(disk).foregroundStyle(.secondary) }
+                    LabeledContent("macOS")  { Text(osLabel).foregroundStyle(.secondary) }
+                    if let display = liveConfig?.display {
+                        LabeledContent("Display") { Text(display).foregroundStyle(.secondary) }
+                    }
+                    LabeledContent("S/N") {
+                        Text(vm.serialNumber.isEmpty ? "—" : vm.serialNumber)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Network") {
+                    LabeledContent("IP Address") {
                         if let ip = vm.ipAddress, !ip.isEmpty {
-                            let vncURL = "vnc://\(ip)"
-                            DetailRow("VNC", vncURL, monospaced: true, copyable: true)
-                            HStack {
-                                Spacer()
-                                Button("Open VNC…") {
-                                    NSWorkspace.shared.open(URL(string: vncURL)!)
-                                }
-                                .buttonStyle(.bordered).controlSize(.small)
-                                .padding(.horizontal, 14).padding(.bottom, 4)
-                            }
-                        }
-                        DetailRow("SSH", "Port 22")
-                        if !vm.sshUsername.isEmpty {
-                            DetailRow("Username", vm.sshUsername, monospaced: true, copyable: true)
-                        }
-                        if vm.sshPassword != nil {
-                            DetailRow("Password", "stored in Keychain")
+                            VMCopyableText(ip, monospaced: true)
+                        } else {
+                            Text("—").foregroundStyle(.secondary)
                         }
                     }
-                    DetailSection("Identity & Dates") {
-                        if !vm.description.isEmpty {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Description")
-                                    .font(.caption).fontWeight(.medium)
-                                    .foregroundStyle(.secondary)
-                                Text(vm.description)
-                                    .font(.callout)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .textSelection(.enabled)
-                            }
-                            .padding(.horizontal, 12).padding(.vertical, 4)
-                        }
-                        if !vm.displayName.isEmpty && vm.displayName != vm.name {
-                            DetailRow("Display name", vm.displayName)
-                        }
-                        DetailRow("Tart name", vm.name, monospaced: true, copyable: true)
-                        DetailRow("Created", vm.createdAt.formatted(date: .numeric, time: .omitted))
-                        DetailRow("Last started", vm.lastStartedAt.map {
-                            $0.formatted(date: .numeric, time: .shortened)
-                        } ?? "Never")
-                        if !vm.tags.isEmpty {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Tags")
-                                    .font(.caption).fontWeight(.medium)
-                                    .foregroundStyle(.secondary).textCase(.uppercase)
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 4) {
-                                        ForEach(Array(vm.tags.enumerated()), id: \.offset) { _, tag in TagChip(tag: tag) }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 12).padding(.vertical, 4)
-                        }
-                    }
-                    // Origin: base VM it was cloned from
-                    if let baseID = vm.baseVMID,
-                       let baseVM = baseVMStore.baseVMs.first(where: { $0.id == baseID }) {
-                        DetailSection("Origin") {
-                            DetailRow("Base VM", baseVM.name)
-                            DetailRow("macOS", "\(baseVM.osName.rawValue) \(baseVM.osVersion)")
-                        }
-                    }
-                    // MDM enrollment
-                    if theme.mdmEnabled && (vm.mdmProfileID != nil || vm.mdmServerID != nil || canLookUpEnrollment) {
-                        DetailSection("MDM") {
-                            if let serverID = vm.mdmServerID,
-                               let server = serverStore.servers.first(where: { $0.id == serverID }) {
-                                DetailRow("Server", server.friendlyName)
-                            }
-                            if let profileID = vm.mdmProfileID {
-                                let profileName = loadProfileName(id: profileID)
-                                if let name = profileName {
-                                    DetailRow("Profile", name)
-                                }
-                            }
-                            // Enrollment status lookup (requires serial number ≥ 10 chars + MDM server)
-                            if canLookUpEnrollment {
-                                MDMEnrollmentStatusRow(
-                                    vm: vm,
-                                    server: serverStore.servers.first(where: { $0.id == vm.mdmServerID }),
-                                    status: enrollmentStatus,
-                                    error: enrollmentError,
-                                    isLoading: isLookingUpEnrollment
-                                ) {
-                                    Task { await lookUpEnrollment() }
-                                }
+                    if let ip = vm.ipAddress, !ip.isEmpty {
+                        let vncURL = "vnc://\(ip)"
+                        LabeledContent("VNC") {
+                            HStack(spacing: 6) {
+                                VMCopyableText(vncURL, monospaced: true)
+                                Button("Open…") { NSWorkspace.shared.open(URL(string: vncURL)!) }
+                                    .buttonStyle(.bordered).controlSize(.mini)
                             }
                         }
                     }
-                    if let ref = vm.registryImageRef {
-                        DetailSection("Registry") {
-                            DetailRow("Image", ref)
+                    LabeledContent("SSH") { Text("Port 22").foregroundStyle(.secondary) }
+                    if !vm.sshUsername.isEmpty {
+                        LabeledContent("Username") {
+                            VMCopyableText(vm.sshUsername, monospaced: true)
+                        }
+                    }
+                    if vm.sshPassword != nil {
+                        LabeledContent("Password") {
+                            Text("Stored in Keychain").foregroundStyle(.secondary)
                         }
                     }
                 }
-                .padding(.vertical, 8)
-            }
 
-            Divider()
-            actionsSection
-            .padding(12)
+                Section("Identity & Dates") {
+                    if !vm.description.isEmpty {
+                        LabeledContent("Description") {
+                            Text(vm.description)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .textSelection(.enabled)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if !vm.displayName.isEmpty && vm.displayName != vm.name {
+                        LabeledContent("Display name") {
+                            Text(vm.displayName).foregroundStyle(.secondary)
+                        }
+                    }
+                    LabeledContent("Tart name") {
+                        VMCopyableText(vm.name, monospaced: true)
+                    }
+                    LabeledContent("Created") {
+                        Text(vm.createdAt.formatted(date: .numeric, time: .omitted))
+                            .foregroundStyle(.secondary)
+                    }
+                    LabeledContent("Last started") {
+                        Text(vm.lastStartedAt.map {
+                            $0.formatted(date: .numeric, time: .shortened)
+                        } ?? "Never")
+                        .foregroundStyle(.secondary)
+                    }
+                    if !vm.tags.isEmpty {
+                        LabeledContent("Tags") {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 4) {
+                                    ForEach(Array(vm.tags.enumerated()), id: \.offset) { _, tag in
+                                        TagChip(tag: tag)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Origin: base VM it was cloned from
+                if let baseID = vm.baseVMID,
+                   let baseVM = baseVMStore.baseVMs.first(where: { $0.id == baseID }) {
+                    Section("Origin") {
+                        LabeledContent("Base VM") { Text(baseVM.name).foregroundStyle(.secondary) }
+                        LabeledContent("macOS") {
+                            Text("\(baseVM.osName.rawValue) \(baseVM.osVersion)")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                // MDM enrollment
+                if theme.mdmEnabled && (vm.mdmProfileID != nil || vm.mdmServerID != nil || canLookUpEnrollment) {
+                    Section("MDM") {
+                        if let serverID = vm.mdmServerID,
+                           let server = serverStore.servers.first(where: { $0.id == serverID }) {
+                            LabeledContent("Server") {
+                                Text(server.friendlyName).foregroundStyle(.secondary)
+                            }
+                        }
+                        if let profileID = vm.mdmProfileID,
+                           let name = loadProfileName(id: profileID) {
+                            LabeledContent("Profile") {
+                                Text(name).foregroundStyle(.secondary)
+                            }
+                        }
+                        if canLookUpEnrollment {
+                            MDMEnrollmentStatusRow(
+                                vm: vm,
+                                server: serverStore.servers.first(where: { $0.id == vm.mdmServerID }),
+                                status: enrollmentStatus,
+                                error: enrollmentError,
+                                isLoading: isLookingUpEnrollment
+                            ) {
+                                Task { await lookUpEnrollment() }
+                            }
+                        }
+                    }
+                }
+
+                if let ref = vm.registryImageRef {
+                    Section("Registry") {
+                        LabeledContent("Image") { Text(ref).foregroundStyle(.secondary) }
+                    }
+                }
+
+                // Push progress (shown when a push is in-flight)
+                if let prog = pushProgress {
+                    Section {
+                        VStack(spacing: 4) {
+                            ProgressView(value: prog).progressViewStyle(.linear)
+                            Text("Pushing… \(Int(prog * 100))%")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .formStyle(.grouped)
         }
         .background(.windowBackground)
+        // ── Toolbar ─────────────────────────────────────────────────────────
+        .toolbar {
+            // Primary action: context-sensitive main CTA
+            ToolbarItem(placement: .primaryAction) {
+                if vm.status == .running {
+                    Button {
+                        if !vm.isStopping { confirmStop = vm }
+                    } label: {
+                        if vm.isStopping {
+                            Label("Stopping…", systemImage: "stop.fill")
+                        } else {
+                            Label("Stop", systemImage: "stop.fill")
+                        }
+                    }
+                    .tint(.red)
+                    .disabled(vm.isStopping)
+                } else if vm.status == .suspended {
+                    Button {
+                        if !vm.isStopping { confirmStop = vm }
+                    } label: {
+                        Label("Stop", systemImage: "stop.fill")
+                    }
+                    .tint(.red)
+                    .disabled(vm.isStopping)
+                } else {
+                    Button(action: onStart) {
+                        Label("Start", systemImage: "play.fill")
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+
+            // "…" menu: secondary actions
+            ToolbarItem(placement: .automatic) {
+                Menu {
+                    // SSH — only when running with IP
+                    if vm.status == .running {
+                        Button {
+                            openSSH(vm: vm)
+                        } label: {
+                            Label("Open SSH in Terminal", systemImage: "terminal")
+                        }
+                        .disabled(vm.ipAddress == nil)
+
+                        Button {
+                            Task { await vmStore.refreshIP(for: vm) }
+                        } label: {
+                            Label(vm.ipAddress.map { $0.isEmpty ? "Resolving IP…" : "Refresh IP" } ?? "Resolve IP",
+                                  systemImage: "arrow.clockwise")
+                        }
+                        .disabled(vm.isResolvingIP)
+
+                        Divider()
+                    }
+
+                    // Push to registry (stopped only)
+                    if vm.status == .stopped {
+                        Button { isPresentingPushSheet = true } label: {
+                            Label("Push to Registry…", systemImage: "arrow.up.circle")
+                        }
+                        .disabled(pushProgress != nil)
+                        Divider()
+                    }
+
+                    Button {
+                        logInspectorOpen.toggle()
+                    } label: {
+                        Label(logInspectorOpen ? "Hide Build Log" : "Show Build Log",
+                              systemImage: "terminal")
+                    }
+                    .disabled(vm.buildLog.isEmpty)
+
+                    Divider()
+                    Button(role: .destructive) {
+                        // Surface deletion through the parent (VMListView holds confirmDelete)
+                        onDismiss()
+                    } label: {
+                        Label("Delete…", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .help("More actions")
+            }
+        }
+        // ── Trailing inspector: build log ────────────────────────────────────
+        .inspector(isPresented: $logInspectorOpen) {
+            if vm.buildLog.isEmpty {
+                VStack(spacing: 8) {
+                    Spacer()
+                    Image(systemName: "terminal")
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundStyle(.secondary)
+                    Text("No build log")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+                .inspectorColumnWidth(min: 240, ideal: 300)
+            } else {
+                BuildLogView(baseVM: vm)
+                    .inspectorColumnWidth(min: 240, ideal: 300)
+            }
+        }
         .sheet(isPresented: $isPresentingPushSheet) {
             PushToRegistrySheet(vmName: vm.name) { imageRef, credentials in
                 isPresentingPushSheet = false
@@ -217,7 +360,7 @@ struct VMDetailPane: View {
     }
 
 
-    // MARK: - Subviews
+    // MARK: - Header
 
     @ViewBuilder private var headerSection: some View {
         VStack(spacing: 4) {
@@ -234,94 +377,11 @@ struct VMDetailPane: View {
             StatusPill(status: vm.status)
         }
         .frame(maxWidth: .infinity)
-        .padding(14)
+        .padding(.vertical, 12)
         .background(.bar)
     }
 
-
-    @ViewBuilder private var actionsSection: some View {
-        Divider()
-        VStack(spacing: 6) {
-                VStack(spacing: 6) {
-                    if vm.status == .running {
-                        Button {
-                            openSSH(vm: vm)
-                        } label: {
-                            Label("Open SSH in Terminal", systemImage: "terminal")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.regular)
-                        .disabled(vm.ipAddress == nil)
-    
-                        Button {
-                            Task { await vmStore.refreshIP(for: vm) }
-                        } label: {
-                            HStack(spacing: 6) {
-                                if vm.isResolvingIP {
-                                    ProgressView().controlSize(.mini)
-                                } else {
-                                    Image(systemName: "arrow.clockwise")
-                                }
-                                Text(vm.ipAddress.map { $0.isEmpty ? "Resolving IP…" : $0 } ?? "Resolving IP…")
-                                    .font(.system(.callout, design: .monospaced))
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.regular)
-                        .disabled(vm.isResolvingIP)
-                    }
-    
-                    if vm.status == .running || vm.status == .suspended {
-                        Button {
-                            if !vm.isStopping { confirmStop = vm }
-                        } label: {
-                            if vm.isStopping {
-                                HStack(spacing: 6) {
-                                    ProgressView().controlSize(.small)
-                                    Text("Stopping…")
-                                }
-                                .frame(maxWidth: .infinity)
-                            } else {
-                                Label("Stop VM", systemImage: "stop.fill").frame(maxWidth: .infinity)
-                            }
-                        }
-                        .buttonStyle(.bordered).controlSize(.regular).tint(.red)
-                        .disabled(vm.isStopping)
-                    } else if vm.status == .stopped {
-                        Button {
-                            onStart()
-                        } label: {
-                            Label("Start VM", systemImage: "play.fill").frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent).controlSize(.regular)
-    
-                        if let prog = pushProgress {
-                            VStack(spacing: 4) {
-                                ProgressView(value: prog).progressViewStyle(.linear)
-                                Text("Pushing… \(Int(prog * 100))%")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                        } else {
-                            Button {
-                                isPresentingPushSheet = true
-                            } label: {
-                                Label("Push to Registry…", systemImage: "arrow.up.circle")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.bordered).controlSize(.regular)
-                        }
-                    }
-    
-                    if let err = pushError {
-                        Label(err, systemImage: "xmark.circle.fill")
-                            .font(.caption).foregroundStyle(.red)
-                            .lineLimit(3)
-                    }
-                }
-    }
-    }
+    // MARK: - Helpers
 
     private func openSSH(vm: VirtualMachine) {
         guard let ip = vm.ipAddress, !ip.isEmpty else { return }
@@ -423,6 +483,41 @@ struct VMDetailPane: View {
             enrollmentError = error.localizedDescription
         }
         isLookingUpEnrollment = false
+    }
+}
+
+// MARK: - VMCopyableText helper (scoped to this file)
+
+private struct VMCopyableText: View {
+    let value: String
+    var monospaced: Bool = false
+    @State private var copied = false
+
+    init(_ value: String, monospaced: Bool = false) {
+        self.value = value
+        self.monospaced = monospaced
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(value)
+                .font(monospaced ? .system(.callout, design: .monospaced) : .callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(value, forType: .string)
+                copied = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+            } label: {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.caption2)
+                    .foregroundStyle(copied ? .green : .secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Copy to clipboard")
+        }
     }
 }
 

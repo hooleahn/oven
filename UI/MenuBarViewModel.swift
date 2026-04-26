@@ -21,6 +21,8 @@ final class MenuBarViewModel {
 
     private(set) var cachedDisplayVMs: [VirtualMachine] = []
     private(set) var cachedHasActiveVMs: Bool = false
+    /// Base VMs currently being built (buildStatus == .building).
+    private(set) var cachedActiveBuilds: [VirtualMachine] = []
 
     // MARK: - Private
 
@@ -49,6 +51,9 @@ final class MenuBarViewModel {
                 .sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
             self.cachedDisplayVMs = all
             self.cachedHasActiveVMs = all.contains { $0.status == .running || $0.status == .suspended }
+            self.cachedActiveBuilds = (self.vmStore?.vms ?? [])
+                .filter { $0.effectivelyBase && $0.buildStatus == .building }
+                .sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
         }
     }
 
@@ -136,4 +141,19 @@ final class MenuBarViewModel {
             return
         }
     }
+
+    /// Bring the main window forward — the UI will navigate to the base VMs tab
+    /// showing the named VM. We post a notification that ContentView can observe.
+    func focusBaseVM(_ vm: VirtualMachine) {
+        openMainWindow()
+        NotificationCenter.default.post(
+            name: .focusBaseVM,
+            object: nil,
+            userInfo: ["vmID": vm.id]
+        )
+    }
+}
+
+extension Notification.Name {
+    static let focusBaseVM = Notification.Name("OvenFocusBaseVM")
 }

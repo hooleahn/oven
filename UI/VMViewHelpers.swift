@@ -1,40 +1,33 @@
 import SwiftUI
 
-// MARK: - Status pill
+// MARK: - Status pill (used only in detail pane header)
 
 struct StatusPill: View {
     let status: VirtualMachine.Status
 
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     var body: some View {
-        HStack(spacing: 5) {
-            Circle().fill(dotColor).frame(width: 7, height: 7)
-                .accessibilityHidden(true)
-            Text(status.label)
-                .font(.caption)
-                .fontWeight(.medium)
-        }
-        .padding(.horizontal, Spacing.sm + 2) // 10 pt
-        .padding(.vertical, Spacing.xs)
-        .background(bgColor, in: Capsule())
-        .accessibilityLabel("Status: \(status.label)")
+        Text(status.label)
+            .font(.caption)
+            .fontWeight(.medium)
+            .foregroundStyle(reduceTransparency ? AnyShapeStyle(.background) : AnyShapeStyle(pillColor))
+            .padding(.horizontal, Spacing.sm + 2) // 10 pt
+            .padding(.vertical, Spacing.xs)
+            .background(reduceTransparency ? pillColor : Color.clear, in: Capsule())
+            .overlay(
+                Capsule().strokeBorder(pillColor, lineWidth: 0.5)
+            )
+            .accessibilityLabel("Status: \(status.label)")
     }
 
-    private var dotColor: Color {
+    private var pillColor: Color {
         switch status {
         case .running:   return .green
-        case .suspended: return .orange
-        case .building:  return .purple
+        case .suspended: return .secondary
+        case .building:  return .accentColor
         case .error:     return .red
-        default:         return .gray
-        }
-    }
-    private var bgColor: Color {
-        switch status {
-        case .running:   return .green.opacity(0.12)
-        case .suspended: return .orange.opacity(0.12)
-        case .building:  return .purple.opacity(0.12)
-        case .error:     return .red.opacity(0.12)
-        default:         return Color.primary.opacity(0.07)
+        default:         return .secondary.opacity(0.5)
         }
     }
 }
@@ -116,21 +109,30 @@ struct StatusDot: View {
     let status: VirtualMachine.Status
 
     var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 12, height: 12)
-            .overlay(Circle().stroke(.white.opacity(1), lineWidth: 1))
-            .accessibilityLabel(status.label)
-            .accessibilityHidden(false)
+        ZStack {
+            if status == .suspended {
+                // Receding: secondary-colored pause icon at 7 pt, no filled circle
+                Image(systemName: "pause.fill")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(Color.secondary)
+                    .frame(width: 12, height: 12)
+            } else {
+                Circle()
+                    .fill(dotColor)
+                    .frame(width: 8, height: 8)
+            }
+        }
+        .frame(width: 12, height: 12)
+        .accessibilityLabel(status.label)
+        .accessibilityHidden(false)
     }
 
-    private var color: Color {
+    private var dotColor: Color {
         switch status {
         case .running:   return .green
-        case .suspended: return .orange
-        case .building:  return .purple
+        case .building:  return .accentColor
         case .error:     return .red
-        default:         return .gray.opacity(0.5)
+        default:         return Color.secondary.opacity(0.5)
         }
     }
 }

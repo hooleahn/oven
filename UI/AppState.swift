@@ -8,6 +8,20 @@ final class AppState: ObservableObject {
     var activeSheet: AppSheet?
     var searchQuery: String = ""
 
+    // Window title — written by list views as selection changes, read by ContentView
+    var windowTitle: String = "Virtual Machines"
+    var windowSubtitle: String = ""
+
+    // Sidebar-driven VM filters — written by ContentView's SidebarView,
+    // read by VMListView.filteredVMs to honour sidebar tag / status selection.
+    var sidebarTagFilter: String?        // nil = no tag filter from sidebar
+    var sidebarStatusFilter: VMTab?      // nil = no status filter from sidebar
+
+    // Cross-column selection — written by the content-column list views so
+    // ContentView's detail column can render the correct pane.
+    var selectedVMID: VirtualMachine.ID?       // nil = no VM selected
+    var selectedBaseVMID: VirtualMachine.ID?   // nil = no Base VM selected
+
     // New VM / Base VM sheet triggers
     var isPresentingNewVM = false
     var isPresentingNewBaseVM = false

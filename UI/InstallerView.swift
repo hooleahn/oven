@@ -62,7 +62,7 @@ struct InstallerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            toolbar
+//            toolbar
             Divider()
             if isLoading {
                 ProgressView("Loading available firmwares…")
@@ -78,7 +78,64 @@ struct InstallerView: View {
             }
         }
         .navigationTitle("macOS Installers")
+//        .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "Search macOS installers…")
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                HStack(spacing: 2) {
+                    Label(settings.ipswDownloadMode == .mistCli ? "mist-cli" : "ipsw.me",
+                          systemImage: settings.ipswDownloadMode == .mistCli ? "terminal" : "network", )
+                    .padding(8)
+                    Text(settings.ipswDownloadMode == .mistCli ? "mist-cli" : "ipsw.me")
+                    .font(.caption).foregroundStyle(.secondary)
+                    Text(" · ")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if let refreshed = lastRefreshedAt {
+                        Text((loadedFromCache ? "Cached " : "Refreshed ") + coarseAge(of: refreshed))
+                            .font(.caption).foregroundStyle(.secondary)
+                            .padding(4)
+                    }
+                    Button { Task {
+                        await IPSWService.shared.invalidateCache()
+                        // Also clear mist cache
+                        let mistCache = AppSettings.defaultLocalStorageRoot
+                            .appendingPathComponent("mist-firmware-cache.json")
+                        try? FileManager.default.removeItem(at: mistCache)
+                        await loadFirmwares()
+                    } } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+    //                .buttonStyle(.bordered).controlSize(.small)
+                    .keyboardShortcut("r", modifiers: .command)
+                    .help("Refresh firmware list")
+                    
+                }
+            }
+            
+            
+            
+            ToolbarItem(placement: .automatic) {
+                Spacer()
+            }
+            ToolbarItem(placement: .automatic) {
+                Menu {
+                    ForEach(FirmwareSortOrder.allCases, id: \.self) { order in
+                        Button {
+                            sortOrder = order
+                        } label: {
+                            HStack {
+                                Text(order.rawValue)
+                                if sortOrder == order { Image(systemName: "checkmark") }
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Sort", systemImage: "arrow.up.arrow.down")
+                }
+                .buttonStyle(.bordered).controlSize(.small)
+                .help("Sort by: \(sortOrder.rawValue)")
+            }
+        }
         .task { await loadFirmwares() }
         .sheet(isPresented: $isPresentingBaseVMSheet) {
             NewBaseVMSheetWithIPSW(preselectedIPSW: selectedIPSWForBaseVM)
@@ -87,51 +144,51 @@ struct InstallerView: View {
 
     // MARK: Toolbar
 
-    private var toolbar: some View {
-        HStack(spacing: 8) {
-            Spacer()
-
-            // Show which source is active
-            if let refreshed = lastRefreshedAt {
-                Text((loadedFromCache ? "Cached · " : "Refreshed · ") + coarseAge(of: refreshed))
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Label(settings.ipswDownloadMode == .mistCli ? "mist-cli" : "ipsw.me",
-                  systemImage: settings.ipswDownloadMode == .mistCli ? "terminal" : "network")
-                .font(.caption).foregroundStyle(.secondary)
-
-            Menu {
-                ForEach(FirmwareSortOrder.allCases, id: \.self) { order in
-                    Button {
-                        sortOrder = order
-                    } label: {
-                        HStack {
-                            Text(order.rawValue)
-                            if sortOrder == order { Image(systemName: "checkmark") }
-                        }
-                    }
-                }
-            } label: {
-                Image(systemName: "arrow.up.arrow.down")
-            }
-            .buttonStyle(.bordered).controlSize(.small)
-            .help("Sort by: \(sortOrder.rawValue)")
-
-            Button { Task {
-                    await IPSWService.shared.invalidateCache()
-                    // Also clear mist cache
-                    let mistCache = AppSettings.defaultLocalStorageRoot
-                        .appendingPathComponent("mist-firmware-cache.json")
-                    try? FileManager.default.removeItem(at: mistCache)
-                    await loadFirmwares()
-                } } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .buttonStyle(.bordered).controlSize(.small)
-            .help("Refresh firmware list")
-        }
-        .padding(.horizontal, Spacing.lg - 2).padding(.vertical, Spacing.sm).background(.bar)
-    }
+//    private var toolbar: some View {
+//        HStack(spacing: 8) {
+//            Spacer()
+//
+//            // Show which source is active
+//            if let refreshed = lastRefreshedAt {
+//                Text((loadedFromCache ? "Cached · " : "Refreshed · ") + coarseAge(of: refreshed))
+//                    .font(.caption).foregroundStyle(.secondary)
+//            }
+//            Label(settings.ipswDownloadMode == .mistCli ? "mist-cli" : "ipsw.me",
+//                  systemImage: settings.ipswDownloadMode == .mistCli ? "terminal" : "network")
+//                .font(.caption).foregroundStyle(.secondary)
+//
+//            Menu {
+//                ForEach(FirmwareSortOrder.allCases, id: \.self) { order in
+//                    Button {
+//                        sortOrder = order
+//                    } label: {
+//                        HStack {
+//                            Text(order.rawValue)
+//                            if sortOrder == order { Image(systemName: "checkmark") }
+//                        }
+//                    }
+//                }
+//            } label: {
+//                Image(systemName: "arrow.up.arrow.down")
+//            }
+//            .buttonStyle(.bordered).controlSize(.small)
+//            .help("Sort by: \(sortOrder.rawValue)")
+//
+//            Button { Task {
+//                    await IPSWService.shared.invalidateCache()
+//                    // Also clear mist cache
+//                    let mistCache = AppSettings.defaultLocalStorageRoot
+//                        .appendingPathComponent("mist-firmware-cache.json")
+//                    try? FileManager.default.removeItem(at: mistCache)
+//                    await loadFirmwares()
+//                } } label: {
+//                Label("Refresh", systemImage: "arrow.clockwise")
+//            }
+//            .buttonStyle(.bordered).controlSize(.small)
+//            .help("Refresh firmware list")
+//        }
+//        .padding(.horizontal, Spacing.lg - 2).padding(.vertical, Spacing.sm).background(.bar)
+//    }
 
     // MARK: List
 

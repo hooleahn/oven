@@ -9,6 +9,8 @@ struct BaseVMView: View {
     @EnvironmentObject var templateStore: PackerTemplateStore
     @EnvironmentObject var blockStore: BuildingBlockStore
     @State private var lastRefreshedAt: Date? = nil
+    @State private var isRefreshing: Bool = false
+    @State private var refreshRotation: Double = 0
 
     private func coarseAge(of date: Date) -> String {
         let s = Int(Date().timeIntervalSince(date))
@@ -17,9 +19,14 @@ struct BaseVMView: View {
         if s < 86_400  { return "\(s / 3600) hr ago" }
         return "\(s / 86_400)d ago"
     }
-    private var buildSession = BuildSessionManager.shared
-    @State private var model = BaseVMViewModel()
+    private let buildSession = BuildSessionManager.shared
+    /// Model is owned by ContentView so the detail column can also access it.
+    @Bindable var model: BaseVMViewModel
     @State private var searchText: String = ""
+
+    init(model: BaseVMViewModel) {
+        self.model = model
+    }
 
     /// Always read the live version from the store so build log updates propagate
     var selectedBaseVM: VirtualMachine? {
@@ -49,12 +56,106 @@ struct BaseVMView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            listColumn
-            detailColumn
-        }
+        // ── Content column: list only ──────────────────────────────────────
+        // The detail pane lives in ContentView's detail column, not here.
+        listColumn
         .navigationTitle(theme.baseVMs)
+        .task { updateWindowTitle() }
+        .onChange(of: model.selectedBaseVMID) { _, id in
+            // Sync selection to appState so ContentView's detail column can render it.
+            appState.selectedBaseVMID = id
+            updateWindowTitle()
+        }
         .searchable(text: $searchText, prompt: "Search Base VMs…")
+        .toolbar {
+            // 1. Navigation group (empty)
+            ToolbarItemGroup(placement: .navigation) {}
+
+            // 2. Primary action — New Base VM (⌘N)
+            ToolbarItem(placement: .primaryAction) {
+                Button { model.isPresentingNewSheet = true } label: {
+                    Label(theme.newBaseVM, systemImage: "plus")
+                }
+                .keyboardShortcut("n", modifiers: .command)
+                .help("\(theme.newBaseVM) (⌘N)")
+            }
+
+            // 3. Secondary actions
+            ToolbarItemGroup(placement: .secondaryAction) {
+                if baseVMStore.isBuilding {
+                    Text("\(theme.building)…").font(.callout).foregroundStyle(.secondary)
+                    Button {
+                        if buildSession.isLocked {
+                            BuildSessionManager.shared.disableInputLock()
+                        } else {
+                            BuildSessionManager.shared.enableInputLock()
+                        }
+                    } label: {
+                        Label(buildSession.isLocked ? "Unlock Input" : "Lock Input",
+                              systemImage: buildSession.isLocked ? "lock.fill" : "lock.open")
+                    }
+                    .help(buildSession.isLocked ? "Unlock keyboard & mouse (⌘⇧⎋)" : "Lock keyboard & mouse during build")
+                    Button("Cancel") { baseVMStore.cancelBuild() }
+                }
+
+                // Clone selected Base VM as a Working VM (⌘D)
+                if let selected = model.selectedBaseVM(from: baseVMStore.baseVMs),
+                   selected.buildStatus == .ready {
+                    Button { model.createVMFromBase = selected } label: {
+                        Label("Clone as Working VM", systemImage: "doc.on.doc")
+                    }
+                    .keyboardShortcut("d", modifiers: .command)
+                    .help("Create a working VM from this base VM (⌘D)")
+                }
+
+                // Delete selected (⌘⌫)
+                if let selected = model.selectedBaseVM(from: baseVMStore.baseVMs) {
+                    Button(role: .destructive) { model.confirmDelete = selected } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .keyboardShortcut(.delete, modifiers: .command)
+                    .help("Delete selected base VM (⌘⌫)")
+                    .disabled(selected.status == .building)
+                }
+            }
+
+            // 4. Flexible space
+            ToolbarItem(placement: .automatic) {
+                Spacer()
+            }
+
+            // 5. Search is provided by .searchable
+
+            // 6. Last-synced label (no sort menu for base VMs)
+            ToolbarItem(placement: .automatic) {
+                if let refreshed = lastRefreshedAt {
+                    Text("Synced " + coarseAge(of: refreshed))
+                        .font(.caption).foregroundStyle(.secondary)
+                        .padding(8)
+                }
+            }
+
+            // 7. Refresh (⌘R)
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    guard !isRefreshing else { return }
+                    isRefreshing = true
+                    withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                        refreshRotation = 360
+                    }
+                    Task {
+                        await baseVMStore.syncOCI()
+                        lastRefreshedAt = Date()
+                        isRefreshing = false
+                        refreshRotation = 0
+                    }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .help("Sync base VMs from tart (⌘R)")
+            }
+        }
         .task { await baseVMStore.syncOCI(); lastRefreshedAt = Date() }
         .overlay {
             if buildSession.isLocked {
@@ -101,8 +202,6 @@ struct BaseVMView: View {
 
     @ViewBuilder private var listColumn: some View {
         VStack(spacing: 0) {
-            toolbar
-            Divider()
             if baseVMStore.baseVMs.isEmpty { emptyState } else { list }
             if baseVMStore.isBuilding,
                let buildingVM = baseVMStore.baseVMs.first(where: { $0.status == .building }) {
@@ -110,69 +209,6 @@ struct BaseVMView: View {
                 LiveBuildLogPanel(baseVM: buildingVM)
             }
         }
-    }
-
-    @ViewBuilder private var detailColumn: some View {
-        if let selected = selectedBaseVM {
-            Divider()
-            BaseVMDetailPane(
-                baseVM: selected,
-                onBuild:    { Task { await baseVMStore.build(baseVM: selected) } },
-                onDelete:   { model.confirmDelete = selected },
-                onCreateVM: { model.createVMFromBase = selected }
-            )
-            .frame(width: 280)
-        }
-    }
-
-    private var toolbar: some View {
-        HStack(spacing: 8) {
-            Spacer()
-            if baseVMStore.isBuilding {
-                ProgressView().controlSize(.small)
-                Text("\(theme.building)…").font(.callout).foregroundStyle(.secondary)
-                Button {
-                    if buildSession.isLocked {
-                        BuildSessionManager.shared.disableInputLock()
-                    } else {
-                        BuildSessionManager.shared.enableInputLock()
-                    }
-                } label: {
-                    Label(buildSession.isLocked ? "Unlock Input" : "Lock Input",
-                          systemImage: buildSession.isLocked ? "lock.fill" : "lock.open")
-                }
-                .buttonStyle(.bordered).controlSize(.small)
-                .help(buildSession.isLocked ? "Unlock keyboard & mouse (⌘⇧⎋)" : "Lock keyboard & mouse during build")
-                Button("Cancel") { baseVMStore.cancelBuild() }
-                    .buttonStyle(.bordered).controlSize(.small)
-            }
-            // Show Clone button when a ready base VM is selected
-            if let selected = model.selectedBaseVM(from: baseVMStore.baseVMs),
-               selected.buildStatus == .ready {
-                Button { model.createVMFromBase = selected } label: {
-                    Label("Clone as Working VM", systemImage: "doc.on.doc")
-                }
-                .buttonStyle(.bordered).controlSize(.small)
-                .help("Create a working VM from this base VM")
-            }
-
-            Button { Task { await baseVMStore.syncOCI(); lastRefreshedAt = Date() } } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .buttonStyle(.bordered).controlSize(.small)
-            .help("Sync base VMs from tart")
-            if let refreshed = lastRefreshedAt {
-                Text("Synced · " + coarseAge(of: refreshed))
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
-            Button { model.isPresentingNewSheet = true } label: {
-                Label(theme.newBaseVM, systemImage: "plus")
-            }
-            .buttonStyle(.borderedProminent).controlSize(.small)
-            .help(theme.newBaseVM)
-        }
-        .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
     }
 
     private var list: some View {
@@ -224,6 +260,19 @@ struct BaseVMView: View {
                 .buttonStyle(.borderedProminent)
         } content: {
             BaseVMWorkflowIndicator()
+        }
+    }
+
+    // MARK: - Window title
+
+    private func updateWindowTitle() {
+        if let vm = selectedBaseVM {
+            let name = vm.displayName.isEmpty ? vm.name : vm.displayName
+            appState.windowTitle = name
+            appState.windowSubtitle = theme.baseVMs
+        } else {
+            appState.windowTitle = theme.baseVMs
+            appState.windowSubtitle = ""
         }
     }
 }

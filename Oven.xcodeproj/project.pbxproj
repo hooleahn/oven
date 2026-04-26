@@ -79,6 +79,7 @@
 		B91426CB2F99709700F13968 /* ManualBuildConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426CA2F99709700F13968 /* ManualBuildConfig.swift */; };
 		B91426CD2F9970CA00F13968 /* ManualBuildHCLGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426CC2F9970CA00F13968 /* ManualBuildHCLGenerator.swift */; };
 		B91426CF2F997C2000F13968 /* BootCommandEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426CE2F997C2000F13968 /* BootCommandEditor.swift */; };
+		B91426D12F99AAF700F13968 /* BuildProgressHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426D02F99AAF700F13968 /* BuildProgressHeader.swift */; };
 		B97A40AA2F970E3F00FB577C /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40A92F970E3F00FB577C /* OnboardingView.swift */; };
 		B97A40AC2F970FB300FB577C /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40AB2F970FB300FB577C /* DesignSystem.swift */; };
 		B97A40B02F971CF000FB577C /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = B97A40AF2F971CF000FB577C /* AppIcon.icon */; };
@@ -188,6 +189,7 @@
 		B91426CA2F99709700F13968 /* ManualBuildConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualBuildConfig.swift; sourceTree = "<group>"; };
 		B91426CC2F9970CA00F13968 /* ManualBuildHCLGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualBuildHCLGenerator.swift; sourceTree = "<group>"; };
 		B91426CE2F997C2000F13968 /* BootCommandEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootCommandEditor.swift; sourceTree = "<group>"; };
+		B91426D02F99AAF700F13968 /* BuildProgressHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildProgressHeader.swift; sourceTree = "<group>"; };
 		B97A40A92F970E3F00FB577C /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		B97A40AB2F970FB300FB577C /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		B97A40AF2F971CF000FB577C /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
@@ -327,6 +329,7 @@
 				B91426C62F9854C100F13968 /* CirrusLabsTemplateSheet.swift */,
 				B91426C82F99704900F13968 /* BootCommandBlock+Seeds.swift */,
 				B91426CE2F997C2000F13968 /* BootCommandEditor.swift */,
+				B91426D02F99AAF700F13968 /* BuildProgressHeader.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -472,6 +475,7 @@
 				9BA5FF9559FA4B3C9F2FEFE8 /* AppSettings.swift in Sources */,
 				2F44781222644152BD02BF7F /* AppState.swift in Sources */,
 				73A7179818F144EAB63ADCC8 /* AppTheme.swift in Sources */,
+				B91426D12F99AAF700F13968 /* BuildProgressHeader.swift in Sources */,
 				E19CD75D7F6C42A9AF80D234 /* BaseVMDetailPane.swift in Sources */,
 				D47681E4C31446C29C356850 /* BaseVMEditSheet.swift in Sources */,
 				95C70AF01F304C9AAB6DDD3C /* BaseVMRow.swift in Sources */,
@@ -577,7 +581,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 303;
+				CURRENT_PROJECT_VERSION = 304;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -695,7 +699,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 303;
+				CURRENT_PROJECT_VERSION = 304;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				GENERATE_INFOPLIST_FILE = NO;

@@ -15,6 +15,31 @@ enum VMSortOrder: String, CaseIterable {
         case stopped = "Stopped"
     }
 
+// MARK: - List Density
+
+enum ListDensity: String, CaseIterable {
+    case cozy    = "Cozy"
+    case compact = "Compact"
+    case tight   = "Tight"
+
+    /// Vertical padding (top + bottom) applied to each VMCard row in list mode.
+    var verticalPadding: CGFloat {
+        switch self {
+        case .cozy:    return 14
+        case .compact: return 10
+        case .tight:   return 6
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .cozy:    return "rectangle.grid.1x2"
+        case .compact: return "list.bullet"
+        case .tight:   return "list.dash"
+        }
+    }
+}
+
 // MARK: - VMListViewModel
 
 @MainActor
@@ -27,9 +52,12 @@ final class VMListViewModel {
     var selectedOSFilters:  Set<String> = []
     var sortOrder: VMSortOrder = .name
     var isListView = false
+    var density: ListDensity = .cozy
 
     // MARK: - Selection / action state
-    var selectedVM: VirtualMachine?
+    /// Multi-selection set used by the native List in list mode.
+    var selectedIDs: Set<VirtualMachine.ID> = []
+    var selectedVM: VirtualMachine?          // kept for grid mode / single-tap
     var confirmDelete: VirtualMachine?
     var confirmStop:   VirtualMachine?
     var cloneVM:       VirtualMachine?
@@ -37,6 +65,9 @@ final class VMListViewModel {
     var editingVM: VirtualMachine?
     var macOSLimitError: String?    // shown when 2 VMs already running
     var confirmStopAll = false      // Stop All confirmation
+    var confirmBulkDelete = false   // bulk delete confirmation
+    var bulkAddTagSheet = false
+    var bulkRemoveTagSheet = false
 
     // MARK: - Derived lists (read from stores injected at call site)
 

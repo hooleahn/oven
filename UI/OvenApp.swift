@@ -153,7 +153,7 @@ struct OvenApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("Oven — macOS VM Manager powered by Tart") {
+        WindowGroup("Oven") {
             Group {
                 if depManager.allReady {
                     AppRootView()
@@ -196,8 +196,7 @@ struct OvenApp: App {
                 }
             }
         }
-        .windowStyle(.hiddenTitleBar)
-        .windowToolbarStyle(.unified(showsTitle: false))
+        .windowToolbarStyle(.unified)
         .defaultSize(width: 1160, height: 720)
         .commands {
             CommandGroup(replacing: .newItem) {}
@@ -281,9 +280,13 @@ struct AppRootView: View {
                 SharedStores.appState = appState
                 SharedStores.recipesViewModel = recipesViewModel
                 await vmStore.sync()
+                // Register any VM tags that don't yet have an explicit palette index
                 for tag in Set(vmStore.vms.flatMap { $0.tags }) {
-                    if tagStore.colors[tag] == nil {
-                        tagStore.setColor(tagColor(for: tag), for: tag)
+                    if tagStore.colorIndices[tag] == nil {
+                        // Assign a deterministic palette index based on name hash
+                        var hash = 5381
+                        for char in tag.unicodeScalars { hash = hash &* 31 &+ Int(char.value) }
+                        tagStore.setPaletteIndex(abs(hash) % TagStore.palette.count, for: tag)
                     }
                 }
                 // Show onboarding on first launch

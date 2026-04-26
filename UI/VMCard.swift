@@ -183,7 +183,7 @@ struct VMCard: View {
     private var thumbnailOverlay: Color {
         switch vm.status {
         case .running:   return Color.vmRunning.opacity(0.35)
-        case .suspended: return .orange.opacity(0.3)
+        case .suspended: return Color.secondary.opacity(0.2)
         case .building:  return Color.vmBuilding.opacity(0.3)
         default:         return .clear
         }
@@ -192,7 +192,7 @@ struct VMCard: View {
     private var thumbnailColor: Color {
         switch vm.status {
         case .running:   return Color.vmRunning.opacity(0.75)
-        case .suspended: return .orange.opacity(0.7)
+        case .suspended: return Color.secondary.opacity(0.4)
         case .building:  return Color.vmBuilding.opacity(0.6)
         default:         return Color.primary.opacity(0.18)
         }

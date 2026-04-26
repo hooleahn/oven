@@ -1,16 +1,5 @@
 import SwiftUI
-
-// MARK: - Tag colour (deterministic fallback)
-
-func tagColor(for tag: String) -> Color {
-    let palette: [Color] = [
-        .blue, .purple, .indigo, .teal, .cyan,
-        .green, .mint, .orange, .red, .pink,
-    ]
-    var hash = 5381
-    for char in tag.unicodeScalars { hash = hash &* 31 &+ Int(char.value) }
-    return palette[abs(hash) % palette.count]
-}
+import AppKit
 
 // MARK: - TagChip
 
@@ -19,6 +8,17 @@ struct TagChip: View {
     var removable: Bool = false
     var onRemove: (() -> Void)? = nil
     var size: CGFloat = 11
+    /// Called on normal tap (replace filter with just this tag).
+    var onTap: ((String) -> Void)? = nil
+    /// Called on shift-tap (add/toggle tag in active filter).
+    var onShiftTap: ((String) -> Void)? = nil
+    /// Called from context menu: Rename.
+    var onRename: ((String) -> Void)? = nil
+    /// Called from context menu: Remove from VM.
+    var onRemoveFromVM: ((String) -> Void)? = nil
+    /// Called from context menu: Delete tag everywhere.
+    var onDeleteEverywhere: ((String) -> Void)? = nil
+
     @EnvironmentObject var tagStore: TagStore
 
     var body: some View {
@@ -38,6 +38,104 @@ struct TagChip: View {
         .padding(.vertical, 2)
         .background(tagStore.color(for: tag).opacity(0.18), in: Capsule())
         .foregroundStyle(tagStore.color(for: tag))
+        .contentShape(Capsule())
+        .ifLet(onTap != nil || onShiftTap != nil) { view in
+            view
+                .onTapGesture {
+                    if NSEvent.modifierFlags.contains(.shift) {
+                        onShiftTap?(tag)
+                    } else {
+                        onTap?(tag)
+                    }
+                }
+        }
+        .contextMenu {
+            if let onRename {
+                Button("Rename…") { onRename(tag) }
+            }
+            if let onTap {
+                Button("Filter by Tag") { onTap(tag) }
+            }
+            colorChangeSubmenu
+            if onRename != nil || onRemoveFromVM != nil || onDeleteEverywhere != nil {
+                Divider()
+            }
+            if let onRemoveFromVM {
+                Button("Remove from VM") { onRemoveFromVM(tag) }
+            }
+            if let onDeleteEverywhere {
+                Button("Delete Tag Everywhere", role: .destructive) { onDeleteEverywhere(tag) }
+            }
+        }
+    }
+
+    @ViewBuilder private var colorChangeSubmenu: some View {
+        Menu("Change Color") {
+            ForEach(0..<TagStore.palette.count, id: \.self) { i in
+                Button {
+                    tagStore.setPaletteIndex(i, for: tag)
+                } label: {
+                    HStack {
+                        Circle()
+                            .fill(TagStore.palette[i])
+                            .frame(width: 12, height: 12)
+                        Text("Color \(i + 1)")
+                        if tagStore.colorIndex(for: tag) == i {
+                            Spacer()
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Helper modifier
+
+private extension View {
+    @ViewBuilder
+    func ifLet(_ condition: Bool, transform: (Self) -> some View) -> some View {
+        if condition {
+            transform(self)
+        } else {
+            self
+        }
+    }
+}
+
+// MARK: - PaletteSwatchGrid
+
+/// A horizontal row of colored circle swatches for palette selection.
+struct PaletteSwatchGrid: View {
+    @Binding var selectedIndex: Int
+    var onSelect: ((Int) -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<TagStore.palette.count, id: \.self) { i in
+                Button {
+                    selectedIndex = i
+                    onSelect?(i)
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(TagStore.palette[i])
+                            .frame(width: 22, height: 22)
+                        if selectedIndex == i {
+                            Circle()
+                                .strokeBorder(.white, lineWidth: 2)
+                                .frame(width: 22, height: 22)
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .help("Color \(i + 1)")
+            }
+        }
     }
 }
 
@@ -49,8 +147,8 @@ struct TagPickerField: View {
     @EnvironmentObject var tagStore: TagStore
     @State private var input = ""
     @State private var showSuggestions = false
-    @State private var pendingNewTag: String? = nil   // tag awaiting color pick
-    @State private var pendingColor: Color = .blue
+    @State private var pendingNewTag: String? = nil
+    @State private var pendingColorIndex: Int = 0
 
     private var suggestions: [String] {
         let q = input.trimmingCharacters(in: .whitespaces).lowercased()
@@ -74,23 +172,22 @@ struct TagPickerField: View {
                 }
             }
 
-            // Inline color picker for new tags
+            // Inline palette picker for new tags
             if let newTag = pendingNewTag {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text("Color for \"\(newTag)\"")
                             .font(.caption).foregroundStyle(.secondary)
-                        ColorPicker("", selection: $pendingColor, supportsOpacity: false)
-                            .labelsHidden().frame(width: 28)
-                        Button("Set color") {
-                            tagStore.setColor(pendingColor, for: newTag)
+                        PaletteSwatchGrid(selectedIndex: $pendingColorIndex)
+                        Button("Set") {
+                            tagStore.setPaletteIndex(pendingColorIndex, for: newTag)
                             tags.append(newTag)
                             pendingNewTag = nil
                         }
                         .buttonStyle(.borderedProminent).controlSize(.mini)
                         Button("Skip") {
-                            // Register with deterministic color so it appears in Preferences
-                            tagStore.setColor(tagColor(for: newTag), for: newTag)
+                            let hash = newTag.unicodeScalars.reduce(5381) { $0 &* 31 &+ Int($1.value) }
+                            tagStore.setPaletteIndex(abs(hash) % TagStore.palette.count, for: newTag)
                             tags.append(newTag)
                             pendingNewTag = nil
                         }
@@ -136,11 +233,11 @@ struct TagPickerField: View {
         guard !t.isEmpty, !tags.contains(t) else { input = ""; return }
         input = ""
         showSuggestions = false
-        // If tag already has a color, just add it; otherwise prompt
-        if tagStore.colors[t] != nil {
+        if tagStore.colorIndices[t] != nil {
             tags.append(t)
         } else {
-            pendingColor = tagColor(for: t)   // pre-seed with deterministic color
+            let hash = t.unicodeScalars.reduce(5381) { $0 &* 31 &+ Int($1.value) }
+            pendingColorIndex = abs(hash) % TagStore.palette.count
             pendingNewTag = t
         }
     }

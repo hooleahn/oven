@@ -10,6 +10,17 @@ import Foundation
 //   let vms: [VirtualMachine] = try AppDatabase.shared.read(.vms)
 //   try AppDatabase.shared.write(vms, to: .vms)
 
+// MARK: - BuildHistory
+
+struct BuildHistoryEntry: Codable, Sendable {
+    let id: UUID
+    let osName: String        // MacOSRelease.Name.rawValue
+    let osVersion: String
+    let durationSec: Double
+    let success: Bool
+    let recordedAt: Date
+}
+
 final class AppDatabase {
 
     static let shared = AppDatabase()
@@ -21,12 +32,14 @@ final class AppDatabase {
         case vms               = "vms/metadata.json"
         case baseVMs           = "base-vms/metadata.json"
         case tagColors         = "tag-colors.json"
+        case tagColorIndices   = "tag-color-indices.json"
         case registryImages    = "registry-images.json"
         case registryCredentials = "registry-credentials.json"
         case mdmProfiles       = "mdm-profiles.json"
         case mdmServers        = "mdm-servers.json"
         case packerBlocks      = "packer-blocks.json"
         case packerBootCommands = "packer-boot-commands.json"
+        case buildHistory      = "build-history.json"
 
         /// Schema version — bump when the model gains non-optional fields
         /// that can't be decoded from older files via decodeIfPresent.
@@ -35,12 +48,14 @@ final class AppDatabase {
             case .vms:               return 6   // v6: manualBuildConfig added for manual-build-path VMs
             case .baseVMs:           return 2   // legacy — data migrated into vms in v4
             case .tagColors:         return 1
+            case .tagColorIndices:   return 1
             case .registryImages:    return 1
             case .registryCredentials: return 1
             case .mdmProfiles:       return 1
             case .mdmServers:        return 1
             case .packerBlocks:      return 2   // v2: added osName, osVersion fields
             case .packerBootCommands: return 1
+            case .buildHistory:      return 1
             }
         }
     }
@@ -140,5 +155,40 @@ final class AppDatabase {
         d.dateDecodingStrategy = .iso8601
         return d
     }()
+
+    // MARK: - Build history
+
+    /// Append a completed build to the history log (max 200 entries retained).
+    func recordBuild(osName: String, osVersion: String, durationSec: Double, success: Bool) {
+        let entry = BuildHistoryEntry(
+            id: UUID(),
+            osName: osName,
+            osVersion: osVersion,
+            durationSec: durationSec,
+            success: success,
+            recordedAt: Date()
+        )
+        var history: [BuildHistoryEntry] = readOrDefault(.buildHistory, default: [])
+        history.append(entry)
+        // Keep only the most recent 200 builds to avoid unbounded growth
+        if history.count > 200 { history = Array(history.suffix(200)) }
+        writeSilently(history, to: .buildHistory)
+    }
+
+    /// Returns the median successful build duration (in seconds) for a given OS name,
+    /// or nil if there are fewer than 2 successful samples.
+    func medianDuration(for osName: String) -> TimeInterval? {
+        let history: [BuildHistoryEntry] = readOrDefault(.buildHistory, default: [])
+        let durations = history
+            .filter { $0.success && $0.osName == osName }
+            .map { $0.durationSec }
+            .sorted()
+        guard durations.count >= 2 else { return nil }
+        let mid = durations.count / 2
+        if durations.count.isMultiple(of: 2) {
+            return (durations[mid - 1] + durations[mid]) / 2.0
+        } else {
+            return durations[mid]
+        }
+    }
 }
-// PLACEHOLDER - will be replaced

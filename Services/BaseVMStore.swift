@@ -400,7 +400,8 @@ final class BaseVMStore: ObservableObject {
                             self.cancelBuild()
                             self.lastError = "Build aborted: disk space critically low"
                         }
-                    }
+                    },
+                    osName: baseVM.osName.rawValue
                 )
                 defer { BuildMonitor.shared.stop() }
 
@@ -413,13 +414,18 @@ final class BaseVMStore: ObservableObject {
                 )
                 let buildResult = await StreamConsumer.buildLog(stream, source: "Packer") { [self] line in
                     update(id: baseVM.id) { $0.buildLog.append(line) }
+                    Task { @MainActor in BuildMonitor.shared.processLogLine(line) }
                 }
                 if buildResult.succeeded {
+                    BuildMonitor.shared.recordCompletion(
+                        osName: baseVM.osName.rawValue, osVersion: baseVM.osVersion, success: true)
                     update(id: baseVM.id) { $0.buildStatus = .ready; $0.builtAt = Date() }
                     AppLogger.shared.success("Build complete: \(baseVM.name)", source: "PackerService")
                     await NotificationService.shared.notifyBuildComplete(vmName: baseVM.name, success: true)
                     BuildSessionManager.shared.performBuildCompletionAction()
                 } else {
+                    BuildMonitor.shared.recordCompletion(
+                        osName: baseVM.osName.rawValue, osVersion: baseVM.osVersion, success: false)
                     update(id: baseVM.id) { $0.buildStatus = .error }
                     lastError = "Packer exited with code \(buildResult.exitCode)"
                     AppLogger.shared.error("Build failed (\(buildResult.exitCode)): \(baseVM.name)", source: "PackerService")
@@ -608,7 +614,8 @@ extension BaseVMStore {
                             self.cancelBuild()
                             self.lastError = "Build aborted: disk space critically low"
                         }
-                    }
+                    },
+                    osName: baseVM.osName.rawValue
                 )
                 defer { BuildMonitor.shared.stop() }
 
@@ -625,6 +632,7 @@ extension BaseVMStore {
                     )
                     let result = await StreamConsumer.buildLog(stream, source: "Tart") { [self] line in
                         update(id: baseVM.id) { $0.buildLog.append(line) }
+                        Task { @MainActor in BuildMonitor.shared.processLogLine(line) }
                     }
                     buildSucceeded = result.succeeded
                     if !buildSucceeded {
@@ -681,6 +689,7 @@ extension BaseVMStore {
                     )
                     let buildResult = await StreamConsumer.buildLog(stream, source: "Packer") { [self] line in
                         update(id: baseVM.id) { $0.buildLog.append(line) }
+                        Task { @MainActor in BuildMonitor.shared.processLogLine(line) }
                     }
                     buildSucceeded = buildResult.succeeded
                     if !buildSucceeded {
@@ -688,6 +697,9 @@ extension BaseVMStore {
                         AppLogger.shared.error("Manual build failed (\(buildResult.exitCode)): \(baseVM.name)", source: "PackerService")
                     }
                 }
+
+                BuildMonitor.shared.recordCompletion(
+                    osName: baseVM.osName.rawValue, osVersion: baseVM.osVersion, success: buildSucceeded)
 
                 if buildSucceeded {
                     update(id: baseVM.id) { $0.buildStatus = .ready; $0.builtAt = Date() }

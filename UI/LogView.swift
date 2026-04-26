@@ -3,8 +3,11 @@ import AppKit
 
 struct LogView: View {
     @EnvironmentObject var logger: AppLogger
+    @EnvironmentObject var appState: AppState
     @State private var filterLevel: LogEntry.Level? = nil
     @State private var searchText = ""
+    @State private var isRefreshing: Bool = false
+    @State private var refreshRotation: Double = 0
 
     var filtered: [LogEntry] {
         logger.entries
@@ -36,43 +39,6 @@ struct LogView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Toolbar
-            HStack(spacing: 8) {
-                HStack(spacing: 5) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary).font(.footnote)
-                    TextField("Filter log…", text: $searchText).textFieldStyle(.plain).font(.callout)
-                }
-                .padding(.horizontal, 8).padding(.vertical, 5)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
-                .frame(maxWidth: 200)
-
-                Picker(selection: $filterLevel) {
-                    Text("All").tag(Optional<LogEntry.Level>.none)
-                    Text("Info").tag(Optional(LogEntry.Level.info))
-                    Text("OK").tag(Optional(LogEntry.Level.success))
-                    Text("Warn").tag(Optional(LogEntry.Level.warning))
-                    Text("Error").tag(Optional(LogEntry.Level.error))
-                } label: {
-                    EmptyView()
-                }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 300)
-                .labelsHidden()
-
-                Spacer()
-
-                Text("\(logger.entries.count) entries")
-                    .font(.caption).foregroundStyle(.secondary)
-
-                Button("Export…") { exportLog() }
-                    .controlSize(.small)
-                Button("Clear") { logger.clear() }
-                    .controlSize(.small)
-            }
-            .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
-
-            Divider()
-
             if filtered.isEmpty {
                 EmptyStateView("No Log Entries", systemImage: "list.bullet.rectangle",
                                description: "Operations will be logged here as you use Oven.")
@@ -113,7 +79,73 @@ struct LogView: View {
             }
         }
         .searchable(text: $searchText, prompt: "Filter log…")
+        .toolbar {
+            // 1. Navigation group (empty)
+            ToolbarItemGroup(placement: .navigation) {}
+
+            // 2. Primary action — Export log (⌘N not applicable; Export is primary here)
+            ToolbarItem(placement: .primaryAction) {
+                Button("Export…") { exportLog() }
+                    .help("Export activity log to a file")
+            }
+
+            // 3. Secondary actions — Clear
+            ToolbarItemGroup(placement: .secondaryAction) {
+                Button("Clear") { logger.clear() }
+                    .help("Clear all log entries")
+            }
+
+            // 4. Flexible space
+            ToolbarItem(placement: .automatic) {
+                Spacer()
+            }
+
+            // 5. Search provided by .searchable
+
+            // 6. Level filter picker + entry count
+            ToolbarItem(placement: .automatic) {
+                HStack(spacing: 8) {
+                    Text("\(logger.entries.count) entries")
+                        .font(.caption).foregroundStyle(.secondary)
+
+                    Picker(selection: $filterLevel) {
+                        Text("All").tag(Optional<LogEntry.Level>.none)
+                        Text("Info").tag(Optional(LogEntry.Level.info))
+                        Text("OK").tag(Optional(LogEntry.Level.success))
+                        Text("Warn").tag(Optional(LogEntry.Level.warning))
+                        Text("Error").tag(Optional(LogEntry.Level.error))
+                    } label: {
+                        EmptyView()
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 300)
+                    .labelsHidden()
+                }
+            }
+
+            // 7. Refresh (⌘R) — scrolls to latest entry
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    guard !isRefreshing else { return }
+                    isRefreshing = true
+                    withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                        refreshRotation = 360
+                    }
+                    // Brief animation then reset — log is always live
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        isRefreshing = false
+                        refreshRotation = 0
+                    }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .rotationEffect(.degrees(isRefreshing ? refreshRotation : 0))
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .help("Scroll to latest log entry (⌘R)")
+            }
+        }
         .navigationTitle("Activity Log")
+        .task { appState.windowTitle = "Logs"; appState.windowSubtitle = "" }
     }
 
     private func exportLog() {
