@@ -1,5 +1,18 @@
 import SwiftUI
 
+// MARK: - Triangle shape for error indicator
+
+private struct TriangleShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.closeSubpath()
+        return p
+    }
+}
+
 // MARK: - Status pill (used only in detail pane header)
 
 struct StatusPill: View {
@@ -11,13 +24,11 @@ struct StatusPill: View {
         Text(status.label)
             .font(.caption)
             .fontWeight(.medium)
-            .foregroundStyle(reduceTransparency ? AnyShapeStyle(.background) : AnyShapeStyle(pillColor))
+            .foregroundStyle(pillColor)
             .padding(.horizontal, Spacing.sm + 2) // 10 pt
             .padding(.vertical, Spacing.xs)
-            .background(reduceTransparency ? pillColor : Color.clear, in: Capsule())
-            .overlay(
-                Capsule().strokeBorder(pillColor, lineWidth: 0.5)
-            )
+            .background(pillColor.opacity(reduceTransparency ? 1 : 0.12), in: Capsule())
+            .overlay(Capsule().strokeBorder(pillColor.opacity(0.25), lineWidth: 0.5))
             .accessibilityLabel("Status: \(status.label)")
     }
 
@@ -46,7 +57,7 @@ struct DetailSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title.uppercased())
-                .font(.system(size: 10, weight: .semibold))
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, Spacing.lg - 2) // 14 pt
                 .padding(.top, Spacing.lg - 2)
@@ -91,11 +102,14 @@ struct DetailRow: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
                 } label: {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                        .font(.caption2)
                         .foregroundStyle(copied ? .green : .secondary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .contentShape(Rectangle().inset(by: -6))
                 .help("Copy to clipboard")
+                .accessibilityLabel("Copy \(label) to clipboard")
+                .accessibilityHint("Copies the value \(value)")
             }
         }
         .padding(.horizontal, Spacing.lg - 2) // 14 pt
@@ -110,29 +124,31 @@ struct StatusDot: View {
 
     var body: some View {
         ZStack {
-            if status == .suspended {
-                // Receding: secondary-colored pause icon at 7 pt, no filled circle
-                Image(systemName: "pause.fill")
-                    .font(.system(size: 7, weight: .bold))
-                    .foregroundStyle(Color.secondary)
-                    .frame(width: 12, height: 12)
-            } else {
+            switch status {
+            case .running:
                 Circle()
-                    .fill(dotColor)
-                    .frame(width: 8, height: 8)
+                    .fill(Color.green)
+                    .frame(width: 10, height: 10)
+            case .stopped:
+                Rectangle()
+                    .fill(Color.secondary)
+                    .frame(width: 10, height: 10)
+            case .error:
+                TriangleShape()
+                    .fill(Color.red)
+                    .frame(width: 10, height: 9)
+            case .suspended:
+                Image(systemName: "pause.fill")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(Color.orange)
+            case .building:
+                Circle()
+                    .stroke(Color.accentColor, lineWidth: 2)
+                    .frame(width: 9, height: 9)
             }
         }
         .frame(width: 12, height: 12)
-        .accessibilityLabel(status.label)
+        .accessibilityLabel("Status: \(status.label)")
         .accessibilityHidden(false)
-    }
-
-    private var dotColor: Color {
-        switch status {
-        case .running:   return .green
-        case .building:  return .accentColor
-        case .error:     return .red
-        default:         return Color.secondary.opacity(0.5)
-        }
     }
 }

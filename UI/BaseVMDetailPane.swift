@@ -10,38 +10,65 @@ struct BaseVMDetailPane: View {
     @EnvironmentObject var baseVMStore: BaseVMStore
     @EnvironmentObject var vmStore: VMStore
     @EnvironmentObject var templateStore: PackerTemplateStore
+    @EnvironmentObject var pushManager: PushManager
     @State private var isPresentingPushSheet = false
-    @State private var pushProgress: Double? = nil
-    @State private var pushError: String? = nil
     @State private var liveConfig: TartService.TartVMConfig? = nil
     @State private var isLoadingConfig = false
     @State private var isPresentingEditSheet = false
-    @SceneStorage("baseVMDetailPane.logInspectorOpen") private var logInspectorOpen = false
+    @State private var isPresentingLogWindow = false
+
+    private var displayTitle: String {
+        if !baseVM.displayName.isEmpty { return baseVM.displayName }
+        if baseVM.vmSource == .registry {
+            let last = (baseVM.name.components(separatedBy: "/").last ?? baseVM.name)
+            let clean = (last.components(separatedBy: ":").first ?? last)
+            return clean.replacingOccurrences(of: "macos-", with: "")
+                .replacingOccurrences(of: "-base", with: " Base")
+                .replacingOccurrences(of: "-", with: " ").capitalized
+        }
+        return baseVM.name
+    }
+
+    private var shouldShowMonoName: Bool {
+        baseVM.vmSource == .registry || !baseVM.displayName.isEmpty
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             // ── Compact header ──────────────────────────────────────────────
-            headerSection
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(displayTitle).font(.title3).fontWeight(.semibold)
+                    if shouldShowMonoName {
+                        Text(baseVM.name)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                Spacer()
+                let tint = capsuleTint(for: baseVM.buildStatus)
+                Text(baseVM.buildStatus.label)
+                    .font(.caption).fontWeight(.medium)
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(tint.opacity(0.12), in: Capsule())
+                    .background(.bar, in: Rectangle())
+                    .overlay(Capsule().strokeBorder(tint.opacity(0.25), lineWidth: 0.5))
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+
+            if !baseVM.description.isEmpty {
+                Text(baseVM.description)
+                    .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16).padding(.bottom, 10)
+            }
 
             Divider()
 
             // ── Grouped form ────────────────────────────────────────────────
             Form {
-                Section("Configuration") {
-                    // Refresh row
-                    HStack(spacing: 4) {
-                        Spacer()
-                        if isLoadingConfig {
-                            ProgressView().controlSize(.mini)
-                        } else {
-                            Button { Task { await loadLiveConfig() } } label: {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.caption2).foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain).help("Refresh from tart")
-                        }
-                    }
-
+                Section {
                     LabeledContent("macOS") {
                         let label = "\(baseVM.osName.rawValue) \(baseVM.osVersion)"
                             .trimmingCharacters(in: .whitespaces)
@@ -63,11 +90,26 @@ struct BaseVMDetailPane: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                } header: {
+                    HStack {
+                        Text("Configuration")
+                        Spacer()
+                        if isLoadingConfig {
+                            ProgressView().controlSize(.mini)
+                        } else {
+                            Button(action: { Task { await loadLiveConfig() } }) {
+                                Image(systemName: "arrow.clockwise").font(.caption)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Reload Configuration")
+                            .accessibilityLabel("Reload Configuration")
+                        }
+                    }
                 }
 
                 Section("Credentials") {
                     LabeledContent("Username") {
-                        CopyableText(baseVM.sshUsername, monospaced: true)
+                        SelectableMonoText(baseVM.sshUsername)
                     }
                     LabeledContent("Password") {
                         Text(baseVM.sshPassword != nil ? "Stored in Keychain" : "Not set")
@@ -98,7 +140,7 @@ struct BaseVMDetailPane: View {
                 }
 
                 // Push progress (shown when a push is in-flight)
-                if let prog = pushProgress {
+                if let prog = pushManager.active[baseVM.name] {
                     Section {
                         VStack(spacing: 4) {
                             ProgressView(value: prog).progressViewStyle(.linear)
@@ -134,6 +176,15 @@ struct BaseVMDetailPane: View {
                 }
             }
 
+            // Push in-flight indicator (shown between primary action and … menu)
+            ToolbarItem(placement: .automatic) {
+                if pushManager.active[baseVM.name] != nil {
+                    ProgressView()
+                        .controlSize(.small)
+                        .help("Pushing to registry…")
+                }
+            }
+
             // "…" menu: secondary actions
             ToolbarItem(placement: .automatic) {
                 Menu {
@@ -146,7 +197,7 @@ struct BaseVMDetailPane: View {
                             Button { isPresentingPushSheet = true } label: {
                                 Label("Push to Registry…", systemImage: "arrow.up.circle")
                             }
-                            .disabled(pushProgress != nil)
+                            .disabled(pushManager.active[baseVM.name] != nil)
                         }
                         Divider()
                     }
@@ -155,12 +206,11 @@ struct BaseVMDetailPane: View {
                     }
                     Divider()
                     Button {
-                        logInspectorOpen.toggle()
+                        isPresentingLogWindow = true
                     } label: {
-                        Label(logInspectorOpen ? "Hide Build Log" : "Show Build Log",
-                              systemImage: "terminal")
+                        Label("Show Build Log", systemImage: "terminal")
                     }
-                    .disabled(baseVM.buildLog.isEmpty)
+
                     Divider()
                     Button(role: .destructive, action: onDelete) {
                         Label("Delete", systemImage: "trash")
@@ -172,24 +222,9 @@ struct BaseVMDetailPane: View {
                 .help("More actions")
             }
         }
-        // ── Trailing inspector: build log ─────────────────────────────────
-        .inspector(isPresented: $logInspectorOpen) {
-            if baseVM.buildLog.isEmpty {
-                VStack(spacing: 8) {
-                    Spacer()
-                    Image(systemName: "terminal")
-                        .font(.system(size: 28, weight: .light))
-                        .foregroundStyle(.secondary)
-                    Text("No build log yet")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity)
-                .inspectorColumnWidth(min: 240, ideal: 300)
-            } else {
-                BuildLogView(baseVM: baseVM)
-                    .inspectorColumnWidth(min: 240, ideal: 300)
-            }
+        // ── Build log modal window ────────────────────────────────────────
+        .sheet(isPresented: $isPresentingLogWindow) {
+            BuildLogWindow(baseVM: baseVM)
         }
         .task(id: baseVM.id) { await loadLiveConfig() }
         .sheet(isPresented: $isPresentingEditSheet) {
@@ -201,50 +236,28 @@ struct BaseVMDetailPane: View {
         .sheet(isPresented: $isPresentingPushSheet) {
             PushToRegistrySheet(vmName: baseVM.name) { imageRef, credentials in
                 isPresentingPushSheet = false
-                Task { await pushBaseVM(to: imageRef, credentials: credentials) }
+                let tartPath = AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps/tart").path
+                Task { await pushManager.push(baseVM: baseVM, to: imageRef,
+                                              credentials: credentials, tartPath: tartPath) }
             }
         }
         .alert("Push failed", isPresented: Binding(
-            get: { pushError != nil }, set: { if !$0 { pushError = nil } }
+            get: { pushManager.errors[baseVM.name] != nil },
+            set: { if !$0 { pushManager.clearError(for: baseVM.name) } }
         )) {
-            Button("OK") { pushError = nil }
-        } message: { Text(pushError ?? "") }
+            Button("OK") { pushManager.clearError(for: baseVM.name) }
+        } message: { Text(pushManager.errors[baseVM.name] ?? "") }
     }
 
-    // MARK: - Header
+    // MARK: - Helpers
 
-    @ViewBuilder private var headerSection: some View {
-        VStack(spacing: 4) {
-            Image(systemName: baseVM.buildStatus.systemImage)
-                .font(.system(size: 28, weight: .light)).foregroundStyle(.secondary)
-            let displayTitle: String = {
-                if !baseVM.displayName.isEmpty { return baseVM.displayName }
-                if baseVM.vmSource == .registry {
-                    let last = (baseVM.name.components(separatedBy: "/").last ?? baseVM.name)
-                    let clean = (last.components(separatedBy: ":").first ?? last)
-                    return clean.replacingOccurrences(of: "macos-", with: "")
-                        .replacingOccurrences(of: "-base", with: " Base")
-                        .replacingOccurrences(of: "-", with: " ").capitalized
-                }
-                return baseVM.name
-            }()
-            Text(displayTitle).font(.headline).lineLimit(2).multilineTextAlignment(.center)
-            if baseVM.vmSource == .registry || !baseVM.displayName.isEmpty {
-                Text(baseVM.name)
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(.tertiary).lineLimit(1)
-            }
-            if !baseVM.description.isEmpty {
-                Text(baseVM.description)
-                    .font(.caption).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center).lineLimit(2)
-            }
-            Text(baseVM.buildStatus.label)
-                .font(.caption).fontWeight(.medium)
-                .padding(.horizontal, 10).padding(.vertical, 4)
-                .background(Color.secondary.opacity(0.1), in: Capsule())
+    private func capsuleTint(for status: VirtualMachine.BuildStatus) -> Color {
+        switch status {
+        case .ready:    return .green
+        case .building: return .blue
+        case .error:    return .red
+        default:        return .secondary
         }
-        .frame(maxWidth: .infinity).padding(.vertical, 12).background(.bar)
     }
 
     // MARK: - Async helpers
@@ -261,76 +274,59 @@ struct BaseVMDetailPane: View {
         isLoadingConfig = false
     }
 
-    @MainActor private func pushBaseVM(to imageRef: String, credentials: [RegistryCredential]) async {
-        let tartPath = AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps/tart").path
-        guard FileManager.default.fileExists(atPath: tartPath) else { return }
-        let host = imageRef.components(separatedBy: "/").first ?? ""
-        let cred = credentials.first(where: { $0.registry == host })
-        pushProgress = 0.0
-        pushError = nil
-        var errorLines: [String] = []
-        AppLogger.shared.log("Pushing \(baseVM.name) → \(imageRef)", source: "BaseVMDetailPane")
-        let tartSvc = TartService(runner: ProcessRunner(), tartPath: tartPath,
-                                  registryUsername: cred?.username,
-                                  registryPassword: cred?.password)
-        let stream = await tartSvc.push(name: baseVM.name, to: imageRef)
-        for await event in stream {
-            switch event {
-            case .stdout(let line):
-                let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                if t.hasPrefix("Error:") { errorLines.append(t) }
-                if line.contains("%") {
-                    let digits = line.filter { $0.isNumber || $0 == "." }
-                    if let pct = Double(digits) { pushProgress = min(pct / 100.0, 1.0) }
-                }
-                AppLogger.shared.log(line, source: "Push")
-            case .stderr(let line):
-                let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !t.isEmpty { errorLines.append(t) }
-                AppLogger.shared.log(line, source: "Push")
-            case .exit(let code):
-                pushProgress = nil
-                if code == 0 {
-                    AppLogger.shared.success("Push complete: \(imageRef)", source: "BaseVMDetailPane")
-                } else {
-                    let raw = errorLines.joined(separator: "\n")
-                    AppLogger.shared.error("Push failed (exit \(code)): \(raw)", source: "BaseVMDetailPane")
-                    pushError = parseTartError(raw) ?? (raw.isEmpty ? "Push failed (exit \(code))" : raw)
-                }
-            }
-        }
-    }
 }
 
-// MARK: - CopyableText helper (inline, scoped to this file)
+// MARK: - Build Log Window
 
-private struct CopyableText: View {
-    let value: String
-    var monospaced: Bool = false
-    @State private var copied = false
-
-    init(_ value: String, monospaced: Bool = false) {
-        self.value = value
-        self.monospaced = monospaced
-    }
+private struct BuildLogWindow: View {
+    let baseVM: VirtualMachine
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text(value)
-                .font(monospaced ? .system(.callout, design: .monospaced) : .callout)
-                .foregroundStyle(.secondary)
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(value, forType: .string)
-                copied = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
-            } label: {
-                Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    .font(.caption2)
-                    .foregroundStyle(copied ? .green : .secondary)
+        VStack(spacing: 0) {
+            // Title bar
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Build Log")
+                        .font(.headline)
+                    Text(baseVM.displayName.isEmpty ? baseVM.name : baseVM.displayName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
             }
-            .buttonStyle(.plain)
-            .help("Copy to clipboard")
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(.bar)
+
+            Divider()
+
+            if baseVM.buildLog.isEmpty {
+                VStack(spacing: 8) {
+                    Spacer()
+                    Image(systemName: "terminal")
+                        .font(.system(.title, weight: .light))
+                        .foregroundStyle(.secondary)
+                    Text("No build log")
+                        .foregroundStyle(.secondary)
+                        .fontWeight(.medium)
+                    Text(baseVM.buildStatus == .ready
+                         ? "This VM was imported from a registry."
+                         : "Run a build to populate the log.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                BuildLogView(baseVM: baseVM)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
+        .frame(minWidth: 600, idealWidth: 700, minHeight: 400, idealHeight: 500)
     }
 }
+

@@ -13,14 +13,34 @@ struct BuildingBlockDetailPane: View {
     // Inline editing state (custom blocks only)
     @State private var editedDisplayName: String = ""
     @State private var editedDescription: String = ""
+    @State private var editedOSName: String = ""
+    @State private var editedOSVersion: String = ""
     @State private var editedProvisioner: BuildingBlock.ProvisionerType = .shell
     @State private var editedContent: String = ""
     @State private var isDirty = false
     @State private var isContentDirty = false
     @State private var isLoading = false
+    @State private var sofaVersions: [String] = []
+    @State private var isFetchingVersions = false
 
     private var canEdit: Bool { !block.isBase }
     private var isAnyDirty: Bool { isDirty || isContentDirty }
+
+    private var versionList: [String] {
+        sofaVersions.isEmpty
+            ? (MacOSRelease.Name(rawValue: editedOSName)?.fallbackVersions ?? [])
+            : sofaVersions
+    }
+
+    private func loadVersions(for osNameRaw: String) async {
+        guard let release = MacOSRelease.Name(rawValue: osNameRaw), !osNameRaw.isEmpty else {
+            sofaVersions = []
+            return
+        }
+        isFetchingVersions = true
+        sofaVersions = await SOFAService.shared.versions(for: release)
+        isFetchingVersions = false
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,6 +57,10 @@ struct BuildingBlockDetailPane: View {
         }
         .onAppear { syncFromBlock() }
         .onChange(of: block.id) { _, _ in syncFromBlock() }
+        .task { await loadVersions(for: editedOSName) }
+        .onChange(of: editedOSName) { _, newName in
+            if canEdit { Task { await loadVersions(for: newName) } }
+        }
     }
 
     // MARK: - Toolbar
@@ -80,7 +104,7 @@ struct BuildingBlockDetailPane: View {
                         Text("Base Block")
                             .font(.caption).fontWeight(.medium)
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.15), in: Capsule())
+                            .background(.quaternary, in: Capsule())
                             .foregroundStyle(.secondary)
                     } else if isAnyDirty {
                         Text("Edited")
@@ -172,12 +196,49 @@ struct BuildingBlockDetailPane: View {
                             .lineLimit(2...4)
                             .onChange(of: editedDescription) { _, _ in if !isLoading { isDirty = true } }
                     }
+                    GridRow {
+                        Text("Target OS").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                        HStack(spacing: 8) {
+                            Picker("", selection: $editedOSName) {
+                                Text("Any").tag("")
+                                ForEach(MacOSRelease.Name.allCases, id: \.self) {
+                                    Text($0.rawValue).tag($0.rawValue)
+                                }
+                            }
+                            .labelsHidden().frame(width: 120)
+                            .onChange(of: editedOSName) { _, _ in if !isLoading { isDirty = true } }
+
+                            if !editedOSName.isEmpty {
+                                Picker("", selection: $editedOSVersion) {
+                                    Text("Any version").tag("")
+                                    ForEach(versionList, id: \.self) { Text($0).tag($0) }
+                                }
+                                .labelsHidden().frame(width: 120)
+                                .onChange(of: editedOSVersion) { _, _ in if !isLoading { isDirty = true } }
+                                if isFetchingVersions {
+                                    ProgressView().controlSize(.mini)
+                                }
+                            }
+                        }
+                    }
                 }
                 .font(.callout)
             } else {
-                if !block.blockDescription.isEmpty {
-                    Text(block.blockDescription).foregroundStyle(.secondary)
+                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 6) {
+                    if !block.blockDescription.isEmpty {
+                        GridRow {
+                            Text("Description").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                            Text(block.blockDescription).foregroundStyle(.secondary)
+                        }
+                    }
+                    GridRow {
+                        Text("Target OS").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                        let os = block.osName.isEmpty ? "Any" : block.osName
+                        let ver = block.osVersion.isEmpty ? "" : " \(block.osVersion)"
+                        Text("\(os)\(ver)").foregroundStyle(block.osName.isEmpty ? .tertiary : .primary)
+                    }
                 }
+                .font(.callout)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -190,9 +251,11 @@ struct BuildingBlockDetailPane: View {
     private func syncFromBlock() {
         // Set isLoading before assignments and clear it on the next run loop tick,
         // so SwiftUI's deferred onChange callbacks are still gated after this returns.
-        isLoading      = true
+        isLoading          = true
         editedDisplayName  = block.displayName
         editedDescription  = block.blockDescription
+        editedOSName       = block.osName
+        editedOSVersion    = block.osVersion
         editedProvisioner  = block.provisioner
         editedContent      = block.hclContent
         isDirty            = false
@@ -208,7 +271,9 @@ struct BuildingBlockDetailPane: View {
             provisioner: editedProvisioner,
             hclContent: editedContent,
             isBase: false,
-            createdAt: block.createdAt
+            createdAt: block.createdAt,
+            osName: editedOSName,
+            osVersion: editedOSVersion
         )
         onSave(updated)
         isDirty = false
@@ -444,6 +509,34 @@ struct BootCommandDetailPane: View {
     @State private var copied = false
     @State private var diagnostics: [BootCommandLinter.Diagnostic] = []
 
+    // Inline editing state (custom blocks only)
+    @State private var editedDisplayName: String = ""
+    @State private var editedDescription: String = ""
+    @State private var editedOSName: String = ""
+    @State private var editedOSVersion: String = ""
+    @State private var isDirty = false
+    @State private var isLoading = false
+    @State private var sofaVersions: [String] = []
+    @State private var isFetchingVersions = false
+
+    private var canEdit: Bool { !cmd.isBase }
+
+    private var versionList: [String] {
+        sofaVersions.isEmpty
+            ? (MacOSRelease.Name(rawValue: editedOSName)?.fallbackVersions ?? [])
+            : sofaVersions
+    }
+
+    private func loadVersions(for osNameRaw: String) async {
+        guard let release = MacOSRelease.Name(rawValue: osNameRaw), !osNameRaw.isEmpty else {
+            sofaVersions = []
+            return
+        }
+        isFetchingVersions = true
+        sofaVersions = await SOFAService.shared.versions(for: release)
+        isFetchingVersions = false
+    }
+
     // Read-only text binding for the editor
     private var commandText: String { cmd.commandLines.joined(separator: "\n") }
 
@@ -478,8 +571,18 @@ struct BootCommandDetailPane: View {
                 .background(Color(nsColor: .controlBackgroundColor))
             }
         }
-        .onAppear { diagnostics = BootCommandLinter.lint(lines: cmd.commandLines) }
-        .onChange(of: cmd.id) { _, _ in diagnostics = BootCommandLinter.lint(lines: cmd.commandLines) }
+        .onAppear {
+            syncFromCmd()
+            diagnostics = BootCommandLinter.lint(lines: cmd.commandLines)
+        }
+        .onChange(of: cmd.id) { _, _ in
+            syncFromCmd()
+            diagnostics = BootCommandLinter.lint(lines: cmd.commandLines)
+        }
+        .task { await loadVersions(for: editedOSName) }
+        .onChange(of: editedOSName) { _, newName in
+            if canEdit { Task { await loadVersions(for: newName) } }
+        }
         .sheet(isPresented: $showingEditSheet) {
             BootCommandEditSheet(cmd: cmd) { updated in onSave(updated) }
         }
@@ -489,20 +592,23 @@ struct BootCommandDetailPane: View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
-                    Text(cmd.displayName).bold()
+                    if canEdit {
+                        Text(editedDisplayName.isEmpty ? "Untitled Block" : editedDisplayName).bold()
+                    } else {
+                        Text(cmd.displayName).bold()
+                    }
                     if cmd.isBase {
                         Text("Base Block")
                             .font(.caption).fontWeight(.medium)
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.15), in: Capsule())
+                            .background(.quaternary, in: Capsule())
                             .foregroundStyle(.secondary)
-                    }
-                    if !cmd.osName.isEmpty {
-                        Text(cmd.osName + (cmd.osVersion.isEmpty ? "" : " \(cmd.osVersion)"))
+                    } else if isDirty {
+                        Text("Edited")
                             .font(.caption).fontWeight(.medium)
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Color.blue.opacity(0.1), in: Capsule())
-                            .foregroundStyle(.blue)
+                            .background(Color.orange.opacity(0.15), in: Capsule())
+                            .foregroundStyle(.orange)
                     }
                     if !diagnostics.isEmpty {
                         let hasError = diagnostics.contains(where: { $0.severity == .error })
@@ -538,7 +644,13 @@ struct BootCommandDetailPane: View {
                 Button("Create Custom Copy", action: onDuplicate)
                     .buttonStyle(.bordered)
             } else {
-                Button("Edit") { showingEditSheet = true }
+                Button("Revert") { syncFromCmd() }.disabled(!isDirty)
+                Button("Save") { commitSave() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut("s", modifiers: .command)
+                    .disabled(!isDirty)
+                Divider().frame(height: 16)
+                Button("Edit Commands") { showingEditSheet = true }
                     .buttonStyle(.bordered)
                 Divider().frame(height: 16)
                 Button(action: onDuplicate) { Image(systemName: "doc.on.doc") }
@@ -551,15 +663,105 @@ struct BootCommandDetailPane: View {
     }
 
     private var cmdHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if !cmd.blockDescription.isEmpty {
-                Text(cmd.blockDescription).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 8) {
+            if canEdit {
+                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 6) {
+                    GridRow {
+                        Text("Display Name").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                        TextField("", text: $editedDisplayName,
+                                  prompt: Text("Block name").foregroundStyle(.tertiary))
+                            .onChange(of: editedDisplayName) { _, _ in if !isLoading { isDirty = true } }
+                    }
+                    GridRow {
+                        Text("Description").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                        TextField("", text: $editedDescription, axis: .vertical)
+                            .lineLimit(2...4)
+                            .onChange(of: editedDescription) { _, _ in if !isLoading { isDirty = true } }
+                    }
+                    GridRow {
+                        Text("Target OS").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                        HStack(spacing: 8) {
+                            Picker("", selection: $editedOSName) {
+                                Text("Any").tag("")
+                                ForEach(MacOSRelease.Name.allCases, id: \.self) {
+                                    Text($0.rawValue).tag($0.rawValue)
+                                }
+                            }
+                            .labelsHidden().frame(width: 120)
+                            .onChange(of: editedOSName) { _, _ in if !isLoading { isDirty = true } }
+
+                            if !editedOSName.isEmpty {
+                                Picker("", selection: $editedOSVersion) {
+                                    Text("Any version").tag("")
+                                    ForEach(versionList, id: \.self) { Text($0).tag($0) }
+                                }
+                                .labelsHidden().frame(width: 120)
+                                .onChange(of: editedOSVersion) { _, _ in if !isLoading { isDirty = true } }
+                                if isFetchingVersions {
+                                    ProgressView().controlSize(.mini)
+                                }
+                            }
+                        }
+                    }
+                    GridRow {
+                        Text("Commands").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                        Text("\(cmd.commandLines.count) line\(cmd.commandLines.count == 1 ? "" : "s")")
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .font(.callout)
+            } else {
+                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 6) {
+                    if !cmd.blockDescription.isEmpty {
+                        GridRow {
+                            Text("Description").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                            Text(cmd.blockDescription).foregroundStyle(.secondary)
+                        }
+                    }
+                    GridRow {
+                        Text("Target OS").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                        let os = cmd.osName.isEmpty ? "Any" : cmd.osName
+                        let ver = cmd.osVersion.isEmpty ? "" : " \(cmd.osVersion)"
+                        Text("\(os)\(ver)").foregroundStyle(cmd.osName.isEmpty ? .tertiary : .primary)
+                    }
+                    GridRow {
+                        Text("Commands").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                        Text("\(cmd.commandLines.count) line\(cmd.commandLines.count == 1 ? "" : "s")")
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .font(.callout)
             }
-            Text("\(cmd.commandLines.count) command line\(cmd.commandLines.count == 1 ? "" : "s")")
-                .font(.caption).foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14).padding(.vertical, 10)
         .background(.background)
+    }
+
+    // MARK: - Helpers
+
+    private func syncFromCmd() {
+        isLoading           = true
+        editedDisplayName   = cmd.displayName
+        editedDescription   = cmd.blockDescription
+        editedOSName        = cmd.osName
+        editedOSVersion     = cmd.osVersion
+        isDirty             = false
+        Task { @MainActor in self.isLoading = false }
+    }
+
+    private func commitSave() {
+        let updated = BootCommandBlock(
+            id: cmd.id,
+            displayName: editedDisplayName.trimmingCharacters(in: .whitespaces),
+            blockDescription: editedDescription,
+            commandLines: cmd.commandLines,
+            isBase: false,
+            createdAt: cmd.createdAt,
+            osName: editedOSName,
+            osVersion: editedOSVersion
+        )
+        onSave(updated)
+        isDirty = false
     }
 }

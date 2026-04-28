@@ -6,10 +6,15 @@ import Foundation
 struct Dependency: Identifiable, Codable, Sendable {
     let id: String               // e.g. "tart", "packer", "mist-cli", "jq"
     let displayName: String
+    let purpose: String          // Human-readable description of what the tool does
+    let icon: String             // SF Symbol name
     let currentVersion: String?  // nil = not yet installed
     let latestVersion: String?   // nil = not yet checked
-    let binaryPath: URL          // absolute path inside deps/
-    let isRequired: Bool   // false = nice-to-have; app works without it
+    let binaryPath: URL          // absolute path inside deps/ (managed) or user-chosen
+    let isRequired: Bool         // false = nice-to-have; app works without it
+    let requiredForLaunch: Bool  // false = can skip; app opens but feature is limited
+    let installURL: URL?         // GitHub release page for manual reference
+    let systemBinaryPath: URL?   // User-supplied override path (from "Use system binary…")
     let status: Status
 
     enum Status: String, Codable, Sendable {
@@ -17,10 +22,23 @@ struct Dependency: Identifiable, Codable, Sendable {
         case installing
         case installed
         case updateAvailable
+        case skipped            // User chose to skip this dependency
         case error
     }
 
     var isReady: Bool { status == .installed || status == .updateAvailable }
+
+    /// The effective binary location shown to the user.
+    var location: String? {
+        if let sys = systemBinaryPath { return sys.path }
+        guard isReady else { return nil }
+        return binaryPath.path
+    }
+
+    /// Version string to display (version or "—")
+    var displayVersion: String {
+        currentVersion ?? "—"
+    }
 }
 
 // MARK: - Release manifest (stored as deps/versions.json)

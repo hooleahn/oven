@@ -50,7 +50,7 @@ struct LiveBuildLogPanel: View {
                         LazyVStack(alignment: .leading, spacing: 0) {
                             ForEach(Array(baseVM.buildLog.enumerated()), id: \.offset) { idx, line in
                                 Text(line)
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .font(.system(.caption, design: .monospaced))
                                     .foregroundStyle(logLineColor(line))
                                     .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -180,7 +180,7 @@ private struct FlatDisclosureGroupStyle: DisclosureGroupStyle {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: configuration.isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(.tertiary)
                     configuration.label
                     Spacer()

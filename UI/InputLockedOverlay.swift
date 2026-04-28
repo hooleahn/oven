@@ -13,7 +13,7 @@ struct InputLockedOverlay: View {
                 // Full hint overlay
                 VStack(spacing: 16) {
                     Image(systemName: "lock.fill")
-                        .font(.system(size: 40, weight: .light))
+                        .font(.system(.largeTitle, weight: .light))
                         .foregroundStyle(.white)
                     Text("Input Locked")
                         .font(.title2).fontWeight(.semibold).foregroundStyle(.white)
@@ -38,7 +38,7 @@ struct InputLockedOverlay: View {
                 // so the user knows why the machine isn't responding
                 VStack(spacing: 6) {
                     Image(systemName: "lock.fill")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.callout.weight(.medium))
                         .foregroundStyle(.white.opacity(0.6))
                     Text("Input locked — building VM")
                         .font(.caption)

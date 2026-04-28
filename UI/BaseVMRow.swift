@@ -48,12 +48,21 @@ struct BaseVMRow: View {
             } else {
                 Text(vm.buildStatus.label)
                     .font(.caption).fontWeight(.medium)
+                    .foregroundStyle(statusColor)
                     .padding(.horizontal, Spacing.sm).padding(.vertical, 3)
                     .background(statusColor.opacity(0.12), in: Capsule())
-                    .foregroundStyle(statusColor)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.5), lineWidth: 0.5))
+//                    .overlay(Capsule().strokeBorder(statusColor.opacity(0.25), lineWidth: 0.5))
             }
         }
         .padding(.vertical, Spacing.xs)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(rowAccessibilityLabel)
+    }
+
+    private var rowAccessibilityLabel: String {
+        let name = vm.displayName.isEmpty ? vm.name : vm.displayName
+        return "\(vm.buildStatus.label): \(name)"
     }
 
     private var subtitleLine: String {

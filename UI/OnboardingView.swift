@@ -2,19 +2,19 @@ import SwiftUI
 
 // MARK: - OnboardingPage model
 
-private struct OnboardingPage {
+private struct OnboardingPage: Identifiable {
+    let id = UUID()
     let icon: String
     let iconColor: Color
     let title: String
     let description: String
-    let diagram: AnyView?
+    let diagram: Diagram?
 
-    init(icon: String, iconColor: Color, title: String, description: String, diagram: (some View)? = Optional<EmptyView>.none) {
-        self.icon        = icon
-        self.iconColor   = iconColor
-        self.title       = title
-        self.description = description
-        self.diagram     = diagram.map { AnyView($0) }
+    enum Diagram {
+        case overview
+        case installer
+        case build
+        case clone
     }
 }
 
@@ -26,48 +26,55 @@ struct OnboardingView: View {
 
     var onDismiss: (() -> Void)?
 
-    private let pages: [OnboardingPage] = [
+    private static let pagesStatic: [OnboardingPage] = [
         OnboardingPage(
             icon: "oven.fill",
             iconColor: .orange,
             title: "Welcome to Oven",
             description: "Oven makes it easy to build, manage, and distribute macOS virtual machines on Apple Silicon. Powered by Tart and Packer, it gives you a full VM lifecycle — from downloading macOS to distributing images via a container registry.",
-            diagram: OnboardingOverviewDiagram()
+            diagram: .overview
         ),
         OnboardingPage(
             icon: "arrow.down.circle.fill",
             iconColor: .blue,
             title: "Download macOS",
             description: "Start by downloading a macOS IPSW firmware directly from Apple. Oven fetches the latest signed releases and stores them locally so you can build Base VMs offline.",
-            diagram: OnboardingInstallerDiagram()
+            diagram: .installer
         ),
         OnboardingPage(
             icon: "shippingbox.fill",
             iconColor: .purple,
             title: "Build a Base VM",
             description: "Use a Packer template to automate the full macOS setup — including user creation, SSH, and software installs. Oven runs the build and shows live output so you always know what's happening.",
-            diagram: OnboardingBuildDiagram()
+            diagram: .build
         ),
         OnboardingPage(
             icon: "square.on.square.fill",
             iconColor: .green,
             title: "Clone & Share VMs",
             description: "Clone Base VMs instantly for development, CI, or testing. Push images to a container registry so your whole team can pull them. Each VM is isolated, fast, and always starts from a clean state.",
-            diagram: OnboardingCloneDiagram()
-        ),
+            diagram: .clone
+        )
     ]
+
+    private let pages: [OnboardingPage] = pagesStatic
 
     var body: some View {
         VStack(spacing: 0) {
             // Page content — manual paging with slide transition
             ZStack {
-                ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
+                SwiftUI.ForEach(0..<pages.count, id: \.self) { index in
+                    let page = pages[index]
+                    let isCurrent = index == currentPage
+                    let xOffset = CGFloat(index - currentPage) * 620.0
+
                     pageView(page)
-                        .opacity(index == currentPage ? 1 : 0)
-                        .offset(x: CGFloat(index - currentPage) * 620)
-                        .animation(.easeInOut(duration: 0.3), value: currentPage)
+                        .opacity(isCurrent ? 1 : 0)
+                        .offset(x: xOffset)
+                        .id(index)
                 }
             }
+            .animation(.easeInOut(duration: 0.3), value: currentPage)
             .clipped()
 
             Divider()
@@ -84,11 +91,11 @@ struct OnboardingView: View {
 
                 // Page dots
                 HStack(spacing: 6) {
-                    ForEach(0..<pages.count, id: \.self) { i in
+                    SwiftUI.ForEach(0..<pages.count, id: \.self) { (i: Int) in
+                        let isCurrent = currentPage == i
                         Circle()
-                            .fill(i == currentPage ? Color.accentColor : Color.secondary.opacity(0.4))
-                            .frame(width: i == currentPage ? 8 : 6, height: i == currentPage ? 8 : 6)
-                            .animation(.easeInOut(duration: 0.2), value: currentPage)
+                            .fill(isCurrent ? Color.accentColor : Color.secondary)
+                            .frame(width: isCurrent ? 8 : 6, height: isCurrent ? 8 : 6)
                     }
                 }
 
@@ -104,7 +111,7 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.regular)
-                .keyboardShortcut(currentPage == pages.count - 1 ? .defaultAction : .none)
+                .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 16)
@@ -124,7 +131,7 @@ struct OnboardingView: View {
                         .fill(page.iconColor.opacity(0.12))
                         .frame(width: 120, height: 120)
                     Image(systemName: page.icon)
-                        .font(.system(size: 52, weight: .medium))
+                        .font(.system(.largeTitle, weight: .medium))
                         .foregroundStyle(page.iconColor)
                 }
                 .padding(.top, 36)
@@ -147,10 +154,28 @@ struct OnboardingView: View {
 
                 // Optional diagram
                 if let diagram = page.diagram {
-                    diagram
-                        .padding(.top, 24)
-                        .padding(.horizontal, 32)
-                        .padding(.bottom, 24)
+                    switch diagram {
+                    case .overview:
+                        OnboardingOverviewDiagram()
+                            .padding(.top, 24)
+                            .padding(.horizontal, 32)
+                            .padding(.bottom, 24)
+                    case .installer:
+                        OnboardingInstallerDiagram()
+                            .padding(.top, 24)
+                            .padding(.horizontal, 32)
+                            .padding(.bottom, 24)
+                    case .build:
+                        OnboardingBuildDiagram()
+                            .padding(.top, 24)
+                            .padding(.horizontal, 32)
+                            .padding(.bottom, 24)
+                    case .clone:
+                        OnboardingCloneDiagram()
+                            .padding(.top, 24)
+                            .padding(.horizontal, 32)
+                            .padding(.bottom, 24)
+                    }
                 }
             }
             .frame(maxWidth: .infinity)

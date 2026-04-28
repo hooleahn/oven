@@ -62,8 +62,6 @@ struct InstallerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-//            toolbar
-            Divider()
             if isLoading {
                 ProgressView("Loading available firmwares…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -78,7 +76,6 @@ struct InstallerView: View {
             }
         }
         .navigationTitle("macOS Installers")
-//        .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "Search macOS installers…")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -103,11 +100,11 @@ struct InstallerView: View {
                         try? FileManager.default.removeItem(at: mistCache)
                         await loadFirmwares()
                     } } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
+                        Label("Refresh Installers", systemImage: "arrow.clockwise")
                     }
     //                .buttonStyle(.bordered).controlSize(.small)
                     .keyboardShortcut("r", modifiers: .command)
-                    .help("Refresh firmware list")
+                    .help("Refresh installer list (⌘R)")
                     
                 }
             }
@@ -141,54 +138,6 @@ struct InstallerView: View {
             NewBaseVMSheetWithIPSW(preselectedIPSW: selectedIPSWForBaseVM)
         }
     }
-
-    // MARK: Toolbar
-
-//    private var toolbar: some View {
-//        HStack(spacing: 8) {
-//            Spacer()
-//
-//            // Show which source is active
-//            if let refreshed = lastRefreshedAt {
-//                Text((loadedFromCache ? "Cached · " : "Refreshed · ") + coarseAge(of: refreshed))
-//                    .font(.caption).foregroundStyle(.secondary)
-//            }
-//            Label(settings.ipswDownloadMode == .mistCli ? "mist-cli" : "ipsw.me",
-//                  systemImage: settings.ipswDownloadMode == .mistCli ? "terminal" : "network")
-//                .font(.caption).foregroundStyle(.secondary)
-//
-//            Menu {
-//                ForEach(FirmwareSortOrder.allCases, id: \.self) { order in
-//                    Button {
-//                        sortOrder = order
-//                    } label: {
-//                        HStack {
-//                            Text(order.rawValue)
-//                            if sortOrder == order { Image(systemName: "checkmark") }
-//                        }
-//                    }
-//                }
-//            } label: {
-//                Image(systemName: "arrow.up.arrow.down")
-//            }
-//            .buttonStyle(.bordered).controlSize(.small)
-//            .help("Sort by: \(sortOrder.rawValue)")
-//
-//            Button { Task {
-//                    await IPSWService.shared.invalidateCache()
-//                    // Also clear mist cache
-//                    let mistCache = AppSettings.defaultLocalStorageRoot
-//                        .appendingPathComponent("mist-firmware-cache.json")
-//                    try? FileManager.default.removeItem(at: mistCache)
-//                    await loadFirmwares()
-//                } } label: {
-//                Label("Refresh", systemImage: "arrow.clockwise")
-//            }
-//            .buttonStyle(.bordered).controlSize(.small)
-//            .help("Refresh firmware list")
-//        }
-//        .padding(.horizontal, Spacing.lg - 2).padding(.vertical, Spacing.sm).background(.bar)
-//    }
 
     // MARK: List
 
@@ -273,8 +222,11 @@ struct InstallerView: View {
                 }
             } else if !isLoading {
                 Section {
-                    EmptyStateView("No Firmwares", systemImage: "arrow.down.circle",
-                                   description: "No macOS firmware found. Try refreshing.")
+                    Label("No macOS firmware found. Try refreshing.", systemImage: "arrow.down.circle")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 8)
+                        .listRowBackground(Color.clear)
                 }
             }
         }
@@ -526,7 +478,7 @@ struct IPSWFirmwareRow: View {
                         .frame(width: 28, height: 28)
                     if isDownloaded {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 11))
+                            .font(.caption)
                             .foregroundStyle(.white, .green)
                             .offset(x: 4, y: 4)
                     }
@@ -639,7 +591,7 @@ struct LocalIPSWRow: View {
                     .foregroundStyle(.green)
                     .frame(width: 28, height: 28)
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundStyle(.white, .green)
                     .offset(x: 4, y: 4)
             }

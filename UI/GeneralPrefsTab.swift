@@ -2,7 +2,7 @@ import SwiftUI
 
 struct GeneralPrefsTab: View {
     @EnvironmentObject var theme: AppTheme
-
+    @AppStorage("toast.disabled") private var toastsDisabled = false
     var body: some View {
         Form {
             Section {
@@ -37,8 +37,24 @@ struct GeneralPrefsTab: View {
                     Label("Show Menu Bar Item", systemImage: "menubar.rectangle")
                 }
                 .help("Shows an Oven icon in the menu bar for quick access to running VMs without opening the main window.")
+
+
             } header: {
                 Text("Menu Bar")
+            }
+
+            Section {
+                Toggle(isOn: $toastsDisabled) {
+                    Label("Disable Error Banners", systemImage: "bell.slash")
+                }
+                .help("Hides the in-app toast banners that appear when errors are logged. Errors are still recorded in the Activity Log.")
+
+                if toastsDisabled {
+                    Text("Error banners are suppressed. Check the Activity Log for errors.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Notifications")
             }
 
             Section {
@@ -46,11 +62,12 @@ struct GeneralPrefsTab: View {
                     theme.funModeEnabled = false
                     theme.debugModeEnabled = false
                     theme.menuBarItemEnabled = true
+                    toastsDisabled = false
                 } label: {
                     Label("Reset General Settings to Defaults", systemImage: "arrow.counterclockwise")
                 }
                 .buttonStyle(.bordered)
-                .help("Restores Fun Mode, Debug Mode, and Menu Bar Item to their default state.")
+                .help("Restores Fun Mode, Debug Mode, Menu Bar Item, and error banners to their default state.")
             } header: {
                 Text("Reset")
             } footer: {

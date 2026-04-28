@@ -49,7 +49,7 @@ struct VMCard: View {
                                 )
                         } else {
                             Image(systemName: osIcon)
-                                .font(.system(size: 28, weight: .light))
+                                .font(.system(.title, weight: .light))
                                 .foregroundStyle(.white.opacity(0.85))
                         }
                     }
@@ -132,6 +132,7 @@ struct VMCard: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, Spacing.sm).padding(.vertical, Spacing.xs)
                         .background(.quaternary, in: Capsule())
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.5), lineWidth: 0.5))
                         .frame(width: 26 + 4 + 26, height: 26)
                 }
                 Button(action: onEdit) {
@@ -153,6 +154,8 @@ struct VMCard: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card))
         .cardStyle(isSelected: isSelected, isHovered: isHovered)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(cardAccessibilityLabel)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
@@ -183,7 +186,7 @@ struct VMCard: View {
     private var thumbnailOverlay: Color {
         switch vm.status {
         case .running:   return Color.vmRunning.opacity(0.35)
-        case .suspended: return Color.secondary.opacity(0.2)
+        case .suspended: return Color(nsColor: .tertiaryLabelColor).opacity(0.3)
         case .building:  return Color.vmBuilding.opacity(0.3)
         default:         return .clear
         }
@@ -192,10 +195,16 @@ struct VMCard: View {
     private var thumbnailColor: Color {
         switch vm.status {
         case .running:   return Color.vmRunning.opacity(0.75)
-        case .suspended: return Color.secondary.opacity(0.4)
+        case .suspended: return Color(nsColor: .tertiaryLabelColor).opacity(0.5)
         case .building:  return Color.vmBuilding.opacity(0.6)
-        default:         return Color.primary.opacity(0.18)
+        default:         return Color(nsColor: .separatorColor).opacity(0.4)
         }
+    }
+
+    private var cardAccessibilityLabel: String {
+        let name = vm.displayName.isEmpty ? vm.name : vm.displayName
+        let tags = vm.tags.isEmpty ? "" : ", tags: \(vm.tags.prefix(3).joined(separator: ", "))"
+        return "\(vm.status.label): \(name)\(tags)"
     }
 
     private var showsDisplayName: Bool {

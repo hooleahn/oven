@@ -39,97 +39,55 @@ final class MDMServerStore: ObservableObject {
     }
 }
 
+// MARK: - MDM Servers view-model
+
+/// Lifted selection and sheet-presentation state for MDMServersView.
+/// Owned by ContentView so both the content column (list) and the detail
+/// column (pane + sheets) share the same instance — matching the pattern
+/// used by VMListViewModel / BaseVMViewModel.
+@MainActor
+@Observable
+final class MDMServersViewModel {
+    var selectedServerID: UUID?       = nil
+    var isPresentingNewSheet: Bool    = false
+    var editingServer: MDMServer?     = nil
+    var confirmDeleteServer: MDMServer? = nil
+}
+
 // MARK: - MDM Servers View
 
+/// List column — pure display and selection only.
+/// All sheet presentation is handled by ContentView's DetailColumn.
 struct MDMServersView: View {
     @EnvironmentObject var serverStore: MDMServerStore
-    @State private var selectedServer: MDMServer?
-    @State private var isPresentingSheet = false
-    @State private var editingServer: MDMServer?
-    @State private var confirmDeleteServer: MDMServer? = nil
+    @Bindable var model: MDMServersViewModel
 
     var body: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                toolbar
-                Divider()
-                if serverStore.servers.isEmpty {
-                    EmptyStateView("No MDM Servers", systemImage: "server.rack",
-                                   description: "Add a Jamf Pro server to use for MDM enrollment.") {
-                        Button("Add Server") { isPresentingSheet = true }
-                            .buttonStyle(.borderedProminent)
-                            .keyboardShortcut(.defaultAction)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List(serverStore.servers, id: \.id, selection: $selectedServer) { server in
-                        MDMServerRow(server: server).tag(server)
-                    }
-                    .listStyle(.inset)
+        Group {
+            if serverStore.servers.isEmpty {
+                EmptyStateView("No MDM Servers", systemImage: "server.rack",
+                               description: "Add a Jamf Pro server to use for MDM enrollment.") {
+                    Button("Add Server") { model.isPresentingNewSheet = true }
+                        .buttonStyle(.borderedProminent)
                 }
-                
-            }
-
-            if let server = selectedServer {
-                Divider()
-                MDMServerDetailPane(
-                    serverID: server.id,
-                    onEdit: { editingServer = server },
-                    onDelete: { confirmDeleteServer = server }
-                )
-                .frame(width: 280)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(serverStore.servers, id: \.id, selection: $model.selectedServerID) { server in
+                    MDMServerRow(server: server).tag(server.id)
+                }
+                .listStyle(.inset)
             }
         }
         .navigationTitle("MDM Servers")
-        .confirmationDialog(
-            confirmDeleteServer.map { "Delete \"\($0.friendlyName)\"?" } ?? "Delete server?",
-            isPresented: Binding(get: { confirmDeleteServer != nil }, set: { if !$0 { confirmDeleteServer = nil } }),
-            titleVisibility: .visible
-        ) {
-            if let server = confirmDeleteServer {
-                Button("Delete Server", role: .destructive) {
-                    serverStore.delete(id: server.id)
-                    if selectedServer?.id == server.id { selectedServer = nil }
-                    confirmDeleteServer = nil
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { model.isPresentingNewSheet = true } label: {
+                    Label("Add Server", systemImage: "plus")
                 }
-                Button("Cancel", role: .cancel) { confirmDeleteServer = nil }
-            }
-        } message: {
-            Text("This MDM server and its stored credentials will be permanently removed.")
-        }
-        .sheet(isPresented: $isPresentingSheet) {
-            MDMServerSheet(server: nil) { serverStore.add($0) }
-        }
-        .sheet(isPresented: Binding(
-            get: { editingServer != nil },
-            set: { if !$0 { editingServer = nil } }
-        )) {
-            if let toEdit = editingServer {
-                MDMServerSheet(server: toEdit) { updated in
-                    serverStore.update(id: toEdit.id) { existing in
-                        existing.friendlyName   = updated.friendlyName
-                        existing.serverURL      = updated.serverURL
-                        existing.serverAuthType = updated.serverAuthType
-                        existing.serverUsername = updated.serverUsername
-                        existing.featureCheckEnrollment       = updated.featureCheckEnrollment
-                        existing.featureDeleteFromJamf        = updated.featureDeleteFromJamf
-                        existing.featureCheckInvitationStatus = updated.featureCheckInvitationStatus
-                    }
-                    editingServer = nil
-                }
+                .keyboardShortcut("n", modifiers: .command)
+                .help("Add a new MDM server (⌘N)")
             }
         }
-    }
-
-    private var toolbar: some View {
-        HStack(spacing: 8) {
-            Spacer()
-            Button { isPresentingSheet = true } label: {
-                Label("Add Server", systemImage: "plus")
-            }
-            .buttonStyle(.borderedProminent).controlSize(.small)
-        }
-        .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
     }
 }
 
@@ -238,7 +196,7 @@ struct MDMServerDetailPane: View {
         VStack(spacing: 0) {
             VStack(spacing: 6) {
                 Image(systemName: "server.rack")
-                    .font(.system(size: 28, weight: .light)).foregroundStyle(.blue)
+                    .font(.system(.title, weight: .light)).foregroundStyle(.blue)
                 Text(server.friendlyName).font(.headline).lineLimit(1)
                 Text(server.serverURL.host ?? "").font(.caption).foregroundStyle(.secondary)
             }

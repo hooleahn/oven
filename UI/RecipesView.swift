@@ -324,26 +324,17 @@ struct RecipesView: View {
             } else if !hasFiltered {
                 ContentUnavailableView.search
             } else {
-                // Two parallel selections: one for provisioner blocks, one for boot command blocks.
-                // We drive them manually via onTapGesture so we can clear the other on selection.
-                List {
+                List(selection: bindableModel.selectedBlockItem) {
                     // Provisioner building blocks
                     if !customBlocks.isEmpty {
                         Section("Custom Building Blocks") {
                             ForEach(customBlocks) { block in
                                 BuildingBlockRow(block: block)
-//                                    .listRowBackground(model.selectedBlockID == block.id
-//                                        ? Color.accentColor.opacity(0.15) : Color.clear)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        model.selectedBlockID = block.id
-                                        model.selectedBootCommandID = nil
-                                    }
+                                    .tag(BlockSelection.block(block.id))
                                     .contextMenu {
                                         Button("Duplicate") {
                                             let copy = blockStore.duplicate(block)
-                                            model.selectedBlockID = copy.id
-                                            model.selectedBootCommandID = nil
+                                            model.selectedBlockItem = .block(copy.id)
                                         }
                                         Button("Delete", role: .destructive) {
                                             model.confirmDeleteBlockID = block.id
@@ -356,13 +347,7 @@ struct RecipesView: View {
                         Section("Base Building Blocks") {
                             ForEach(baseBlocks) { block in
                                 BuildingBlockRow(block: block)
-                                    .listRowBackground(model.selectedBlockID == block.id
-                                        ? Color.accentColor.opacity(0.15) : Color.clear)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        model.selectedBlockID = block.id
-                                        model.selectedBootCommandID = nil
-                                    }
+                                    .tag(BlockSelection.block(block.id))
                             }
                         }
                     }
@@ -371,18 +356,11 @@ struct RecipesView: View {
                         Section("Custom Boot Commands") {
                             ForEach(customCmds) { cmd in
                                 BootCommandRow(cmd: cmd)
-//                                    .listRowBackground(model.selectedBootCommandID == cmd.id
-//                                        ? Color.accentColor.opacity(0.15) : Color.clear)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        model.selectedBootCommandID = cmd.id
-                                        model.selectedBlockID = nil
-                                    }
+                                    .tag(BlockSelection.bootCommand(cmd.id))
                                     .contextMenu {
                                         Button("Duplicate") {
                                             let copy = blockStore.duplicateBootCommand(cmd)
-                                            model.selectedBootCommandID = copy.id
-                                            model.selectedBlockID = nil
+                                            model.selectedBlockItem = .bootCommand(copy.id)
                                         }
                                         Button("Delete", role: .destructive) {
                                             model.confirmDeleteBootCommandID = cmd.id
@@ -395,13 +373,7 @@ struct RecipesView: View {
                         Section("Base Boot Commands") {
                             ForEach(baseCmds) { cmd in
                                 BootCommandRow(cmd: cmd)
-//                                    .listRowBackground(model.selectedBootCommandID == cmd.id
-//                                        ? Color.accentColor.opacity(0.15) : Color.clear)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        model.selectedBootCommandID = cmd.id
-                                        model.selectedBlockID = nil
-                                    }
+                                    .tag(BlockSelection.bootCommand(cmd.id))
                             }
                         }
                     }
@@ -483,6 +455,8 @@ struct RecipesView: View {
                     editedContent: bindableModel.editedContent,
                     editedDisplayName: bindableModel.editedDisplayName,
                     editedDescription: bindableModel.editedDescription,
+                    editedOSName: bindableModel.editedOSName,
+                    editedOSVersion: bindableModel.editedOSVersion,
                     isDirty: bindableModel.isDirty,
                     isMetadataDirty: bindableModel.isMetadataDirty,
                     isSaving: bindableModel.isSaving,
@@ -505,8 +479,11 @@ struct RecipesView: View {
 
     private func emptyState(_ title: String, image: String, description: String) -> some View {
         EmptyStateView(title, systemImage: image, description: description) {
-            Button("New…") { model.isPresentingNewSheet = true }
-                .buttonStyle(.borderedProminent)
+            ContentUnavailableView(
+                "No Recipe Selected",
+                systemImage: "doc.text",
+                description: Text("Select an item from the list.")
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

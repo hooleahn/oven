@@ -18,7 +18,10 @@ struct VMListView: View {
 
     /// All tags across all VMs for filter picker and autocomplete
     var filteredVMs: [VirtualMachine] {
-        model.filteredVMs(from: vmStore.vms, searchQuery: appState.searchQuery)
+        model.filteredVMs(from: vmStore.vms,
+                          searchQuery: appState.searchQuery,
+                          sidebarTagFilter: appState.sidebarTagFilter,
+                          sidebarStatusFilter: appState.sidebarStatusFilter)
     }
     private var workingVMs: [VirtualMachine] { vmStore.vms.filter { !$0.effectivelyBase } }
     var allTags: [String]     { model.allTags(from: workingVMs) }
@@ -37,6 +40,44 @@ struct VMListView: View {
     var body: some View {
         // ── Content column: list only ──────────────────────────────────────
         // The detail pane lives in ContentView's detail column, not here.
+        contentStack
+            .navigationTitle("Virtual Machines")
+            .task { updateWindowTitle() }
+            .onChange(of: model.selectedIDs, initial: false) { _, newIDs in
+                appState.selectedVMID = newIDs.count == 1 ? newIDs.first : nil
+                updateWindowTitle()
+            }
+            .onChange(of: model.selectedVM, initial: false) { _, vm in
+                appState.selectedVMID = vm?.id
+                updateWindowTitle()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .menuBarFocusVM)) { note in
+                guard let id = note.userInfo?["vmID"] as? VirtualMachine.ID else { return }
+                model.selectedIDs = [id]
+            }
+            .modifier(VMListSheets(
+                model: model,
+                vmStore: vmStore,
+                baseVMStore: baseVMStore,
+                appState: appState
+            ))
+            .searchable(text: $appState.searchQuery, prompt: "Search VMs…")
+            .safeAreaInset(edge: .bottom, spacing: 0) { floatingActionBar }
+            .toolbar { toolbarContent }
+            .task { await vmStore.sync() }
+            .refreshable { await vmStore.sync() }
+            .onChange(of: vmStore.vms) { _, vms in
+                Task { @MainActor in
+                    if let id = self.model.selectedVM?.id {
+                        self.model.selectedVM = vms.first { $0.id == id }
+                    }
+                    let validIDs = Set(vms.map { $0.id })
+                    self.model.selectedIDs = self.model.selectedIDs.intersection(validIDs)
+                }
+            }
+    }
+
+    private var contentStack: some View {
         VStack(spacing: 0) {
             activeTagFilterBar
             if vmStore.vms.isEmpty && !vmStore.isSyncing {
@@ -47,377 +88,274 @@ struct VMListView: View {
                 vmGrid
             }
         }
-        .navigationTitle("Virtual Machines")
-        .task { updateWindowTitle() }
-        .onChange(of: model.selectedIDs, initial: false) { _, newIDs in
-            // Sync single selection to appState so the detail column can render it.
-            appState.selectedVMID = newIDs.count == 1 ? newIDs.first : nil
-            updateWindowTitle()
-        }
-        .onChange(of: model.selectedVM, initial: false) { _, vm in
-            // Grid mode single-selection.
-            appState.selectedVMID = vm?.id
-            updateWindowTitle()
-        }
-        .confirmationDialog(
-            model.confirmStop.map { "Stop \($0.displayName.isEmpty ? $0.name : $0.displayName)?" } ?? "Stop VM?",
-            isPresented: Binding(get: { model.confirmStop != nil }, set: { if !$0 { model.confirmStop = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button("Stop", role: .destructive) {
-                if let vm = model.confirmStop {
-                    model.confirmStop = nil
-                    Task { try? await vmStore.stop(vm: vm) }
-                }
-            }
-            Button("Cancel", role: .cancel) { model.confirmStop = nil }
-        } message: {
-            Text("The VM will be sent a shutdown signal and given 30 seconds to stop gracefully.")
-        }
-        .sheet(item: $model.cloneVM) { vm in
-            CloneVMSheet(vm: vm)
-                .environmentObject(vmStore)
-                .environmentObject(baseVMStore)
-                .environmentObject(appState)
-        }
-        .confirmationDialog(
-            "Delete \"\(model.confirmDelete?.displayName ?? "")\"?",
-            isPresented: Binding(get: { model.confirmDelete != nil }, set: { if !$0 { model.confirmDelete = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
-                guard let vmToDelete = model.confirmDelete else { return }
-                model.confirmDelete = nil
-                Task { try? await vmStore.delete(vm: vmToDelete) }
-            }
-        } message: {
-            Text("This will permanently delete the VM image from disk. This cannot be undone.")
-        }
-        .confirmationDialog(
-            "Delete \(model.selectedIDs.count) VMs?",
-            isPresented: $model.confirmBulkDelete,
-            titleVisibility: .visible
-        ) {
-            Button("Delete \(model.selectedIDs.count) VMs", role: .destructive) {
-                let ids = model.selectedIDs
-                model.selectedIDs.removeAll()
-                for vm in vmStore.vms where ids.contains(vm.id) {
-                    Task { try? await vmStore.delete(vm: vm) }
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will permanently delete \(model.selectedIDs.count) VM images from disk. This cannot be undone.")
-        }
-        .sheet(isPresented: $appState.isPresentingNewVM) {
-            NewVMSheet()
-                .environmentObject(vmStore)
-                .environmentObject(baseVMStore)
-                .environmentObject(appState)
-        }
-        .searchable(text: $appState.searchQuery, prompt: "Search VMs…")
-        .toolbar {
-            // 1. Navigation group (empty — no back/forward in this view)
-            ToolbarItemGroup(placement: .navigation) {}
-
-            // 2. Primary action — New VM (⌘N)
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    appState.isPresentingNewVM = true
-                } label: {
-                    Label("New VM", systemImage: "plus")
-                }
-                .keyboardShortcut("n", modifiers: .command)
-                .help("New VM (⌘N)")
-            }
-
-            // 3. Secondary actions
-            ToolbarItemGroup(placement: .secondaryAction) {
-                // Bulk actions when 2+ VMs selected in list mode
-                if model.isListView && model.selectedIDs.count >= 2 {
-                    BulkActionsMenu(
-                        count: model.selectedIDs.count,
-                        selectedVMs: selectedVMs,
-                        vmStore: vmStore,
-                        model: model
-                    )
-                }
-
-                // Clone selected VM (⌘D)
-                if model.selectedIDs.count == 1,
-                   let vm = vmStore.vms.first(where: { model.selectedIDs.contains($0.id) }) {
-                    Button { model.cloneVM = vm } label: {
-                        Label("Clone", systemImage: "doc.on.doc")
-                    }
-                    .keyboardShortcut("d", modifiers: .command)
-                    .help("Clone selected VM (⌘D)")
-                }
-
-                // Delete selected (⌘⌫)
-                if model.selectedIDs.count == 1,
-                   let vm = vmStore.vms.first(where: { model.selectedIDs.contains($0.id) }) {
-                    Button(role: .destructive) { model.confirmDelete = vm } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                    .keyboardShortcut(.delete, modifiers: .command)
-                    .help("Delete selected VM (⌘⌫)")
-                } else if model.selectedIDs.count >= 2 {
-                    Button(role: .destructive) { model.confirmBulkDelete = true } label: {
-                        Label("Delete Selected", systemImage: "trash")
-                    }
-                    .keyboardShortcut(.delete, modifiers: .command)
-                    .help("Delete selected VMs (⌘⌫)")
-                }
-
-                // Stop All — only shown when VMs are running
-                let runningVMs = vmStore.vms.filter { $0.status == .running || $0.status == .suspended }
-                if !runningVMs.isEmpty {
-                    Button {
-                        model.confirmStopAll = true
-                    } label: {
-                        Label("Stop All", systemImage: "stop.fill")
-                    }
-                    .tint(.red)
-                    .help("Stop all \(runningVMs.count) running VM\(runningVMs.count == 1 ? "" : "s")")
-                }
-            }
-
-            // 4. Flexible space
-            ToolbarItem(placement: .automatic) {
-                Spacer()
-            }
-
-            // 5. Search is provided by .searchable — no explicit item needed
-
-            // 6. Sort / filter / view-mode menus
-            ToolbarItem(placement: .automatic) {
-                HStack(spacing: 4) {
-                    tagFilterMenu
-                    osFilterMenu
-                    sortMenu
-
-                    // View mode toggle
-                    Button { model.isListView.toggle() } label: {
-                        Image(systemName: model.isListView ? "square.grid.2x2" : "list.bullet")
-                    }
-                    .help(model.isListView ? "Switch to grid view" : "Switch to list view")
-
-                    if model.isListView {
-                        densityMenu
-                    }
-
-                    // Tab filter
-                    Picker("", selection: $model.selectedTab) {
-                        ForEach(VMTab.allCases, id: \.self) {
-                            Text($0.rawValue).tag($0)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 200)
-                }
-            }
-
-            // 7. Refresh (⌘R) — always visible, animates when refreshing
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    guard !isRefreshing else { return }
-                    isRefreshing = true
-                    withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
-                        refreshRotation = 360
-                    }
-                    Task {
-                        await vmStore.sync()
-                        isRefreshing = false
-                        refreshRotation = 0
-                    }
-                } label: {
-//                    Label("Refresh", systemImage: "arrow.clockwise")
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .keyboardShortcut("r", modifiers: .command)
-                .help("Refresh VM list (⌘R)")
-            }
-        }
-        .task { await vmStore.sync() }
-        .refreshable { await vmStore.sync() }
-        .onChange(of: vmStore.vms) { _, vms in
-            Task { @MainActor in
-                // Keep grid single-selection in sync
-                if let id = self.model.selectedVM?.id {
-                    self.model.selectedVM = vms.first { $0.id == id }
-                }
-                // Prune stale IDs from multi-selection
-                let validIDs = Set(vms.map { $0.id })
-                self.model.selectedIDs = self.model.selectedIDs.intersection(validIDs)
-            }
-        }
-        .sheet(item: $model.pendingLaunchVM) { vm in
-            LaunchModeSheet(vm: vm) { mode in
-                model.pendingLaunchVM = nil
-                Task { await startVM(vm, mode: mode) }
-            }
-        }
-        .alert("Cannot Start VM", isPresented: Binding(
-            get: { model.macOSLimitError != nil },
-            set: { if !$0 { model.macOSLimitError = nil } }
-        )) {
-            Button("OK") { model.macOSLimitError = nil }
-        } message: {
-            Text(model.macOSLimitError ?? "")
-        }
-        .confirmationDialog(
-            "Stop All Running VMs?",
-            isPresented: $model.confirmStopAll,
-            titleVisibility: .visible
-        ) {
-            Button("Stop All", role: .destructive) {
-                let running = vmStore.vms.filter { $0.status == .running || $0.status == .suspended }
-                for vm in running {
-                    Task { try? await vmStore.stop(vm: vm) }
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            let count = vmStore.vms.filter { $0.status == .running || $0.status == .suspended }.count
-            Text("This will stop \(count) VM\(count == 1 ? "" : "s").")
-        }
-        .sheet(item: $model.editingVM) { vm in
-            VMEditSheet(vm: vm)
-                .environmentObject(vmStore)
-        }
-
     }
 
-    // MARK: Density menu
-
-    @ViewBuilder private var densityMenu: some View {
-        Menu {
-            ForEach(ListDensity.allCases, id: \.self) { d in
-                Button {
-                    density = d
-                    model.density = d
-                } label: {
-                    HStack {
-                        Image(systemName: d.systemImage)
-                        Text(d.rawValue)
-                        if density == d { Image(systemName: "checkmark") }
-                    }
-                }
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                appState.isPresentingNewVM = true
+            } label: {
+                Label("New VM", systemImage: "plus")
             }
-        } label: {
-            Image(systemName: density.systemImage)
+            .keyboardShortcut("n", modifiers: .command)
+            .help("New VM (⌘N)")
         }
-        .buttonStyle(.bordered).controlSize(.small)
-        .help("Row density: \(density.rawValue)")
-    }
-
-    // MARK: Filter/Sort menus
-
-    @ViewBuilder private var tagFilterMenu: some View {
-        if !allTags.isEmpty {
-            Menu {
-                if !model.selectedTagFilters.isEmpty {
-                    Button("Clear") { model.selectedTagFilters.removeAll() }
-                    Divider()
+        ToolbarItem(placement: .automatic) {
+            filterSortMenu
+        }
+        ToolbarItem(placement: .automatic) {
+            Button { model.isListView.toggle() } label: {
+                Image(systemName: model.isListView ? "square.grid.2x2" : "list.bullet")
+            }
+            .help(model.isListView ? "Switch to grid view" : "Switch to list view")
+        }
+        ToolbarItem(placement: .automatic) {
+            Button {
+                guard !isRefreshing else { return }
+                isRefreshing = true
+                withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                    refreshRotation = 360
                 }
-                ForEach(allTags, id: \.self) { tag in
-                    Button {
-                        if model.selectedTagFilters.contains(tag) { model.selectedTagFilters.remove(tag) }
-                        else { model.selectedTagFilters.insert(tag) }
-                    } label: {
-                        HStack {
-                            Circle().fill(tagStore.color(for: tag)).frame(width: 8, height: 8)
-                            Text(tag)
-                            if model.selectedTagFilters.contains(tag) { Image(systemName: "checkmark") }
-                        }
-                    }
+                Task {
+                    await vmStore.sync()
+                    isRefreshing = false
+                    refreshRotation = 0
                 }
             } label: {
-                HStack(spacing: 3) {
-                    Image(systemName: "tag")
-                    if !model.selectedTagFilters.isEmpty {
-                        badgeView(model.selectedTagFilters.count)
-                    }
-                }
+                Label("Refresh VMs", systemImage: "arrow.clockwise")
             }
-            .buttonStyle(.bordered).controlSize(.small)
-            .help(model.selectedTagFilters.isEmpty ? "Filter by tag" : "\(model.selectedTagFilters.count) tag filter(s) active")
+            .keyboardShortcut("r", modifiers: .command)
+            .help("Refresh VM list (⌘R)")
         }
     }
 
-    @ViewBuilder private var osFilterMenu: some View {
-        if !allOSMajors.isEmpty {
-            Menu {
-                if !model.selectedOSFilters.isEmpty {
-                    Button("Clear") { model.selectedOSFilters.removeAll() }
-                    Divider()
+    // MARK: Filter & Sort consolidated menu
+
+    /// True when any filter deviates from the defaults.
+    private var isAnyFilterActive: Bool {
+        model.selectedTab != .all ||
+        !model.selectedTagFilters.isEmpty ||
+        !model.selectedOSFilters.isEmpty
+    }
+
+    private var activeFilterCount: Int {
+        (model.selectedTab != .all ? 1 : 0) +
+        model.selectedTagFilters.count +
+        model.selectedOSFilters.count
+    }
+
+    @ViewBuilder private var filterSortMenu: some View {
+        Menu {
+            // ── Show (tab filter) ──────────────────────────────────────────
+            Section("Show") {
+                ForEach(VMTab.allCases, id: \.self) { tab in
+                    Button {
+                        model.selectedTab = tab
+                    } label: {
+                        HStack {
+                            Text(tab.rawValue)
+                            if model.selectedTab == tab { Image(systemName: "checkmark") }
+                        }
+                    }
                 }
-                ForEach(allOSMajors, id: \.self) { major in
-                    let versions = osVersions(under: major)
-                    if versions.count > 1 {
+            }
+
+            // ── Tags ──────────────────────────────────────────────────────
+            if !allTags.isEmpty {
+                Section("Tags") {
+                    if !model.selectedTagFilters.isEmpty {
+                        Button("Clear Tag Filters") { model.selectedTagFilters.removeAll() }
+                    }
+                    ForEach(allTags, id: \.self) { tag in
                         Button {
-                            let all = versions.allSatisfy { model.selectedOSFilters.contains($0) }
-                            if all { versions.forEach { model.selectedOSFilters.remove($0) } }
-                            else   { versions.forEach { model.selectedOSFilters.insert($0) } }
+                            if model.selectedTagFilters.contains(tag) { model.selectedTagFilters.remove(tag) }
+                            else { model.selectedTagFilters.insert(tag) }
                         } label: {
                             HStack {
-                                Text(major).fontWeight(.medium)
-                                if versions.allSatisfy({ model.selectedOSFilters.contains($0) }) {
-                                    Image(systemName: "checkmark")
-                                }
+                                Circle().fill(tagStore.color(for: tag)).frame(width: 8, height: 8)
+                                Text(tag)
+                                if model.selectedTagFilters.contains(tag) { Image(systemName: "checkmark") }
                             }
                         }
-                        ForEach(versions, id: \.self) { ver in
+                    }
+                }
+            }
+
+            // ── macOS ─────────────────────────────────────────────────────
+            if !allOSMajors.isEmpty {
+                Section("macOS") {
+                    if !model.selectedOSFilters.isEmpty {
+                        Button("Clear OS Filters") { model.selectedOSFilters.removeAll() }
+                    }
+                    ForEach(allOSMajors, id: \.self) { major in
+                        let versions = osVersions(under: major)
+                        if versions.count > 1 {
+                            Button {
+                                let all = versions.allSatisfy { model.selectedOSFilters.contains($0) }
+                                if all { versions.forEach { model.selectedOSFilters.remove($0) } }
+                                else   { versions.forEach { model.selectedOSFilters.insert($0) } }
+                            } label: {
+                                HStack {
+                                    Text(major).fontWeight(.medium)
+                                    if versions.allSatisfy({ model.selectedOSFilters.contains($0) }) {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                            ForEach(versions, id: \.self) { ver in
+                                Button {
+                                    if model.selectedOSFilters.contains(ver) { model.selectedOSFilters.remove(ver) }
+                                    else { model.selectedOSFilters.insert(ver) }
+                                } label: {
+                                    HStack {
+                                        Text("  " + ver)
+                                        if model.selectedOSFilters.contains(ver) { Image(systemName: "checkmark") }
+                                    }
+                                }
+                            }
+                        } else if let ver = versions.first {
                             Button {
                                 if model.selectedOSFilters.contains(ver) { model.selectedOSFilters.remove(ver) }
                                 else { model.selectedOSFilters.insert(ver) }
                             } label: {
                                 HStack {
-                                    Text("  " + ver)
+                                    Text(major)
                                     if model.selectedOSFilters.contains(ver) { Image(systemName: "checkmark") }
                                 }
                             }
                         }
-                    } else if let ver = versions.first {
+                    }
+                }
+            }
+
+            // ── Sort by ───────────────────────────────────────────────────
+            Section("Sort By") {
+                ForEach(VMSortOrder.allCases, id: \.self) { order in
+                    Button {
+                        model.sortOrder = order
+                    } label: {
+                        HStack {
+                            Text(order.rawValue)
+                            if model.sortOrder == order { Image(systemName: "checkmark") }
+                        }
+                    }
+                }
+            }
+
+            // ── Density (list view only) ───────────────────────────────────
+            if model.isListView {
+                Section("Density") {
+                    ForEach(ListDensity.allCases, id: \.self) { d in
                         Button {
-                            if model.selectedOSFilters.contains(ver) { model.selectedOSFilters.remove(ver) }
-                            else { model.selectedOSFilters.insert(ver) }
+                            density = d
+                            model.density = d
                         } label: {
                             HStack {
-                                Text(major)
-                                if model.selectedOSFilters.contains(ver) { Image(systemName: "checkmark") }
+                                Image(systemName: d.systemImage)
+                                Text(d.rawValue)
+                                if density == d { Image(systemName: "checkmark") }
                             }
                         }
                     }
                 }
-            } label: {
-                HStack(spacing: 3) {
-                    Image(systemName: "apple.logo")
-                    if !model.selectedOSFilters.isEmpty { badgeView(model.selectedOSFilters.count) }
-                }
-            }
-            .buttonStyle(.bordered).controlSize(.small)
-            .help(model.selectedOSFilters.isEmpty ? "Filter by OS" : "\(model.selectedOSFilters.count) OS filter(s) active")
-        }
-    }
-
-    @ViewBuilder private var sortMenu: some View {
-        Menu {
-            ForEach(VMSortOrder.allCases, id: \.self) { order in
-                Button {
-                    model.sortOrder = order
-                } label: {
-                    HStack {
-                        Text(order.rawValue)
-                        if model.sortOrder == order { Image(systemName: "checkmark") }
-                    }
-                }
             }
         } label: {
-            Image(systemName: "arrow.up.arrow.down")
+            HStack(spacing: 3) {
+                Image(systemName: "line.3.horizontal.decrease")
+                if isAnyFilterActive {
+                    badgeView(activeFilterCount)
+                }
+            }
         }
-        .buttonStyle(.bordered).controlSize(.small)
-        .help("Sort by: \(model.sortOrder.rawValue)")
+        .help(isAnyFilterActive ? "\(activeFilterCount) filter(s) active" : "Filter & Sort")
+    }
+
+    // MARK: Floating action bar
+
+    @ViewBuilder private var floatingActionBar: some View {
+        let runningVMs = vmStore.vms.filter { $0.status == .running || $0.status == .suspended }
+        let showBulk = model.isListView && model.selectedIDs.count >= 2
+        let showStopAll = !runningVMs.isEmpty
+
+        if showBulk || showStopAll {
+            HStack(spacing: 10) {
+                if showBulk {
+                    // Start selected
+                    Button {
+                        for vm in selectedVMs where vm.status == .stopped {
+                            Task {
+                                let stream = await vmStore.start(vm: vm, mode: .native)
+                                for await _ in stream {}
+                                await vmStore.sync()
+                            }
+                        }
+                    } label: {
+                        Label("Start", systemImage: "play.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    // Stop selected
+                    Button {
+                        for vm in selectedVMs where vm.status == .running || vm.status == .suspended {
+                            Task { try? await vmStore.stop(vm: vm) }
+                        }
+                    } label: {
+                        Label("Stop", systemImage: "stop.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    Divider().frame(height: 18)
+
+                    // Bulk delete
+                    Button(role: .destructive) {
+                        model.confirmBulkDelete = true
+                    } label: {
+                        Label(model.selectedIDs.count == 1 ? "Delete" : "Delete \(model.selectedIDs.count)",
+                              systemImage: "trash")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .keyboardShortcut(.delete, modifiers: .command)
+
+                    Spacer()
+
+                    Text("\(model.selectedIDs.count) selected")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Button("Clear") { model.selectedIDs.removeAll() }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if showBulk && showStopAll {
+                    Divider().frame(height: 18)
+                }
+
+                if showStopAll {
+                    if !showBulk { Spacer() }
+                    Button {
+                        model.confirmStopAll = true
+                    } label: {
+                        Label("Stop All (\(runningVMs.count))", systemImage: "stop.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .controlSize(.small)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(.bar)
+            .overlay(alignment: .top) { Divider() }
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .animation(.easeInOut(duration: 0.2), value: showBulk)
+            .animation(.easeInOut(duration: 0.2), value: showStopAll)
+        }
     }
 
     // MARK: Active tag filter bar
@@ -427,17 +365,17 @@ struct VMListView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                        .font(.system(size: 11))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                     ForEach(model.selectedTagFilters.sorted(), id: \.self) { tag in
                         HStack(spacing: 3) {
                             Text(tag)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.caption.weight(.medium))
                             Button {
                                 model.selectedTagFilters.remove(tag)
                             } label: {
                                 Image(systemName: "xmark")
-                                    .font(.system(size: 8, weight: .bold))
+                                    .font(.caption2.weight(.bold))
                             }
                             .buttonStyle(.plain)
                         }
@@ -449,7 +387,7 @@ struct VMListView: View {
                     Button("Clear") {
                         model.selectedTagFilters.removeAll()
                     }
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                 }
@@ -569,6 +507,10 @@ struct VMListView: View {
             Button("Stop…") { model.confirmStop = vm }
                 .disabled(vm.status == .stopped)
             Divider()
+            Button(vm.isPinned ? "Unpin from Menu Bar" : "Pin to Menu Bar") {
+                vmStore.update(id: vm.id) { $0.isPinned.toggle() }
+            }
+            Divider()
             Button("Edit…") { model.editingVM = vm }
             Button("Clone…") { model.cloneVM = vm }
             Button("Delete…", role: .destructive) { model.confirmDelete = vm }
@@ -581,7 +523,7 @@ struct VMListView: View {
         VStack(spacing: 16) {
             Spacer()
             Image(systemName: "square.stack.3d.up")
-                .font(.system(size: 36, weight: .light))
+                .font(.system(.largeTitle, weight: .light))
                 .foregroundStyle(.secondary)
             Text("\(model.selectedIDs.count) VMs Selected")
                 .font(.headline)
@@ -642,12 +584,119 @@ struct VMListView: View {
         }
     }
 
-    // MARK: Actions
+}
 
-    private func startVM(_ vmToStart: VirtualMachine, mode: TartService.RunMode = .native) async {
-        guard !vmToStart.effectivelyBase else { return }  // base VMs cannot be started
-        // macOS limits concurrent macOS VMs to 2. Check before handing off to tart
-        // so we give a clear error rather than letting tart exit with code 1.
+// MARK: - VMListSheets (extracted to help the type-checker)
+
+private struct VMListSheets: ViewModifier {
+    @Bindable var model: VMListViewModel
+    let vmStore: VMStore
+    let baseVMStore: BaseVMStore
+    let appState: AppState
+
+    private var stopTitle: String {
+        model.confirmStop.map { "Stop \($0.displayName.isEmpty ? $0.name : $0.displayName)?" } ?? "Stop VM?"
+    }
+    private var deleteTitle: String {
+        model.confirmDelete.map { "Delete \"\($0.displayName.isEmpty ? $0.name : $0.displayName)\"?" } ?? "Delete VM?"
+    }
+    private var stopAllTitle: String {
+        let count = vmStore.vms.filter { $0.status == .running || $0.status == .suspended }.count
+        return "Stop \(count) Running VM\(count == 1 ? "" : "s")?"
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog(stopTitle,
+                isPresented: Binding(get: { model.confirmStop != nil }, set: { if !$0 { model.confirmStop = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("Stop", role: .destructive) {
+                    if let vm = model.confirmStop {
+                        model.confirmStop = nil
+                        Task { try? await vmStore.stop(vm: vm) }
+                    }
+                }
+                Button("Cancel", role: .cancel) { model.confirmStop = nil }
+            } message: {
+                Text("The VM will be sent a shutdown signal and given 30 seconds to stop gracefully.")
+            }
+            .sheet(item: $model.cloneVM) { vm in
+                CloneVMSheet(vm: vm)
+                    .environmentObject(vmStore)
+                    .environmentObject(baseVMStore)
+                    .environmentObject(appState)
+            }
+            .confirmationDialog(deleteTitle,
+                isPresented: Binding(get: { model.confirmDelete != nil }, set: { if !$0 { model.confirmDelete = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    guard let vmToDelete = model.confirmDelete else { return }
+                    model.confirmDelete = nil
+                    Task { try? await vmStore.delete(vm: vmToDelete) }
+                }
+                Button("Cancel", role: .cancel) { model.confirmDelete = nil }
+            } message: {
+                Text("This permanently removes the VM image from disk. This cannot be undone.")
+            }
+            .confirmationDialog("Delete \(model.selectedIDs.count) VMs?",
+                isPresented: $model.confirmBulkDelete,
+                titleVisibility: .visible
+            ) {
+                Button("Delete \(model.selectedIDs.count) VMs", role: .destructive) {
+                    let ids = model.selectedIDs
+                    model.selectedIDs.removeAll()
+                    for vm in vmStore.vms where ids.contains(vm.id) {
+                        Task { try? await vmStore.delete(vm: vm) }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently removes \(model.selectedIDs.count) VM images from disk. This cannot be undone.")
+            }
+            .sheet(isPresented: Binding(get: { appState.isPresentingNewVM }, set: { appState.isPresentingNewVM = $0 })) {
+                NewVMSheet()
+                    .environmentObject(vmStore)
+                    .environmentObject(baseVMStore)
+                    .environmentObject(appState)
+            }
+            .sheet(item: $model.pendingLaunchVM) { vm in
+                LaunchModeSheet(vm: vm) { mode in
+                    model.pendingLaunchVM = nil
+                    Task { await startVM(vm, mode: mode, vmStore: vmStore, appState: appState) }
+                }
+            }
+            .alert("Cannot Start VM", isPresented: Binding(
+                get: { model.macOSLimitError != nil },
+                set: { if !$0 { model.macOSLimitError = nil } }
+            )) {
+                Button("OK") { model.macOSLimitError = nil }
+            } message: {
+                Text(model.macOSLimitError ?? "")
+            }
+            .confirmationDialog(stopAllTitle,
+                isPresented: $model.confirmStopAll,
+                titleVisibility: .visible
+            ) {
+                Button("Stop All", role: .destructive) {
+                    let running = vmStore.vms.filter { $0.status == .running || $0.status == .suspended }
+                    for vm in running {
+                        Task { try? await vmStore.stop(vm: vm) }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Each VM will be sent a shutdown signal and given 30 seconds to stop gracefully.")
+            }
+            .sheet(item: $model.editingVM) { vm in
+                VMEditSheet(vm: vm)
+                    .environmentObject(vmStore)
+            }
+    }
+
+    private func startVM(_ vmToStart: VirtualMachine, mode: TartService.RunMode, vmStore: VMStore, appState: AppState) async {
+        guard !vmToStart.effectivelyBase else { return }
         let runningCount = vmStore.vms.filter { $0.status == .running || $0.status == .suspended }.count
         if runningCount >= 2 {
             let names = vmStore.vms
@@ -743,7 +792,7 @@ struct VMListRow: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     ForEach(Array(vm.tags.prefix(3).enumerated()), id: \.offset) { _, tag in
-                        TagChip(tag: tag, size: 9,
+                        TagChip(tag: tag, size: .caption2,
                                 onTap: onTagTap,
                                 onShiftTap: onTagShiftTap)
                     }
@@ -765,6 +814,14 @@ struct VMListRow: View {
             .buttonStyle(.plain)
         }
         .padding(.vertical, density.verticalPadding / 2)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(rowAccessibilityLabel)
+    }
+
+    private var rowAccessibilityLabel: String {
+        let name = vm.displayName.isEmpty ? vm.name : vm.displayName
+        let tags = vm.tags.isEmpty ? "" : ", tags: \(vm.tags.prefix(3).joined(separator: ", "))"
+        return "\(vm.status.label): \(name)\(tags)"
     }
 
     private var statusCaptionColor: Color {

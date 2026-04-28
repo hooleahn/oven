@@ -8,22 +8,26 @@ import SwiftUI
 struct BuildProgressHeader: View {
 
     var monitor = BuildMonitor.shared
+    @State var buildPhases: [BuildPhase] = BuildPhase.allCases
 
     var body: some View {
         VStack(spacing: 8) {
             // Phase indicator row
             HStack(spacing: 0) {
-                ForEach(Array(BuildPhase.allCases.enumerated()), id: \.offset) { index, phaseCase in
-                    if index > 0 {
-                        // Connector line between circles
-                        Rectangle()
-                            .fill(phaseCase.rawValue <= monitor.phase.rawValue
-                                  ? Color.accentColor
-                                  : Color.secondary.opacity(0.25))
-                            .frame(maxWidth: .infinity, maxHeight: 2)
-                    }
+                ForEach(buildPhases.indices, id: \.self) { index in
+                                    let phase = buildPhases[index]
+                                    
+                                    if index > 0 {
+                                        // Connector line
+                                        Rectangle()
+                                            // Usamos 'phase' y 'monitor.phase' para la lógica
+                                            .fill(phase.rawValue <= monitor.phase.rawValue
+                                                  ? Color.accentColor
+                                                  : Color.secondary.opacity(0.3)) // 'secondary' es más seguro en SwiftUI que 'separator'
+                                            .frame(maxWidth: .infinity, maxHeight: 2)
+                                    }
                     PhaseCircle(
-                        phase: phaseCase,
+                        phase: phase,
                         currentPhase: monitor.phase
                     )
                 }
@@ -90,7 +94,7 @@ private struct PhaseCircle: View {
 
                 if isComplete {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(.white)
                 } else if isCurrent {
                     Circle()
@@ -104,13 +108,13 @@ private struct PhaseCircle: View {
                         )
                 } else {
                     Circle()
-                        .fill(Color.secondary.opacity(0.3))
+                        .fill(.quaternary)
                         .frame(width: 10, height: 10)
                 }
             }
 
             Text(phase.label)
-                .font(.system(size: 9, weight: isCurrent ? .semibold : .regular))
+                .font(.caption2.weight(isCurrent ? .semibold : .regular))
                 .foregroundStyle(isFuture ? .tertiary : (isCurrent ? .primary : .secondary))
                 .lineLimit(1)
         }
@@ -122,7 +126,7 @@ private struct PhaseCircle: View {
     private var circleBackground: Color {
         if isComplete { return .accentColor }
         if isCurrent  { return Color.accentColor.opacity(0.18) }
-        return Color.secondary.opacity(0.12)
+        return Color(nsColor: .quaternaryLabelColor)
     }
 }
 

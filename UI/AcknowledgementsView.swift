@@ -10,7 +10,7 @@ struct AcknowledgementsView: View {
             // Header
             VStack(spacing: 6) {
                 Image(systemName: "heart.fill")
-                    .font(.system(size: 36))
+                    .font(.largeTitle)
                     .foregroundStyle(.orange)
                 Text("Acknowledgements")
                     .font(.title2.bold())

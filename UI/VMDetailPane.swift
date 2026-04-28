@@ -81,7 +81,7 @@ struct VMDetailPane: View {
                 Section("Network") {
                     LabeledContent("IP Address") {
                         if let ip = vm.ipAddress, !ip.isEmpty {
-                            VMCopyableText(ip, monospaced: true)
+                            SelectableMonoText(ip)
                         } else {
                             Text("—").foregroundStyle(.secondary)
                         }
@@ -90,7 +90,7 @@ struct VMDetailPane: View {
                         let vncURL = "vnc://\(ip)"
                         LabeledContent("VNC") {
                             HStack(spacing: 6) {
-                                VMCopyableText(vncURL, monospaced: true)
+                                SelectableMonoText(vncURL)
                                 Button("Open…") { NSWorkspace.shared.open(URL(string: vncURL)!) }
                                     .buttonStyle(.bordered).controlSize(.mini)
                             }
@@ -99,7 +99,7 @@ struct VMDetailPane: View {
                     LabeledContent("SSH") { Text("Port 22").foregroundStyle(.secondary) }
                     if !vm.sshUsername.isEmpty {
                         LabeledContent("Username") {
-                            VMCopyableText(vm.sshUsername, monospaced: true)
+                            SelectableMonoText(vm.sshUsername)
                         }
                     }
                     if vm.sshPassword != nil {
@@ -124,7 +124,7 @@ struct VMDetailPane: View {
                         }
                     }
                     LabeledContent("Tart name") {
-                        VMCopyableText(vm.name, monospaced: true)
+                        SelectableMonoText(vm.name)
                     }
                     LabeledContent("Created") {
                         Text(vm.createdAt.formatted(date: .numeric, time: .omitted))
@@ -210,6 +210,7 @@ struct VMDetailPane: View {
             .formStyle(.grouped)
         }
         .background(.windowBackground)
+        .background(.bar, in: Rectangle())
         // ── Toolbar ─────────────────────────────────────────────────────────
         .toolbar {
             // Primary action: context-sensitive main CTA
@@ -282,6 +283,13 @@ struct VMDetailPane: View {
                     }
                     .disabled(vm.buildLog.isEmpty)
 
+                    Button {
+                        vmStore.update(id: vm.id) { $0.isPinned.toggle() }
+                    } label: {
+                        Label(vm.isPinned ? "Unpin from Menu Bar" : "Pin to Menu Bar",
+                              systemImage: vm.isPinned ? "pin.slash" : "pin")
+                    }
+
                     Divider()
                     Button(role: .destructive) {
                         // Surface deletion through the parent (VMListView holds confirmDelete)
@@ -301,7 +309,7 @@ struct VMDetailPane: View {
                 VStack(spacing: 8) {
                     Spacer()
                     Image(systemName: "terminal")
-                        .font(.system(size: 28, weight: .light))
+                        .font(.system(.title, weight: .light))
                         .foregroundStyle(.secondary)
                     Text("No build log")
                         .foregroundStyle(.secondary)
@@ -365,7 +373,7 @@ struct VMDetailPane: View {
     @ViewBuilder private var headerSection: some View {
         VStack(spacing: 4) {
             Image(systemName: "desktopcomputer")
-                .font(.system(size: 28, weight: .light))
+                .font(.system(.title, weight: .light))
                 .foregroundStyle(.secondary)
             Text(vm.displayName.isEmpty ? vm.name : vm.displayName)
                 .font(.headline).lineLimit(2).multilineTextAlignment(.center)
@@ -483,41 +491,6 @@ struct VMDetailPane: View {
             enrollmentError = error.localizedDescription
         }
         isLookingUpEnrollment = false
-    }
-}
-
-// MARK: - VMCopyableText helper (scoped to this file)
-
-private struct VMCopyableText: View {
-    let value: String
-    var monospaced: Bool = false
-    @State private var copied = false
-
-    init(_ value: String, monospaced: Bool = false) {
-        self.value = value
-        self.monospaced = monospaced
-    }
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Text(value)
-                .font(monospaced ? .system(.callout, design: .monospaced) : .callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(value, forType: .string)
-                copied = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
-            } label: {
-                Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    .font(.caption2)
-                    .foregroundStyle(copied ? .green : .secondary)
-            }
-            .buttonStyle(.plain)
-            .help("Copy to clipboard")
-        }
     }
 }
 

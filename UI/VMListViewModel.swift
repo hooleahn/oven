@@ -71,17 +71,26 @@ final class VMListViewModel {
 
     // MARK: - Derived lists (read from stores injected at call site)
 
-    func filteredVMs(from vms: [VirtualMachine], searchQuery: String) -> [VirtualMachine] {
+    func filteredVMs(from vms: [VirtualMachine],
+                     searchQuery: String,
+                     sidebarTagFilter: String? = nil,
+                     sidebarStatusFilter: VMTab? = nil) -> [VirtualMachine] {
         // Working VMs only — base VMs are shown in the Base VMs view
         let workingVMs = vms.filter { !$0.effectivelyBase }
         var base: [VirtualMachine]
-        switch selectedTab {
+
+        // Sidebar status filter takes precedence over the toolbar tab filter.
+        let effectiveTab = sidebarStatusFilter ?? selectedTab
+        switch effectiveTab {
         case .all:     base = workingVMs
         case .running: base = workingVMs.filter { $0.status == .running || $0.status == .suspended }
         case .stopped: base = workingVMs.filter { $0.status == .stopped }
         }
 
-        if !selectedTagFilters.isEmpty {
+        // Sidebar tag filter takes precedence over toolbar tag filters.
+        if let sidebarTag = sidebarTagFilter {
+            base = base.filter { $0.tags.contains(sidebarTag) }
+        } else if !selectedTagFilters.isEmpty {
             base = base.filter { selectedTagFilters.isSubset(of: Set($0.tags)) }
         }
         if !selectedOSFilters.isEmpty {

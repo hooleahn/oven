@@ -375,7 +375,7 @@ struct NewBaseVMSheet: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             } header: { Text("MDM enrollment") }
-              footer: { Text("If selected, the enrollment profile and invitation ID will be baked into the Packer template.") }
+              footer: { Text("If selected, the enrollment profile and invitation ID will be built into the Packer template.") }
         }
 
         // Tart name preview
@@ -625,8 +625,7 @@ struct NewBaseVMSheet: View {
                         .padding(8)
                 }
                 .frame(maxHeight: 220)
-                .background(Color.primary.opacity(0.04))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
             }
         }
     }

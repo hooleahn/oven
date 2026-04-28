@@ -32,7 +32,7 @@ struct EmptyStateView<Actions: View, Content: View>: View {
 
             VStack(spacing: 20) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 56, weight: .light))
+                    .font(.system(.largeTitle, weight: .light))
                     .foregroundStyle(.secondary)
 
                 VStack(spacing: 8) {

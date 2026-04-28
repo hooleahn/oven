@@ -80,6 +80,13 @@
 		B91426CD2F9970CA00F13968 /* ManualBuildHCLGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426CC2F9970CA00F13968 /* ManualBuildHCLGenerator.swift */; };
 		B91426CF2F997C2000F13968 /* BootCommandEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426CE2F997C2000F13968 /* BootCommandEditor.swift */; };
 		B91426D12F99AAF700F13968 /* BuildProgressHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426D02F99AAF700F13968 /* BuildProgressHeader.swift */; };
+		B91426D32F9DD5A400F13968 /* ToastCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426D22F9DD5A400F13968 /* ToastCenter.swift */; };
+		B91426D52F9DD5C200F13968 /* ToastStackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426D42F9DD5C200F13968 /* ToastStackView.swift */; };
+		B91426D72F9F256F00F13968 /* PushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426D62F9F256F00F13968 /* PushManager.swift */; };
+		B91426D92F9F2B4500F13968 /* EmptyStateVMList.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426D82F9F2B4500F13968 /* EmptyStateVMList.swift */; };
+		B91426DB2F9F2B5900F13968 /* EmptyStateBaseVMs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426DA2F9F2B5900F13968 /* EmptyStateBaseVMs.swift */; };
+		B91426DD2F9F2B6600F13968 /* EmptyStateRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426DC2F9F2B6600F13968 /* EmptyStateRegistry.swift */; };
+		B91426DF2F9F2B7600F13968 /* EmptyStateRecipes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426DE2F9F2B7600F13968 /* EmptyStateRecipes.swift */; };
 		B97A40AA2F970E3F00FB577C /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40A92F970E3F00FB577C /* OnboardingView.swift */; };
 		B97A40AC2F970FB300FB577C /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40AB2F970FB300FB577C /* DesignSystem.swift */; };
 		B97A40B02F971CF000FB577C /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = B97A40AF2F971CF000FB577C /* AppIcon.icon */; };
@@ -190,6 +197,13 @@
 		B91426CC2F9970CA00F13968 /* ManualBuildHCLGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualBuildHCLGenerator.swift; sourceTree = "<group>"; };
 		B91426CE2F997C2000F13968 /* BootCommandEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootCommandEditor.swift; sourceTree = "<group>"; };
 		B91426D02F99AAF700F13968 /* BuildProgressHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildProgressHeader.swift; sourceTree = "<group>"; };
+		B91426D22F9DD5A400F13968 /* ToastCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastCenter.swift; sourceTree = "<group>"; };
+		B91426D42F9DD5C200F13968 /* ToastStackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastStackView.swift; sourceTree = "<group>"; };
+		B91426D62F9F256F00F13968 /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
+		B91426D82F9F2B4500F13968 /* EmptyStateVMList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateVMList.swift; sourceTree = "<group>"; };
+		B91426DA2F9F2B5900F13968 /* EmptyStateBaseVMs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateBaseVMs.swift; sourceTree = "<group>"; };
+		B91426DC2F9F2B6600F13968 /* EmptyStateRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateRegistry.swift; sourceTree = "<group>"; };
+		B91426DE2F9F2B7600F13968 /* EmptyStateRecipes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateRecipes.swift; sourceTree = "<group>"; };
 		B97A40A92F970E3F00FB577C /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		B97A40AB2F970FB300FB577C /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		B97A40AF2F971CF000FB577C /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
@@ -330,6 +344,12 @@
 				B91426C82F99704900F13968 /* BootCommandBlock+Seeds.swift */,
 				B91426CE2F997C2000F13968 /* BootCommandEditor.swift */,
 				B91426D02F99AAF700F13968 /* BuildProgressHeader.swift */,
+				B91426D22F9DD5A400F13968 /* ToastCenter.swift */,
+				B91426D42F9DD5C200F13968 /* ToastStackView.swift */,
+				B91426D82F9F2B4500F13968 /* EmptyStateVMList.swift */,
+				B91426DA2F9F2B5900F13968 /* EmptyStateBaseVMs.swift */,
+				B91426DC2F9F2B6600F13968 /* EmptyStateRegistry.swift */,
+				B91426DE2F9F2B7600F13968 /* EmptyStateRecipes.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -375,6 +395,7 @@
 				AA3407A9972E4871AB9375EB /* VMStore.swift */,
 				B91426C42F98546100F13968 /* CirrusLabsTemplateStore.swift */,
 				B91426CC2F9970CA00F13968 /* ManualBuildHCLGenerator.swift */,
+				B91426D62F9F256F00F13968 /* PushManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -481,18 +502,22 @@
 				95C70AF01F304C9AAB6DDD3C /* BaseVMRow.swift in Sources */,
 				B97A40AA2F970E3F00FB577C /* OnboardingView.swift in Sources */,
 				E0394ED035C447DC8F00D77A /* BaseVMStore.swift in Sources */,
+				B91426D92F9F2B4500F13968 /* EmptyStateVMList.swift in Sources */,
 				1D8FC871ABAC420F8C4D5815 /* BaseVMView.swift in Sources */,
 				50ACC8882A244C0CA52598C0 /* BuildLogView.swift in Sources */,
 				80969823F20249C08B1638DB /* BuildMonitor.swift in Sources */,
 				956EFBA268334D67BB2C88C9 /* BuildSessionManager.swift in Sources */,
 				D52FB5DDC895499D911FA20A /* CirrusCatalogueSheet.swift in Sources */,
 				7B23F5DD1EE24C788EBAEC5B /* CirrusLabsCatalogueRow.swift in Sources */,
+				B91426DB2F9F2B5900F13968 /* EmptyStateBaseVMs.swift in Sources */,
 				4643B10B3B364CC2A34AE103 /* CloneVMSheet.swift in Sources */,
 				B97A40AC2F970FB300FB577C /* DesignSystem.swift in Sources */,
+				B91426DD2F9F2B6600F13968 /* EmptyStateRegistry.swift in Sources */,
 				73054575B317430EBFA56649 /* ContentView.swift in Sources */,
 				B9ADE8C02F7DE64D00B30458 /* SOFAService.swift in Sources */,
 				7C35CBA641854707ABDC0925 /* Dependency.swift in Sources */,
 				B91426C72F9854C100F13968 /* CirrusLabsTemplateSheet.swift in Sources */,
+				B91426D72F9F256F00F13968 /* PushManager.swift in Sources */,
 				F991657C3B6A417FA9F35F32 /* DependencyManager.swift in Sources */,
 				B39FD500255442D793F5D6E4 /* EmptyStateView.swift in Sources */,
 				2F9BC3605FE441F9AB5BFB0B /* IPSWService.swift in Sources */,
@@ -514,6 +539,7 @@
 				1F8390C6C5694FD18B4EB3D7 /* NewVMSheet.swift in Sources */,
 				6084DCE449FE47D39296CB5C /* NotificationService.swift in Sources */,
 				05900CE23CDB487BBA1CFF91 /* OvenApp.swift in Sources */,
+				B91426D52F9DD5C200F13968 /* ToastStackView.swift in Sources */,
 				E33F3AEED31240E3A3B7C81B /* PackerService.swift in Sources */,
 				31E567C2DEEA476F96BABFDE /* PreferencesView.swift in Sources */,
 				6BD2AFE8F9784129A4BA4380 /* PreflightCheck.swift in Sources */,
@@ -526,6 +552,7 @@
 				9DDA46FCB2B94A9801B36C2B /* PackerTemplate.swift in Sources */,
 				B91426BD2F983AEE00F13968 /* AcknowledgementsView.swift in Sources */,
 				FD31881B18A20CE7D501B422 /* HCLEditor.swift in Sources */,
+				B91426DF2F9F2B7600F13968 /* EmptyStateRecipes.swift in Sources */,
 				33A88016FDFCA1505226CD55 /* BuildingBlock.swift in Sources */,
 				0710E86F4880421F7A082349 /* BuildingBlockDetailPane.swift in Sources */,
 				67B908241F12695FECC8CA0C /* BuildingBlockStore.swift in Sources */,
@@ -539,6 +566,7 @@
 				EA6F4FE3BD644AC686E0F328 /* RegistryImageRow.swift in Sources */,
 				B91426C92F99704900F13968 /* BootCommandBlock+Seeds.swift in Sources */,
 				96EC6A01B9BD4129869AB92B /* RegistryService.swift in Sources */,
+				B91426D32F9DD5A400F13968 /* ToastCenter.swift in Sources */,
 				B91426CB2F99709700F13968 /* ManualBuildConfig.swift in Sources */,
 				BFB8A48BC686468691CA5658 /* RegistryView.swift in Sources */,
 				C3D8415537B744118F8E6C2C /* SetupView.swift in Sources */,
@@ -574,6 +602,7 @@
 		05379D94493C4922AB39CCE9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
@@ -581,11 +610,14 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 304;
+				CURRENT_PROJECT_VERSION = 305;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Resources/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Oven - macOS VM Manager powered by Tart";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hooleahn.oven;
@@ -633,7 +665,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -680,7 +713,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -692,6 +725,7 @@
 		FED8957A3DA545AA80316F07 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
@@ -699,11 +733,14 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 304;
+				CURRENT_PROJECT_VERSION = 305;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Resources/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Oven - macOS VM Manager powered by Tart";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hooleahn.oven;

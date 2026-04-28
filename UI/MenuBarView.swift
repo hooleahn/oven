@@ -1,142 +1,74 @@
 import SwiftUI
 
-// MARK: - MenuBarView
+// MARK: - MenuBarMenuContent
 //
-// Content for the .menu-style MenuBarExtra.
-// IMPORTANT: .menu style renders as a native NSMenu, so only Button, Menu,
-// Divider, ForEach, Label, and Text are valid top-level children.
-// Layout containers (HStack, VStack, etc.) are ignored.
+// Native .menu-style MenuBarExtra content.
+// Only Button, Menu, Divider, ForEach, Label, and Text are valid here —
+// no custom layout, ScrollView, or gesture modifiers.
+//
+// Three sections:
+//   1. Running — all VMs currently running or suspended (with Stop submenu)
+//   2. Recent  — top 3 stopped VMs by lastStartedAt
+//   3. Pinned  — up to 5 VMs the user has pinned via right-click
 
-struct MenuBarView: View {
+struct MenuBarMenuContent: View {
 
-    // Passed in from OvenApp — cannot use @EnvironmentObject because
-    // MenuBarExtra content runs outside the main environment hierarchy.
     var model: MenuBarViewModel
-    var monitor = BuildMonitor.shared
 
     var body: some View {
-        // Sync VM state each time the menu is opened.
-        // .task fires on onAppear, which the .menu style triggers on every open.
-        Color.clear
-            .frame(width: 0, height: 0)
-            .task { model.onMenuOpen() }
+        // Kick a sync every time the menu opens.
+        Color.clear.frame(width: 0, height: 0).task { model.onMenuOpen() }
 
-        // ── Active Builds section ────────────────────────────────────────────
-        if !model.cachedActiveBuilds.isEmpty {
-            Text("Builds")
-            ForEach(model.cachedActiveBuilds) { vm in
-                buildEntry(vm)
-            }
-            Divider()
-        }
-
-        // ── Virtual Machines section ─────────────────────────────────────────
-        if model.cachedDisplayVMs.isEmpty {
+        if model.runningVMs.isEmpty && model.recentVMs.isEmpty && model.pinnedVMs.isEmpty {
             Text("No Virtual Machines")
-        } else {
-            ForEach(model.cachedDisplayVMs) { vm in
-                vmEntry(vm)
-            }
         }
 
-        Divider()
-
-        if model.cachedHasActiveVMs {
-            Button("Stop All VMs…") {
-                model.confirmAndStopAll()
+        // MARK: Running
+        if !model.runningVMs.isEmpty {
+            Text("Running")
+            ForEach(model.runningVMs) { vm in
+                let label = vm.displayName.isEmpty ? vm.name : vm.displayName
+                Menu {
+                    Button("Open in Oven") { model.focusVM(vm) }
+                    Divider()
+                    Button("Stop\u{2026}", role: .destructive) { model.stopVM(vm) }
+                } label: {
+                    Label {
+                        Text(label)
+                    } icon: {
+                        Image(systemName: "circle.fill").foregroundStyle(.green)
+                    }
+                }
             }
             Divider()
         }
 
-        Button("Open Oven") {
-            model.openMainWindow()
-        }
-    }
-
-    // MARK: - Per-build entry
-
-    @ViewBuilder
-    private func buildEntry(_ vm: VirtualMachine) -> some View {
-        let label = vm.displayName.isEmpty ? vm.name : vm.displayName
-        let phase = monitor.phase.label
-        let pct   = Int(monitor.progress * 100)
-        Button {
-            model.focusBaseVM(vm)
-        } label: {
-            // Native NSMenu renders Label/Text; we compose a readable string
-            // since layout views are not available in .menu style.
-            Label(
-                "\(label)  [\(phase)]  \(pct)%",
-                systemImage: "arrow.triangle.2.circlepath"
-            )
-        }
-    }
-
-    // MARK: - Per-VM entry
-
-    @ViewBuilder
-    private func vmEntry(_ vm: VirtualMachine) -> some View {
-        let label = vm.displayName.isEmpty ? vm.name : vm.displayName
-
-        switch vm.status {
-
-        case .stopped:
-            // Stopped VM: submenu lets user pick launch mode
-            Menu {
-                Button {
-                    model.startVM(vm, mode: .native)
-                } label: {
-                    Label("Native Window", systemImage: "desktopcomputer")
-                }
-
-                Button {
-                    model.startVM(vm, mode: .vnc)
-                } label: {
-                    Label("VNC / Screen Sharing", systemImage: "inset.filled.rectangle.and.person.filled")
-                }
-
-                Button {
-                    model.startVM(vm, mode: .headless)
-                } label: {
-                    Label("Headless (SSH only)", systemImage: "terminal")
-                }
-            } label: {
-                Label(label, systemImage: "stop.circle")
-            }
-
-        case .running:
-            Menu {
-                Button("Stop…", role: .destructive) {
-                    model.confirmAndStopVM(vm)
-                }
-            } label: {
-                Label {
-                    Text(label)
-                } icon: {
-                    Image(systemName: "play.circle.fill")
-                        .foregroundStyle(.green)
+        // MARK: Recent
+        if !model.recentVMs.isEmpty {
+            Text("Recent")
+            ForEach(model.recentVMs) { vm in
+                Button(vm.displayName.isEmpty ? vm.name : vm.displayName) {
+                    model.focusVM(vm)
                 }
             }
+            Divider()
+        }
 
-        case .suspended:
-            Menu {
-                Button("Stop…", role: .destructive) {
-                    model.confirmAndStopVM(vm)
-                }
-            } label: {
-                Label {
-                    Text(label)
-                } icon: {
-                    Image(systemName: "pause.circle.fill")
-                        .foregroundStyle(.orange)
+        // MARK: Pinned
+        if !model.pinnedVMs.isEmpty {
+            Text("Pinned")
+            ForEach(model.pinnedVMs) { vm in
+                Button(vm.displayName.isEmpty ? vm.name : vm.displayName) {
+                    model.focusVM(vm)
                 }
             }
-
-        case .building:
-            Label(label + " (Building…)", systemImage: "arrow.triangle.2.circlepath")
-
-        case .error:
-            Label(label + " (Error)", systemImage: "exclamationmark.circle.fill")
+            Divider()
         }
+
+        // MARK: Footer
+        Button("Open Oven") { model.openMainWindow() }
+        SettingsLink { Text("Preferences\u{2026}") }
+        Divider()
+        Button("Quit Oven") { NSApp.terminate(nil) }
     }
 }

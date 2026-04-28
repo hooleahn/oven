@@ -3,67 +3,83 @@ import AppKit
 
 // MARK: - MenuBarViewModel
 //
-// Drives the menu bar extra. Reads from SharedStores (same pattern as AppDelegate)
-// so it works outside the main SwiftUI environment hierarchy.
-//
-// Cached properties (cachedDisplayVMs, cachedHasActiveVMs) are stored @Observable
-// properties so SwiftUI can track them correctly. Direct access to
-// SharedStores.vmStore?.vms would not be tracked by SwiftUI observation.
-//
-// Sync is triggered on demand — when the user opens the menu — rather than
-// on a background timer, which avoids unnecessary tart process calls.
+// Drives the menu bar extra. Reads directly from SharedStores.vmStore so
+// SwiftUI's @Observable machinery on VMStore propagates changes automatically.
+// No separate cache is needed — computed properties below are re-evaluated
+// whenever vmStore.vms changes.
 
 @MainActor
 @Observable
 final class MenuBarViewModel {
 
-    // MARK: - Cached state (observed by SwiftUI)
+    // MARK: - Store reference
+    //
+    // Held directly rather than read from SharedStores so the menu bar panel
+    // has data even before the main window opens (SharedStores.vmStore is only
+    // set inside WindowGroup.task, which runs only when the window appears).
+    var vmStore: VMStore?
 
-    private(set) var cachedDisplayVMs: [VirtualMachine] = []
-    private(set) var cachedHasActiveVMs: Bool = false
-    /// Base VMs currently being built (buildStatus == .building).
-    private(set) var cachedActiveBuilds: [VirtualMachine] = []
+    // All non-base VMs
+    private var allVMs: [VirtualMachine] {
+        vmStore?.vms.filter { !$0.effectivelyBase } ?? []
+    }
 
-    // MARK: - Private
+    // MARK: - Sections
 
-    private var vmStore: VMStore? { SharedStores.vmStore }
-    private var appState: AppState? { SharedStores.appState }
+    /// VMs currently running or suspended, newest first.
+    var runningVMs: [VirtualMachine] {
+        allVMs
+            .filter { $0.status == .running || $0.status == .suspended }
+            .sorted { ($0.lastStartedAt ?? .distantPast) > ($1.lastStartedAt ?? .distantPast) }
+    }
+
+    /// Up to 3 stopped VMs most recently launched (lastStartedAt), then most recently created.
+    /// Running VMs are excluded since they already appear in runningVMs.
+    var recentVMs: [VirtualMachine] {
+        let runningIDs = Set(runningVMs.map(\.id))
+        return allVMs
+            .filter { !runningIDs.contains($0.id) && !$0.isPinned }
+            .sorted {
+                let a = $0.lastStartedAt ?? $0.createdAt
+                let b = $1.lastStartedAt ?? $1.createdAt
+                return a > b
+            }
+            .prefix(3)
+            .map { $0 }
+    }
+
+    /// Up to 5 VMs the user has pinned, alphabetically sorted.
+    var pinnedVMs: [VirtualMachine] {
+        allVMs
+            .filter(\.isPinned)
+            .sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+            .prefix(5)
+            .map { $0 }
+    }
+
+    var runningCount: Int { runningVMs.count }
+    var buildingCount: Int {
+        vmStore?.vms.filter { $0.effectivelyBase && $0.buildStatus == .building }.count ?? 0
+    }
 
     // MARK: - On menu open
 
-    /// Call this from MenuBarView.onAppear — fires each time the menu is opened.
     func onMenuOpen() {
-        Task {
-            await vmStore?.sync()
-            refreshCache()
+        // Ensure vmStore is wired — SharedStores.vmStore is set when the main
+        // window opens, but we want the menu bar to work before that too.
+        // We assign here as a fallback; OvenApp.body also assigns it.
+        if vmStore == nil {
+            vmStore = SharedStores.vmStore
         }
+        // Kick a background sync so statuses are fresh.
+        Task { await vmStore?.sync() }
     }
 
-    // MARK: - Cache refresh
+    // MARK: - Start VM
 
-    func refreshCache() {
-        // Defer mutations to the next run loop turn so they never fire during
-        // a SwiftUI layout pass, which would cause "Publishing changes from
-        // within view updates" warnings.
-        Task { @MainActor in
-            let all = (self.vmStore?.vms ?? [])
-                .filter { !$0.effectivelyBase }
-                .sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
-            self.cachedDisplayVMs = all
-            self.cachedHasActiveVMs = all.contains { $0.status == .running || $0.status == .suspended }
-            self.cachedActiveBuilds = (self.vmStore?.vms ?? [])
-                .filter { $0.effectivelyBase && $0.buildStatus == .building }
-                .sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
-        }
-    }
-
-    // MARK: - Start
-
-    /// Start a stopped VM with the given launch mode, tracking the operation in AppState.
     func startVM(_ vm: VirtualMachine, mode: TartService.RunMode) {
-        guard let store = vmStore, let state = appState else { return }
+        guard let store = vmStore, let state = SharedStores.appState else { return }
         guard vm.status == .stopped, !vm.effectivelyBase else { return }
-
         Task {
             let label = vm.displayName.isEmpty ? vm.name : vm.displayName
             let opID = state.beginOperation(vmName: label, kind: .start)
@@ -73,18 +89,14 @@ final class MenuBarViewModel {
             })
             state.finishOperation(id: opID)
             await store.sync()
-            refreshCache()
         }
     }
 
-    // MARK: - Stop single VM (with confirmation)
+    // MARK: - Stop VM
 
-    /// Show an NSAlert to confirm stopping a single VM, then stop it.
-    /// NSAlert.runModal() is safe here — menu actions always fire on the main thread.
-    func confirmAndStopVM(_ vm: VirtualMachine) {
+    func stopVM(_ vm: VirtualMachine) {
         guard let store = vmStore else { return }
         guard vm.status == .running || vm.status == .suspended else { return }
-
         let label = vm.displayName.isEmpty ? vm.name : vm.displayName
         let alert = NSAlert()
         alert.messageText = "Stop \"\(label)\"?"
@@ -92,68 +104,55 @@ final class MenuBarViewModel {
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Stop")
         alert.addButton(withTitle: "Cancel")
-
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-
         Task {
             try? await store.stop(vm: vm)
             await store.sync()
-            refreshCache()
         }
     }
 
-    // MARK: - Stop All (with confirmation)
+    // MARK: - Toggle pin
 
-    /// Show an NSAlert to confirm stopping all running/suspended VMs.
-    func confirmAndStopAll() {
-        guard let store = vmStore else { return }
-        let active = cachedDisplayVMs.filter { $0.status == .running || $0.status == .suspended }
-        guard !active.isEmpty else { return }
-
-        let count = active.count
-        let alert = NSAlert()
-        alert.messageText = "Stop All Running VMs?"
-        alert.informativeText = "This will stop \(count) VM\(count == 1 ? "" : "s"). Each will be given 30 seconds to shut down gracefully."
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Stop All")
-        alert.addButton(withTitle: "Cancel")
-
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-
-        for vm in active {
-            Task {
-                try? await store.stop(vm: vm)
-            }
-        }
-        Task {
-            await store.sync()
-            refreshCache()
-        }
+    func togglePin(_ vm: VirtualMachine) {
+        vmStore?.update(id: vm.id) { $0.isPinned.toggle() }
     }
 
     // MARK: - Open Main Window
 
-    /// Activate the app and bring the main window to front.
     func openMainWindow() {
+        // Activate the app — this brings the existing window to front
+        // without closing/reopening it (which corrupts the unified toolbar).
         NSApp.activate(ignoringOtherApps: true)
-        for window in NSApp.windows where window.title.contains("Oven") {
-            window.makeKeyAndOrderFront(nil)
+
+        // If there's already a visible Oven window, bring it forward.
+        if let win = NSApp.windows.first(where: { $0.title == "Oven" && !$0.isMiniaturized }) {
+            win.makeKeyAndOrderFront(nil)
             return
         }
+
+        // Window is miniaturized — deminiaturize it.
+        if let win = NSApp.windows.first(where: { $0.title == "Oven" }) {
+            win.deminiaturize(nil)
+            return
+        }
+
+        // No window exists yet — trigger the app reopen handler.
+        _ = NSApp.delegate?.applicationShouldHandleReopen?(NSApp, hasVisibleWindows: false)
     }
 
-    /// Bring the main window forward — the UI will navigate to the base VMs tab
-    /// showing the named VM. We post a notification that ContentView can observe.
-    func focusBaseVM(_ vm: VirtualMachine) {
+    /// Navigate the main window to a specific VM and select it in the list.
+    func focusVM(_ vm: VirtualMachine) {
         openMainWindow()
-        NotificationCenter.default.post(
-            name: .focusBaseVM,
-            object: nil,
-            userInfo: ["vmID": vm.id]
-        )
+        // Post after a brief delay so VMListView is visible and observing
+        // before the notification fires.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            NotificationCenter.default.post(
+                name: .menuBarFocusVM, object: nil, userInfo: ["vmID": vm.id]
+            )
+        }
     }
 }
 
 extension Notification.Name {
-    static let focusBaseVM = Notification.Name("OvenFocusBaseVM")
+    static let menuBarFocusVM = Notification.Name("OvenMenuBarFocusVM")
 }

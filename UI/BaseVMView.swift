@@ -150,10 +150,10 @@ struct BaseVMView: View {
                         refreshRotation = 0
                     }
                 } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    Label("Refresh Base VMs", systemImage: "arrow.clockwise")
                 }
                 .keyboardShortcut("r", modifiers: .command)
-                .help("Sync base VMs from tart (⌘R)")
+                .help("Refresh base VM list (⌘R)")
             }
         }
         .task { await baseVMStore.syncOCI(); lastRefreshedAt = Date() }
@@ -163,7 +163,7 @@ struct BaseVMView: View {
             }
         }
         .confirmationDialog(
-            "Delete \"\(model.confirmDelete?.name ?? "")\"?",
+            model.confirmDelete.map { "Delete \"\($0.displayName.isEmpty ? $0.name : $0.displayName)\"?" } ?? "Delete Base VM?",
             isPresented: Binding(get: { model.confirmDelete != nil }, set: { if !$0 { model.confirmDelete = nil } }),
             titleVisibility: .visible
         ) {
@@ -180,6 +180,9 @@ struct BaseVMView: View {
                     if model.selectedBaseVMID == deletedID { model.selectedBaseVMID = nil }
                 }
             }
+            Button("Cancel", role: .cancel) { model.confirmDelete = nil }
+        } message: {
+            Text("This permanently removes the base VM image from disk. This cannot be undone.")
         }
         .onChange(of: baseVMStore.baseVMs) { _, vms in
             Task { @MainActor in
@@ -258,8 +261,6 @@ struct BaseVMView: View {
         ) {
             Button(theme.newBaseVM) { model.isPresentingNewSheet = true }
                 .buttonStyle(.borderedProminent)
-        } content: {
-            BaseVMWorkflowIndicator()
         }
     }
 
@@ -277,49 +278,6 @@ struct BaseVMView: View {
     }
 }
 
-// MARK: - Base VM workflow indicator (used in empty state)
-
-private struct BaseVMWorkflowIndicator: View {
-    var body: some View {
-        HStack(spacing: 0) {
-            WorkflowStep(icon: "arrow.down.circle.fill", color: .blue, label: "Download\nInstaller")
-            WorkflowArrow()
-            WorkflowStep(icon: "hammer.fill", color: .orange, label: "Build\nBase VM")
-            WorkflowArrow()
-            WorkflowStep(icon: "doc.on.doc.fill", color: .green, label: "Clone as\nWorking VM")
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-private struct WorkflowStep: View {
-    let icon: String
-    let color: Color
-    let label: String
-
-    var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 24))
-                .foregroundStyle(color)
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(width: 72)
-        }
-    }
-}
-
-private struct WorkflowArrow: View {
-    var body: some View {
-        Image(systemName: "chevron.right")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.tertiary)
-            .padding(.horizontal, 8)
-            .padding(.bottom, 16) // optically align with icon centre
-    }
-}
 
 // MARK: - Row
 

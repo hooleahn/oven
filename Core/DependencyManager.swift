@@ -151,7 +151,53 @@ final class DependencyManager: ObservableObject {
         }
     }
 
-    var allReady: Bool { dependencies.filter(\.isRequired).allSatisfy(\.isReady) }
+    /// The storage root directory where managed binaries are stored.
+    var storageRoot: URL { depsDirectory.deletingLastPathComponent() }
+
+    var allReady: Bool {
+        dependencies
+            .filter { $0.requiredForLaunch }
+            .allSatisfy { $0.isReady || $0.status == .skipped || $0.systemBinaryPath != nil }
+    }
+
+    /// Point a dependency at a user-supplied binary instead of the managed one.
+    /// Validates the path with `--version` (or `version` for packer) before accepting it.
+    func setSystemBinary(id: String, path: URL) async {
+        guard let i = dependencies.firstIndex(where: { $0.id == id }) else { return }
+        let version = try? await readVersion(binaryPath: path.path, id: id)
+        let d = dependencies[i]
+        dependencies[i] = Dependency(
+            id: d.id, displayName: d.displayName,
+            purpose: d.purpose, icon: d.icon,
+            currentVersion: version, latestVersion: d.latestVersion,
+            binaryPath: d.binaryPath,
+            isRequired: d.isRequired, requiredForLaunch: d.requiredForLaunch,
+            installURL: d.installURL, systemBinaryPath: path,
+            status: version != nil ? .installed : .error
+        )
+    }
+
+    /// Mark a dependency as skipped — the user acknowledges it won't be installed.
+    func skipDependency(id: String) {
+        guard let i = dependencies.firstIndex(where: { $0.id == id }) else { return }
+        let d = dependencies[i]
+        dependencies[i] = Dependency(
+            id: d.id, displayName: d.displayName,
+            purpose: d.purpose, icon: d.icon,
+            currentVersion: d.currentVersion, latestVersion: d.latestVersion,
+            binaryPath: d.binaryPath,
+            isRequired: d.isRequired, requiredForLaunch: d.requiredForLaunch,
+            installURL: d.installURL, systemBinaryPath: d.systemBinaryPath,
+            status: .skipped
+        )
+    }
+
+    /// Install all dependencies that are not yet installed (or skipped).
+    func installAll() async {
+        for dep in dependencies where dep.status == .notInstalled || dep.status == .error {
+            await install(dep)
+        }
+    }
 
     var hasUpdatesAvailable: Bool {
         mode == .managed && dependencies.contains { $0.status == .updateAvailable }
@@ -198,17 +244,27 @@ final class DependencyManager: ObservableObject {
             let dep = dependencies[i]
             let p = customPath(for: dep.id, in: settings.customPaths)
             guard !p.isEmpty, FileManager.default.fileExists(atPath: p) else {
-                dependencies[i] = Dependency(id: dep.id, displayName: dep.displayName,
-                                             currentVersion: nil, latestVersion: nil,
-                                             binaryPath: URL(fileURLWithPath: p.isEmpty ? dep.binaryPath.path : p),
-                                             isRequired: dep.isRequired, status: .notInstalled)
+                dependencies[i] = Dependency(
+                    id: dep.id, displayName: dep.displayName,
+                    purpose: dep.purpose, icon: dep.icon,
+                    currentVersion: nil, latestVersion: nil,
+                    binaryPath: URL(fileURLWithPath: p.isEmpty ? dep.binaryPath.path : p),
+                    isRequired: dep.isRequired, requiredForLaunch: dep.requiredForLaunch,
+                    installURL: dep.installURL, systemBinaryPath: dep.systemBinaryPath,
+                    status: .notInstalled
+                )
                 continue
             }
             let version = try? await readVersion(binaryPath: p, id: dep.id)
-            dependencies[i] = Dependency(id: dep.id, displayName: dep.displayName,
-                                         currentVersion: version, latestVersion: nil,
-                                         binaryPath: URL(fileURLWithPath: p),
-                                         isRequired: dep.isRequired, status: .installed)
+            dependencies[i] = Dependency(
+                id: dep.id, displayName: dep.displayName,
+                purpose: dep.purpose, icon: dep.icon,
+                currentVersion: version, latestVersion: nil,
+                binaryPath: URL(fileURLWithPath: p),
+                isRequired: dep.isRequired, requiredForLaunch: dep.requiredForLaunch,
+                installURL: dep.installURL, systemBinaryPath: dep.systemBinaryPath,
+                status: .installed
+            )
         }
     }
 
@@ -471,16 +527,70 @@ final class DependencyManager: ObservableObject {
 
     // MARK: - State
 
+    // MARK: - Dependency metadata catalogue
+
+    private struct DepMeta {
+        let purpose: String
+        let icon: String
+        let requiredForLaunch: Bool
+        let installURL: URL?
+    }
+
+    private func meta(for id: String) -> DepMeta {
+        switch id {
+        case "tart":
+            return DepMeta(
+                purpose: "Runs macOS virtual machines on Apple Silicon",
+                icon: "desktopcomputer",
+                requiredForLaunch: true,
+                installURL: URL(string: "https://github.com/cirruslabs/tart/releases")
+            )
+        case "packer":
+            return DepMeta(
+                purpose: "Automates VM provisioning from templates",
+                icon: "wrench.and.screwdriver",
+                requiredForLaunch: true,
+                installURL: URL(string: "https://github.com/hashicorp/packer/releases")
+            )
+        case "mist-cli":
+            return DepMeta(
+                purpose: "Downloads macOS installers from Apple's servers",
+                icon: "arrow.down.circle",
+                requiredForLaunch: false,
+                installURL: URL(string: "https://github.com/ninxsoft/mist-cli/releases")
+            )
+        case "tart-packer-plugin":
+            return DepMeta(
+                purpose: "Packer plugin that drives tart to build VMs",
+                icon: "puzzlepiece.extension",
+                requiredForLaunch: true,
+                installURL: URL(string: "https://github.com/cirruslabs/packer-plugin-tart/releases")
+            )
+        case "jq":
+            return DepMeta(
+                purpose: "Parses JSON output from tart and other tools",
+                icon: "curlybraces",
+                requiredForLaunch: true,
+                installURL: URL(string: "https://github.com/jqlang/jq/releases")
+            )
+        default:
+            return DepMeta(purpose: "", icon: "wrench", requiredForLaunch: false, installURL: nil)
+        }
+    }
+
     private func buildInitialState(settings: AppSettings) {
         if settings.dependencyMode == .custom {
             let paths = settings.customPaths
             func customDep(_ id: String, _ displayName: String, _ path: String, required: Bool) -> Dependency {
                 let p = path.isEmpty ? "" : path
                 let exists = !p.isEmpty && FileManager.default.fileExists(atPath: p)
+                let m = meta(for: id)
                 return Dependency(id: id, displayName: displayName,
+                                  purpose: m.purpose, icon: m.icon,
                                   currentVersion: nil, latestVersion: nil,
                                   binaryPath: URL(fileURLWithPath: p.isEmpty ? depsDirectory.appendingPathComponent(id).path : p),
-                                  isRequired: required,
+                                  isRequired: required, requiredForLaunch: m.requiredForLaunch,
+                                  installURL: m.installURL, systemBinaryPath: nil,
                                   status: exists ? .installed : .notInstalled)
             }
             dependencies = [
@@ -503,27 +613,38 @@ final class DependencyManager: ObservableObject {
             let files = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
             return files.contains(where: { $0.hasPrefix("packer-plugin-tart") }) ? .installed : .notInstalled
         }
+        func dep(_ id: String, _ displayName: String, currentVersion: String?,
+                 binaryPath: URL, isRequired: Bool, status: Dependency.Status) -> Dependency {
+            let info = meta(for: id)
+            return Dependency(id: id, displayName: displayName,
+                              purpose: info.purpose, icon: info.icon,
+                              currentVersion: currentVersion, latestVersion: nil,
+                              binaryPath: binaryPath,
+                              isRequired: isRequired, requiredForLaunch: info.requiredForLaunch,
+                              installURL: info.installURL, systemBinaryPath: nil,
+                              status: status)
+        }
         dependencies = [
-            Dependency(id: "tart",               displayName: "tart",
-                       currentVersion: m.tart,               latestVersion: nil,
-                       binaryPath: depsDirectory.appendingPathComponent("tart.app/Contents/MacOS/tart"),
-                       isRequired: true, status: st("tart", m.tart)),
-            Dependency(id: "packer",             displayName: "packer",
-                       currentVersion: m.packer,             latestVersion: nil,
-                       binaryPath: depsDirectory.appendingPathComponent("packer"),
-                       isRequired: true, status: st("packer", m.packer)),
-            Dependency(id: "mist-cli",           displayName: "mist-cli",
-                       currentVersion: m.mistCLI,            latestVersion: nil,
-                       binaryPath: depsDirectory.appendingPathComponent("mist-cli"),
-                       isRequired: false, status: st("mist-cli", m.mistCLI)),
-            Dependency(id: "tart-packer-plugin", displayName: "packer-plugin-tart",
-                       currentVersion: m.tartPackerPlugin,   latestVersion: nil,
-                       binaryPath: depsDirectory.appendingPathComponent("tart-packer-plugin"),
-                       isRequired: true, status: pluginInstalled()),
-            Dependency(id: "jq",                 displayName: "jq",
-                       currentVersion: m.jq,                 latestVersion: nil,
-                       binaryPath: depsDirectory.appendingPathComponent("jq"),
-                       isRequired: true, status: st("jq", m.jq)),
+            dep("tart",               "tart",
+                currentVersion: m.tart,
+                binaryPath: depsDirectory.appendingPathComponent("tart.app/Contents/MacOS/tart"),
+                isRequired: true, status: st("tart", m.tart)),
+            dep("packer",             "packer",
+                currentVersion: m.packer,
+                binaryPath: depsDirectory.appendingPathComponent("packer"),
+                isRequired: true, status: st("packer", m.packer)),
+            dep("mist-cli",           "mist-cli",
+                currentVersion: m.mistCLI,
+                binaryPath: depsDirectory.appendingPathComponent("mist-cli"),
+                isRequired: false, status: st("mist-cli", m.mistCLI)),
+            dep("tart-packer-plugin", "packer-plugin-tart",
+                currentVersion: m.tartPackerPlugin,
+                binaryPath: depsDirectory.appendingPathComponent("tart-packer-plugin"),
+                isRequired: true, status: pluginInstalled()),
+            dep("jq",                 "jq",
+                currentVersion: m.jq,
+                binaryPath: depsDirectory.appendingPathComponent("jq"),
+                isRequired: true, status: st("jq", m.jq)),
         ]
     }
 
@@ -537,28 +658,44 @@ final class DependencyManager: ObservableObject {
     private func updateStatus(id: String, to status: Dependency.Status) {
         guard let i = dependencies.firstIndex(where: { $0.id == id }) else { return }
         let d = dependencies[i]
-        dependencies[i] = Dependency(id: d.id, displayName: d.displayName,
-                                      currentVersion: d.currentVersion, latestVersion: d.latestVersion,
-                                      binaryPath: d.binaryPath, isRequired: d.isRequired, status: status)
+        dependencies[i] = Dependency(
+            id: d.id, displayName: d.displayName,
+            purpose: d.purpose, icon: d.icon,
+            currentVersion: d.currentVersion, latestVersion: d.latestVersion,
+            binaryPath: d.binaryPath,
+            isRequired: d.isRequired, requiredForLaunch: d.requiredForLaunch,
+            installURL: d.installURL, systemBinaryPath: d.systemBinaryPath,
+            status: status
+        )
     }
 
     private func updateInstalledVersion(id: String, version: String?) {
         guard let i = dependencies.firstIndex(where: { $0.id == id }) else { return }
         let d = dependencies[i]
-        dependencies[i] = Dependency(id: d.id, displayName: d.displayName,
-                                      currentVersion: version, latestVersion: d.latestVersion,
-                                      binaryPath: d.binaryPath, isRequired: d.isRequired,
-                                      status: version != nil ? .installed : d.status)
+        dependencies[i] = Dependency(
+            id: d.id, displayName: d.displayName,
+            purpose: d.purpose, icon: d.icon,
+            currentVersion: version, latestVersion: d.latestVersion,
+            binaryPath: d.binaryPath,
+            isRequired: d.isRequired, requiredForLaunch: d.requiredForLaunch,
+            installURL: d.installURL, systemBinaryPath: d.systemBinaryPath,
+            status: version != nil ? .installed : d.status
+        )
         saveManifest()
     }
 
     private func updateLatestVersion(id: String, latestVersion: String?) {
         guard let i = dependencies.firstIndex(where: { $0.id == id }) else { return }
         let d = dependencies[i]
-        dependencies[i] = Dependency(id: d.id, displayName: d.displayName,
-                                      currentVersion: d.currentVersion, latestVersion: latestVersion,
-                                      binaryPath: d.binaryPath, isRequired: d.isRequired,
-                                      status: d.status)
+        dependencies[i] = Dependency(
+            id: d.id, displayName: d.displayName,
+            purpose: d.purpose, icon: d.icon,
+            currentVersion: d.currentVersion, latestVersion: latestVersion,
+            binaryPath: d.binaryPath,
+            isRequired: d.isRequired, requiredForLaunch: d.requiredForLaunch,
+            installURL: d.installURL, systemBinaryPath: d.systemBinaryPath,
+            status: d.status
+        )
     }
 
     private func fileExists(_ name: String) -> Bool {

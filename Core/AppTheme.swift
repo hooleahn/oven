@@ -18,7 +18,7 @@ final class AppTheme: ObservableObject {
     var registry: String         { funModeEnabled ? "Pantry"        : "Image Registry" }
     var mdmEnrollment: String    { funModeEnabled ? "MDM Enroll"    : "MDM Enrollment" }
     var mdmServers: String       { funModeEnabled ? "MDM Servers"   : "MDM Servers" }
-    var recipes: String          { funModeEnabled ? "Recipes"       : "Packer Templates" }
+    var recipes: String          { funModeEnabled ? "Recipe Book"   : "Packer Templates" }
     var logs: String             { funModeEnabled ? "Oven Log"      : "Activity Log" }
 
     /// Action verbs

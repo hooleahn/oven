@@ -100,6 +100,7 @@ struct OvenApp: App {
     @State private var blockStore = BuildingBlockStore()
     @State private var recipesViewModel = RecipesViewModel()
     @State private var menuBarViewModel = MenuBarViewModel()
+    @State private var pushManager = PushManager()
 
     // MARK: - Store factories (called once at app launch)
 
@@ -152,6 +153,28 @@ struct OvenApp: App {
                 .appendingPathComponent("deps/tart").path
     }
 
+    // MARK: - Menu bar icon label
+
+    @ViewBuilder
+    private var menuBarLabel: some View {
+        Image("MenuBarIcon")
+            .renderingMode(.template)
+            .overlay(alignment: .topTrailing) {
+                if menuBarViewModel.runningCount > 0 {
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 6, height: 6)
+                        .overlay(Circle().stroke(Color(nsColor: .textBackgroundColor), lineWidth: 1))
+                        .offset(x: 3, y: -2)
+                }
+            }
+            .overlay {
+                if NSImage(named: "MenuBarIcon") == nil {
+                    Image(systemName: "flame.fill")
+                }
+            }
+    }
+
     var body: some Scene {
         WindowGroup("Oven") {
             Group {
@@ -169,6 +192,7 @@ struct OvenApp: App {
                         .environmentObject(baseVMStore)
                         .environmentObject(templateStore)
                         .environmentObject(blockStore)
+                        .environmentObject(pushManager)
                         .environment(recipesViewModel)
                 } else {
                     SetupView(depManager: depManager)
@@ -180,6 +204,9 @@ struct OvenApp: App {
                 SharedStores.vmStore = vmStore
                 SharedStores.baseVMStore = baseVMStore
                 SharedStores.packerService = OvenApp.makePackerService()
+                // Also wire into menuBarViewModel (MenuBarExtra.task may run first,
+                // but this ensures the reference is set when the main window opens too)
+                menuBarViewModel.vmStore = vmStore
                 await depManager.bootstrap()
                 // Log OS version check at startup
                 let ver = ProcessInfo.processInfo.operatingSystemVersion
@@ -221,21 +248,18 @@ struct OvenApp: App {
                 .environmentObject(depManager)
         }
 
-        MenuBarExtra(isInserted: $menuBarItemEnabled) {
-            MenuBarView(model: menuBarViewModel)
-        } label: {
-            // Use the custom oven icon as a template so macOS tints it
-            // correctly in light/dark mode and for active/inactive states.
-            // The badge overlay signals when VMs are running.
-            Image("MenuBarIcon")
-                .overlay(alignment: .topTrailing) {
-                    if menuBarViewModel.cachedHasActiveVMs {
-                        Circle()
-                            .fill(.green)
-                            .frame(width: 6, height: 6)
-                            .offset(x: 2, y: -2)
-                    }
+        MenuBarExtra(isInserted: Binding(
+            get:  { menuBarItemEnabled },
+            set:  { _ in }
+        )) {
+            MenuBarMenuContent(model: menuBarViewModel)
+                .onAppear {
+                    // Wire vmStore before onMenuOpen() runs so computed
+                    // properties have data even if the main window is closed.
+                    menuBarViewModel.vmStore = vmStore
                 }
+        } label: {
+            menuBarLabel
         }
         .menuBarExtraStyle(.menu)
     }

@@ -1,123 +1,99 @@
 import SwiftUI
 
-// MARK: - Enrollment view
+// MARK: - Enrollment view-model
 
-struct MDMEnrollmentView: View {
-    @EnvironmentObject var serverStore: MDMServerStore
-    @State private var profiles: [MDMProfile] = []
-    @State private var selectedProfile: MDMProfile?
-    @State private var isPresentingSheet = false
-    @State private var editingProfile: MDMProfile? = nil
-    @State private var confirmDeleteProfile: MDMProfile? = nil
+/// Lifted selection, profile data, and sheet-presentation state for MDMEnrollmentView.
+/// Owned by ContentView so both the content column (list) and the detail
+/// column (pane + sheets) share the same instance — matching the pattern
+/// used by VMListViewModel / BaseVMViewModel.
+@MainActor
+@Observable
+final class MDMEnrollmentViewModel {
+    var selectedProfileID: UUID?          = nil
+    var profiles: [MDMProfile]            = []
+    var isPresentingNewSheet: Bool        = false
+    var editingProfile: MDMProfile?       = nil
+    var confirmDeleteProfile: MDMProfile? = nil
 
-    var body: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                toolbar
-                Divider()
-                if profiles.isEmpty {
-                    EmptyStateView("No Enrollment Profiles", systemImage: "lock.shield",
-                                   description: "Create an enrollment profile to make it easier to enroll VMs into your MDM.") {
-                        Button("New Profile") { isPresentingSheet = true }
-                            .buttonStyle(.borderedProminent)
-                            .keyboardShortcut(.defaultAction)
-                    } content: {
-                        VStack(alignment: .leading, spacing: 10) {
-                            MDMBenefitRow(icon: "checkmark.shield.fill", color: .green,
-                                          text: "Simplify enrolling VMs into Jamf Pro at boot")
-                            MDMBenefitRow(icon: "clock.arrow.2.circlepath", color: .orange,
-                                          text: "Reuse invitation IDs across multiple VM clones")
-                        }
-                        .padding(.vertical, 4)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List(profiles, id: \.id, selection: $selectedProfile) { profile in
-                        MDMProfileRow(profile: profile, servers: serverStore.servers).tag(profile)
-                    }
-                    .listStyle(.inset)
-                }
-            }
-            if let profile = selectedProfile {
-                Divider()
-                MDMProfileDetailPane(
-                    profile: profileBinding(for: profile.id),
-                    server: serverStore.servers.first(where: { $0.id == profile.serverID }),
-                    servers: serverStore.servers,
-                    onEdit: { editingProfile = profile },
-                    onDelete: { confirmDeleteProfile = profile }
-                )
-                .frame(width: 280)
-                .id(profile.id)
-            }
-        }
-        .navigationTitle("MDM Enrollment")
-        .confirmationDialog(
-            confirmDeleteProfile.map { "Delete \"\($0.displayName)\"?" } ?? "Delete profile?",
-            isPresented: Binding(get: { confirmDeleteProfile != nil }, set: { if !$0 { confirmDeleteProfile = nil } }),
-            titleVisibility: .visible
-        ) {
-            if let profile = confirmDeleteProfile {
-                Button("Delete Profile", role: .destructive) { deleteProfile(profile) }
-                Button("Cancel", role: .cancel) { confirmDeleteProfile = nil }
-            }
-        } message: {
-            Text("This enrollment profile will be permanently removed.")
-        }
-        .sheet(isPresented: $isPresentingSheet) {
-            MDMProfileSheet(servers: serverStore.servers) { profiles.append($0); saveProfiles() }
-        }
-        .sheet(item: $editingProfile) { profile in
-            MDMProfileSheet(servers: serverStore.servers, editing: profile) { updated in
-                if let i = profiles.firstIndex(where: { $0.id == updated.id }) {
-                    profiles[i] = updated
-                    // Keep selected profile in sync
-                    if selectedProfile?.id == updated.id { selectedProfile = updated }
-                    saveProfiles()
-                }
-            }
-        }
-        .onAppear { loadProfiles() }
+    func load() {
+        let loaded = AppDatabase.shared.readOrDefault(.mdmProfiles, default: [MDMProfile]())
+        if !loaded.isEmpty { profiles = loaded }
     }
 
-    private var toolbar: some View {
-        HStack(spacing: 8) {
-            Spacer()
-            Button { isPresentingSheet = true } label: {
-                Label("New Profile", systemImage: "plus")
-            }
-            .buttonStyle(.borderedProminent).controlSize(.small)
-        }
-        .padding(.horizontal, 14).padding(.vertical, 8).background(.bar)
+    func save() {
+        AppDatabase.shared.writeSilently(profiles, to: .mdmProfiles)
     }
 
-    private func profileBinding(for id: UUID) -> Binding<MDMProfile> {
+    func profileBinding(for id: UUID) -> Binding<MDMProfile> {
         Binding(
-            get: { profiles.first(where: { $0.id == id }) ?? MDMProfile(displayName: "") },
-            set: { updated in
-                if let i = profiles.firstIndex(where: { $0.id == id }) {
-                    profiles[i] = updated
-                    saveProfiles()
+            get: { [weak self] in
+                self?.profiles.first(where: { $0.id == id }) ?? MDMProfile(displayName: "")
+            },
+            set: { [weak self] updated in
+                guard let self else { return }
+                if let i = self.profiles.firstIndex(where: { $0.id == id }) {
+                    self.profiles[i] = updated
+                    self.save()
                 }
             }
         )
     }
 
-    private func deleteProfile(_ profile: MDMProfile) {
+    func delete(_ profile: MDMProfile) {
         profiles.removeAll { $0.id == profile.id }
-        if selectedProfile?.id == profile.id { selectedProfile = nil }
+        if selectedProfileID == profile.id { selectedProfileID = nil }
         confirmDeleteProfile = nil
-        saveProfiles()
+        save()
     }
+}
 
-    private func loadProfiles() {
-        let loaded = AppDatabase.shared.readOrDefault(.mdmProfiles, default: [MDMProfile]())
-        guard !loaded.isEmpty else { return }
-        profiles = loaded
-    }
+// MARK: - Enrollment view
 
-    private func saveProfiles() {
-        AppDatabase.shared.writeSilently(profiles, to: .mdmProfiles)
+/// List column — pure display and selection only.
+/// All sheet presentation is handled by ContentView's DetailColumn.
+struct MDMEnrollmentView: View {
+    @EnvironmentObject var serverStore: MDMServerStore
+    @Bindable var model: MDMEnrollmentViewModel
+
+    var body: some View {
+        Group {
+            if model.profiles.isEmpty {
+                // MDM Enrollment is the least discoverable entry point in the app.
+                // The benefit rows below explain what enrollment profiles do before
+                // the user commits to the setup flow — acceptable exception to the
+                // no-extra-content rule.
+                EmptyStateView("No Enrollment Profiles", systemImage: "lock.shield",
+                               description: "Create an enrollment profile to enroll VMs into your MDM at boot.") {
+                    Button("New Profile") { model.isPresentingNewSheet = true }
+                        .buttonStyle(.borderedProminent)
+                } content: {
+                    VStack(alignment: .leading, spacing: 10) {
+                        MDMBenefitRow(icon: "checkmark.shield.fill", color: .green,
+                                      text: "Simplify enrolling VMs into Jamf Pro at boot")
+                        MDMBenefitRow(icon: "clock.arrow.2.circlepath", color: .orange,
+                                      text: "Reuse invitation IDs across multiple VM clones")
+                    }
+                    .padding(.vertical, 4)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(model.profiles, id: \.id, selection: $model.selectedProfileID) { profile in
+                    MDMProfileRow(profile: profile, servers: serverStore.servers).tag(profile.id)
+                }
+                .listStyle(.inset)
+            }
+        }
+        .navigationTitle("MDM Enrollment")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { model.isPresentingNewSheet = true } label: {
+                    Label("New Profile", systemImage: "plus")
+                }
+                .keyboardShortcut("n", modifiers: .command)
+                .help("Create a new enrollment profile (⌘N)")
+            }
+        }
+        .onAppear { model.load() }
     }
 }
 
@@ -185,7 +161,7 @@ struct MDMProfileDetailPane: View {
             // Header
             VStack(spacing: 6) {
                 Image(systemName: profile.isValid ? "checkmark.seal.fill" : "xmark.seal.fill")
-                    .font(.system(size: 28, weight: .light))
+                    .font(.system(.title, weight: .light))
                     .foregroundStyle(profile.isValid ? .green : .red)
                 Text(profile.displayName).font(.headline).lineLimit(1)
                 Text(serverLabel).font(.caption).foregroundStyle(.secondary)

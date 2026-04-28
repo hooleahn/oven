@@ -39,7 +39,7 @@ struct TagsPrefsTab: View {
         }
 
         .confirmationDialog(
-            confirmDeleteTag.map { "Delete '\($0)'?" } ?? "Delete tag?",
+            confirmDeleteTag.map { "Delete \"\($0)\"?" } ?? "Delete tag?",
             isPresented: Binding(
                 get: { confirmDeleteTag != nil },
                 set: { if !$0 { confirmDeleteTag = nil } }

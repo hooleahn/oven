@@ -7,7 +7,7 @@ struct TagChip: View {
     let tag: String
     var removable: Bool = false
     var onRemove: (() -> Void)? = nil
-    var size: CGFloat = 11
+    var size: Font = .caption
     /// Called on normal tap (replace filter with just this tag).
     var onTap: ((String) -> Void)? = nil
     /// Called on shift-tap (add/toggle tag in active filter).
@@ -24,12 +24,12 @@ struct TagChip: View {
     var body: some View {
         HStack(spacing: 3) {
             Text(tag)
-                .font(.system(size: size, weight: .medium))
+                .font(size.weight(.medium))
                 .lineLimit(1)
             if removable {
                 Button { onRemove?() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: size - 3, weight: .bold))
+                        .font(.caption2.weight(.bold))
                 }
                 .buttonStyle(.plain)
             }
@@ -39,6 +39,8 @@ struct TagChip: View {
         .background(tagStore.color(for: tag).opacity(0.18), in: Capsule())
         .foregroundStyle(tagStore.color(for: tag))
         .contentShape(Capsule())
+        .accessibilityLabel("Tag: \(tag)")
+        .accessibilityHint("Double-tap to filter by this tag, option-double-tap to remove")
         .ifLet(onTap != nil || onShiftTap != nil) { view in
             view
                 .onTapGesture {
@@ -127,7 +129,7 @@ struct PaletteSwatchGrid: View {
                                 .strokeBorder(.white, lineWidth: 2)
                                 .frame(width: 22, height: 22)
                             Image(systemName: "checkmark")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.caption2.weight(.bold))
                                 .foregroundStyle(.white)
                         }
                     }

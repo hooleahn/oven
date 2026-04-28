@@ -28,9 +28,27 @@ struct TemplateDetailPane: View {
 
     @EnvironmentObject var theme: AppTheme
     @State private var copied = false
+    @State private var sofaVersions: [String] = []
+    @State private var isFetchingVersions = false
 
     private var canEdit: Bool { !template.isBase }
     private var isAnyDirty: Bool { isDirty || isMetadataDirty }
+
+    private var versionList: [String] {
+        sofaVersions.isEmpty
+            ? (MacOSRelease.Name(rawValue: editedOSName)?.fallbackVersions ?? [])
+            : sofaVersions
+    }
+
+    private func loadVersions(for osNameRaw: String) async {
+        guard let release = MacOSRelease.Name(rawValue: osNameRaw), !osNameRaw.isEmpty else {
+            sofaVersions = []
+            return
+        }
+        isFetchingVersions = true
+        sofaVersions = await SOFAService.shared.versions(for: release)
+        isFetchingVersions = false
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,6 +65,10 @@ struct TemplateDetailPane: View {
                 validationBanner(result)
             }
         }
+        .task { await loadVersions(for: editedOSName) }
+        .onChange(of: editedOSName) { _, newName in
+            Task { await loadVersions(for: newName) }
+        }
     }
 
     // MARK: - Toolbar
@@ -60,7 +82,8 @@ struct TemplateDetailPane: View {
                         Text("Base Template")
                             .font(.caption).fontWeight(.medium)
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.15), in: Capsule())
+                            .background(.quaternary, in: Capsule())
+                            .background(.bar, in: Rectangle())
                             .foregroundStyle(.secondary)
                     } else if isAnyDirty {
                         Text("Edited")
@@ -191,13 +214,15 @@ struct TemplateDetailPane: View {
                         .onChange(of: editedOSName) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
 
                         if !editedOSName.isEmpty {
-                            let versions = MacOSRelease.Name(rawValue: editedOSName)?.fallbackVersions ?? []
                             Picker("", selection: $editedOSVersion) {
                                 Text("Any version").tag("")
-                                ForEach(versions, id: \.self) { Text($0).tag($0) }
+                                ForEach(versionList, id: \.self) { Text($0).tag($0) }
                             }
                             .labelsHidden().frame(width: 120)
                             .onChange(of: editedOSVersion) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
+                            if isFetchingVersions {
+                                ProgressView().controlSize(.mini)
+                            }
                         }
                     }
                 } else {

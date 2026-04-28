@@ -109,6 +109,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         return base + "-" + String(UUID().uuidString.prefix(4).lowercased())
     }
 
+    var isPinned: Bool = false          // pinned VMs appear in the menu bar extra
     var isResolvingIP: Bool = false    // true while polling for IP
     var isStopping: Bool = false       // true while tart stop is in flight
     var actualDiskGB: Int? = nil       // from tart list Size field, nil if unknown
@@ -241,6 +242,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         sharedFolders    = try c.decodeIfPresent([SharedFolder].self,  forKey: .sharedFolders)   ?? []
         sshUsername      = try c.decodeIfPresent(String.self,         forKey: .sshUsername)      ?? "baker"
         manualBuildConfig = try c.decodeIfPresent(ManualBuildConfig.self, forKey: .manualBuildConfig)
+        isPinned         = try c.decodeIfPresent(Bool.self,             forKey: .isPinned)         ?? false
         isResolvingIP    = false  // always reset on load — never persisted
         isStopping       = false
     }

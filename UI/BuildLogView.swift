@@ -44,7 +44,7 @@ struct BuildLogView: View {
                     LazyVStack(alignment: .leading, spacing: 1) {
                         ForEach(Array(baseVM.buildLog.enumerated()), id: \.offset) { idx, line in
                             Text(line)
-                                .font(.system(size: 10, design: .monospaced))
+                                .font(.system(.caption2, design: .monospaced))
                                 .foregroundStyle(lineColor(line))
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -54,9 +54,9 @@ struct BuildLogView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                 }
-                .frame(minHeight: 120, maxHeight: 280)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.2)))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator.opacity(0.5)))
                 .onChange(of: baseVM.buildLog.count) { _, _ in
                     if let last = baseVM.buildLog.indices.last {
                         proxy.scrollTo(last, anchor: .bottom)

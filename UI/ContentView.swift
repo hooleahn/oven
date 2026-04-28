@@ -30,8 +30,8 @@ enum SidebarItem: String, Hashable, CaseIterable {
     /// 2-column destinations stretch their content to full width instead.
     var hasDetailPane: Bool {
         switch self {
-        case .virtualMachines, .baseVMs, .mdmServers: return true
-        case .installers, .registry, .mdmEnrollment, .activityLog, .recipes: return false
+        case .virtualMachines, .baseVMs, .mdmServers, .mdmEnrollment: return true
+        case .installers, .registry, .activityLog, .recipes: return false
         }
     }
 
@@ -48,9 +48,26 @@ enum SidebarItem: String, Hashable, CaseIterable {
         }
     }
 
-    // The five primary Library items, in keyboard-shortcut order (⌘1–⌘5)
+    /// Short label shown in the sidebar row.
+    var sidebarLabel: String {
+        switch self {
+        case .virtualMachines: return "VMs"
+        case .baseVMs:         return "Base VMs"
+        case .recipes:         return "Recipes"
+        case .installers:      return "Installers"
+        case .registry:        return "Registry"
+        case .mdmEnrollment:   return "Enrollment"
+        case .mdmServers:      return "Servers"
+        case .activityLog:     return "Activity"
+        }
+    }
+
+    /// Full display name used for navigationTitle / window subtitle.
+    var fullTitle: String { defaultLabel }
+
+    // The four primary Library items, in keyboard-shortcut order (⌘1–⌘4)
     static var libraryItems: [SidebarItem] {
-        [.virtualMachines, .baseVMs, .recipes, .installers, .registry]
+        [.virtualMachines, .baseVMs, .installers, .registry]
     }
 }
 
@@ -68,11 +85,14 @@ struct ContentView: View {
     // SceneStorage persists the selected tab across relaunches within the same scene.
     @SceneStorage("oven.selectedTab") private var storedSelection: String = SidebarItem.virtualMachines.rawValue
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @AppStorage("toast.disabled") private var toastsDisabled = false
 
     // View models lifted here so both the content column (list) and the
     // detail column (pane) share the same model instance.
-    @State private var vmListModel    = VMListViewModel()
-    @State private var baseVMModel    = BaseVMViewModel()
+    @State private var vmListModel        = VMListViewModel()
+    @State private var baseVMModel        = BaseVMViewModel()
+    @State private var mdmServersModel    = MDMServersViewModel()
+    @State private var mdmEnrollmentModel = MDMEnrollmentViewModel()
 
     private var selection: Binding<SidebarItem?> {
         Binding(
@@ -88,21 +108,37 @@ struct ContentView: View {
             // ── 3-column layout: Sidebar | Content list | Detail pane ────────
             NavigationSplitView(columnVisibility: $columnVisibility) {
                 SidebarView(selection: selection)
-                    .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
+                    .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 250)
             } content: {
                 ContentRouter(selection: selection.wrappedValue,
                               vmListModel: vmListModel,
-                              baseVMModel: baseVMModel)
-                    .navigationSplitViewColumnWidth(min: 320, ideal: 500, max: 800)
+                              baseVMModel: baseVMModel,
+                              mdmServersModel: mdmServersModel,
+                              mdmEnrollmentModel: mdmEnrollmentModel)
+                    .navigationSplitViewColumnWidth(min: 180, ideal: 930, max: 1000)
             } detail: {
-                DetailColumn(selection: selection.wrappedValue,
-                             vmListModel: vmListModel,
-                             baseVMModel: baseVMModel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .navigationTitle(appState.windowTitle)
-                    .navigationSubtitle(appState.windowSubtitle)
+                ZStack(alignment: .top) {
+                    DetailColumn(selection: selection.wrappedValue,
+                                 vmListModel: vmListModel,
+                                 baseVMModel: baseVMModel,
+                                 mdmServersModel: mdmServersModel,
+                                 mdmEnrollmentModel: mdmEnrollmentModel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if !toastsDisabled {
+                        ToastStackView()
+                    }
+                }
+                .navigationSplitViewColumnWidth(min: 240, ideal: 320)
+                .navigationTitle(appState.windowTitle)
+                .navigationSubtitle(appState.windowSubtitle)
             }
             .navigationSplitViewStyle(.balanced)
+            .onReceive(NotificationCenter.default.publisher(for: .navigateToLog)) { _ in
+                storedSelection = SidebarItem.activityLog.rawValue
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .menuBarFocusVM)) { _ in
+                storedSelection = SidebarItem.virtualMachines.rawValue
+            }
             .onChange(of: storedSelection) { _, raw in
                 appState.selectedVMID     = nil
                 appState.selectedBaseVMID = nil
@@ -118,12 +154,25 @@ struct ContentView: View {
             // ── 2-column layout: Sidebar | Full-width content ────────────────
             NavigationSplitView(columnVisibility: $columnVisibility) {
                 SidebarView(selection: selection)
-                    .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
+                    .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 250)
             } detail: {
-                ContentRouter(selection: selection.wrappedValue,
-                              vmListModel: vmListModel,
-                              baseVMModel: baseVMModel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ZStack(alignment: .top) {
+                    ContentRouter(selection: selection.wrappedValue,
+                                  vmListModel: vmListModel,
+                                  baseVMModel: baseVMModel,
+                                  mdmServersModel: mdmServersModel,
+                                  mdmEnrollmentModel: mdmEnrollmentModel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if !toastsDisabled {
+                        ToastStackView()
+                    }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .navigateToLog)) { _ in
+                storedSelection = SidebarItem.activityLog.rawValue
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .menuBarFocusVM)) { _ in
+                storedSelection = SidebarItem.virtualMachines.rawValue
             }
             .onChange(of: storedSelection) { _, raw in
                 appState.selectedVMID     = nil
@@ -145,6 +194,8 @@ struct ContentView: View {
 
 /// Renders the correct detail pane for the currently selected tab and item.
 /// Lives in the third column of the NavigationSplitView.
+/// All .sheet and .confirmationDialog modifiers for MDM views live here so they
+/// are anchored in the detail column where macOS can present them correctly.
 private struct DetailColumn: View {
     @EnvironmentObject var vmStore: VMStore
     @EnvironmentObject var baseVMStore: BaseVMStore
@@ -154,18 +205,100 @@ private struct DetailColumn: View {
     let selection: SidebarItem?
     @Bindable var vmListModel: VMListViewModel
     @Bindable var baseVMModel: BaseVMViewModel
+    @Bindable var mdmServersModel: MDMServersViewModel
+    @Bindable var mdmEnrollmentModel: MDMEnrollmentViewModel
 
     var body: some View {
-        switch selection {
-        case .virtualMachines:
-            vmDetail
-
-        case .baseVMs:
-            baseVMDetail
-
-        default:
-            // Tabs that handle their own layout (no detail pane)
-            Color.clear
+        Group {
+            switch selection {
+            case .virtualMachines:
+                vmDetail
+            case .baseVMs:
+                baseVMDetail
+            case .mdmServers:
+                mdmServersDetail
+            case .mdmEnrollment:
+                mdmEnrollmentDetail
+            default:
+                Color.clear
+            }
+        }
+        // MARK: MDM Servers sheets (anchored in detail column)
+        .sheet(isPresented: $mdmServersModel.isPresentingNewSheet) {
+            MDMServerSheet(server: nil) { serverStore.add($0) }
+        }
+        .sheet(isPresented: Binding(
+            get: { mdmServersModel.editingServer != nil },
+            set: { if !$0 { mdmServersModel.editingServer = nil } }
+        )) {
+            if let toEdit = mdmServersModel.editingServer {
+                MDMServerSheet(server: toEdit) { updated in
+                    serverStore.update(id: toEdit.id) { s in
+                        s.friendlyName   = updated.friendlyName
+                        s.serverURL      = updated.serverURL
+                        s.serverAuthType = updated.serverAuthType
+                        s.serverUsername = updated.serverUsername
+                        s.featureCheckEnrollment       = updated.featureCheckEnrollment
+                        s.featureDeleteFromJamf        = updated.featureDeleteFromJamf
+                        s.featureCheckInvitationStatus = updated.featureCheckInvitationStatus
+                    }
+                    mdmServersModel.editingServer = nil
+                }
+            }
+        }
+        .confirmationDialog(
+            mdmServersModel.confirmDeleteServer.map { "Delete \"\($0.friendlyName)\"?" } ?? "Delete server?",
+            isPresented: Binding(
+                get: { mdmServersModel.confirmDeleteServer != nil },
+                set: { if !$0 { mdmServersModel.confirmDeleteServer = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let server = mdmServersModel.confirmDeleteServer {
+                Button("Delete Server", role: .destructive) {
+                    serverStore.delete(id: server.id)
+                    if mdmServersModel.selectedServerID == server.id {
+                        mdmServersModel.selectedServerID = nil
+                    }
+                    mdmServersModel.confirmDeleteServer = nil
+                }
+                Button("Cancel", role: .cancel) { mdmServersModel.confirmDeleteServer = nil }
+            }
+        } message: {
+            Text("This MDM server and its stored credentials will be permanently removed.")
+        }
+        // MARK: MDM Enrollment sheets (anchored in detail column)
+        .sheet(isPresented: $mdmEnrollmentModel.isPresentingNewSheet) {
+            MDMProfileSheet(servers: serverStore.servers) { profile in
+                mdmEnrollmentModel.profiles.append(profile)
+                mdmEnrollmentModel.save()
+            }
+        }
+        .sheet(item: $mdmEnrollmentModel.editingProfile) { profile in
+            MDMProfileSheet(servers: serverStore.servers, editing: profile) { updated in
+                if let i = mdmEnrollmentModel.profiles.firstIndex(where: { $0.id == updated.id }) {
+                    mdmEnrollmentModel.profiles[i] = updated
+                    mdmEnrollmentModel.save()
+                }
+                mdmEnrollmentModel.editingProfile = nil
+            }
+        }
+        .confirmationDialog(
+            mdmEnrollmentModel.confirmDeleteProfile.map { "Delete \"\($0.displayName)\"?" } ?? "Delete profile?",
+            isPresented: Binding(
+                get: { mdmEnrollmentModel.confirmDeleteProfile != nil },
+                set: { if !$0 { mdmEnrollmentModel.confirmDeleteProfile = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let profile = mdmEnrollmentModel.confirmDeleteProfile {
+                Button("Delete Profile", role: .destructive) {
+                    mdmEnrollmentModel.delete(profile)
+                }
+                Button("Cancel", role: .cancel) { mdmEnrollmentModel.confirmDeleteProfile = nil }
+            }
+        } message: {
+            Text("This enrollment profile will be permanently removed.")
         }
     }
 
@@ -173,7 +306,6 @@ private struct DetailColumn: View {
 
     @ViewBuilder private var vmDetail: some View {
         if vmListModel.selectedIDs.count > 1 {
-            // Multi-selection summary
             multiSelectionSummary
         } else if let vm = selectedVM {
             VMDetailPane(
@@ -197,12 +329,10 @@ private struct DetailColumn: View {
     }
 
     private var selectedVM: VirtualMachine? {
-        // List mode: single-item selectedIDs set
         if vmListModel.selectedIDs.count == 1,
            let id = vmListModel.selectedIDs.first {
             return vmStore.vms.first { $0.id == id }
         }
-        // Grid mode: selectedVM property
         return vmListModel.selectedVM
     }
 
@@ -214,7 +344,7 @@ private struct DetailColumn: View {
         VStack(spacing: 16) {
             Spacer()
             Image(systemName: "square.stack.3d.up")
-                .font(.system(size: 36, weight: .light))
+                .font(.system(.largeTitle, weight: .light))
                 .foregroundStyle(.secondary)
             Text("\(vmListModel.selectedIDs.count) VMs Selected")
                 .font(.headline)
@@ -277,6 +407,51 @@ private struct DetailColumn: View {
             )
         }
     }
+
+    // MARK: MDM Servers detail
+
+    @ViewBuilder private var mdmServersDetail: some View {
+        if let id = mdmServersModel.selectedServerID,
+           serverStore.servers.contains(where: { $0.id == id }) {
+            MDMServerDetailPane(
+                serverID: id,
+                onEdit:   { mdmServersModel.editingServer = serverStore.servers.first { $0.id == id } },
+                onDelete: { mdmServersModel.confirmDeleteServer = serverStore.servers.first { $0.id == id } }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ContentUnavailableView(
+                "No Server Selected",
+                systemImage: "server.rack",
+                description: Text("Select an MDM server from the list.")
+            )
+        }
+    }
+
+    // MARK: MDM Enrollment detail
+
+    @ViewBuilder private var mdmEnrollmentDetail: some View {
+        if let id = mdmEnrollmentModel.selectedProfileID,
+           mdmEnrollmentModel.profiles.contains(where: { $0.id == id }) {
+            let resolvedServer = mdmEnrollmentModel.profiles
+                .first(where: { $0.id == id })
+                .flatMap { p in serverStore.servers.first { $0.id == p.serverID } }
+            MDMProfileDetailPane(
+                profile: mdmEnrollmentModel.profileBinding(for: id),
+                server: resolvedServer,
+                servers: serverStore.servers,
+                onEdit:   { mdmEnrollmentModel.editingProfile = mdmEnrollmentModel.profiles.first { $0.id == id } },
+                onDelete: { mdmEnrollmentModel.confirmDeleteProfile = mdmEnrollmentModel.profiles.first { $0.id == id } }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ContentUnavailableView(
+                "No Profile Selected",
+                systemImage: "lock.shield",
+                description: Text("Select an enrollment profile from the list.")
+            )
+        }
+    }
 }
 
 // MARK: - Sidebar
@@ -286,6 +461,7 @@ struct SidebarView: View {
     @EnvironmentObject var vmStore: VMStore
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var tagStore: TagStore
+    @EnvironmentObject var pushManager: PushManager
     @Binding var selection: SidebarItem?
 
     private var runningVMCount: Int {
@@ -296,29 +472,33 @@ struct SidebarView: View {
         appState.activeIPSWDownloads.count + appState.registryDownloads.count
     }
 
+    private var activePushCount: Int {
+        pushManager.active.count
+    }
+
     var body: some View {
         List(selection: $selection) {
 
             // MARK: Library
-            Section {
+            Section("Library") {
                 libraryRow(.virtualMachines, shortcut: "1",
                            badge: runningVMCount > 0 ? "\(runningVMCount)" : nil)
                 libraryRow(.baseVMs,         shortcut: "2")
-                libraryRow(.recipes,         shortcut: "3")
-                libraryRow(.installers,      shortcut: "4",
+                libraryRow(.installers,      shortcut: "3",
                            badge: activeDownloadCount > 0 ? "\(activeDownloadCount)" : nil)
-                libraryRow(.registry,        shortcut: "5")
-            } header: {
-                SidebarSectionHeader("Library")
+                libraryRow(.registry,        shortcut: "4")
+            }
+
+            // MARK: Build
+            Section("Build") {
+                libraryRow(.recipes, shortcut: "5")
             }
 
             // MARK: MDM (feature-flagged)
             if theme.mdmEnabled {
-                Section {
-                    sidebarItem(.mdmServers)
+                Section("MDM") {
                     sidebarItem(.mdmEnrollment)
-                } header: {
-                    SidebarSectionHeader("MDM")
+                    sidebarItem(.mdmServers)
                 }
             }
 
@@ -371,11 +551,10 @@ struct SidebarView: View {
                 SidebarSectionHeader("Filters")
             }
 
-            // MARK: General
-            Section {
-                sidebarItem(.activityLog)
-            } header: {
-                SidebarSectionHeader("General")
+            // MARK: System
+            Section("System") {
+                sidebarItem(.activityLog,
+                            badge: activePushCount > 0 ? "\(activePushCount)" : nil)
             }
         }
         .listStyle(.sidebar)
@@ -440,16 +619,7 @@ struct SidebarView: View {
     // MARK: - Theme helpers
 
     private func themedLabel(_ item: SidebarItem) -> String {
-        switch item {
-        case .virtualMachines: return theme.virtualMachines
-        case .baseVMs:         return theme.baseVMs
-        case .recipes:         return theme.recipes
-        case .installers:      return theme.installers
-        case .registry:        return theme.registry
-        case .mdmEnrollment:   return theme.mdmEnrollment
-        case .mdmServers:      return theme.mdmServers
-        case .activityLog:     return theme.logs
-        }
+        item.sidebarLabel
     }
 
     private func themedIcon(_ item: SidebarItem) -> String {
@@ -496,7 +666,7 @@ struct OvenStatusBar: View {
             // Preferences button — opens the ⌘, Settings window
             SettingsLink {
                 Image(systemName: "gearshape")
-                    .font(.system(size: 13, weight: .light))
+                    .font(.callout.weight(.light))
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
@@ -531,6 +701,8 @@ struct ContentRouter: View {
     let selection: SidebarItem?
     @Bindable var vmListModel: VMListViewModel
     @Bindable var baseVMModel: BaseVMViewModel
+    @Bindable var mdmServersModel: MDMServersViewModel
+    @Bindable var mdmEnrollmentModel: MDMEnrollmentViewModel
 
     var body: some View {
         switch selection {
@@ -539,8 +711,8 @@ struct ContentRouter: View {
         case .recipes:         RecipesView()
         case .installers:      InstallerView()
         case .registry:        RegistryView()
-        case .mdmEnrollment:   MDMEnrollmentView()
-        case .mdmServers:      MDMServersView()
+        case .mdmEnrollment:   MDMEnrollmentView(model: mdmEnrollmentModel)
+        case .mdmServers:      MDMServersView(model: mdmServersModel)
         case .activityLog:     LogView()
         case .none:
             ContentUnavailableView("Select an item", systemImage: "sidebar.left",

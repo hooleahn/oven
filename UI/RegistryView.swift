@@ -9,6 +9,7 @@ struct RegistryView: View {
     @State private var lastRefreshedAt: Date? = nil
     @State private var isRefreshing: Bool = false
     @State private var refreshRotation: Double = 0
+    @FocusState private var newImageRefFocused: Bool
 
     private func coarseAge(of date: Date) -> String {
         let s = Int(Date().timeIntervalSince(date))
@@ -59,11 +60,6 @@ struct RegistryView: View {
         rvm.credentials.first(where: { $0.registry == rvm.selectedRegistry })
     }
 
-    /// Count of tracked images for a given registry host.
-    private func imageCount(for registry: String) -> Int {
-        rvm.images.filter { $0.registryHost == registry }.count
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             // ── Middle: ZStack so banner never shifts content centre ────────
@@ -83,17 +79,16 @@ struct RegistryView: View {
                             }
                         }
                         .padding(.horizontal, 14).padding(.vertical, 6)
-                        .background(Color.primary.opacity(0.02))
+                        .background(.bar)
                         Divider()
                     }
 
                     if filteredImages.isEmpty {
-                        ContentUnavailableView {
-                            Label("No Images", systemImage: "externaldrive.connected.to.line.below")
-                        } description: {
-                            Text("Add an image reference in the bar below to pull or push images on \(rvm.selectedRegistry).")
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        EmptyStateView(
+                            "No Images",
+                            systemImage: "externaldrive.connected.to.line.below",
+                            description: "Add an image reference in the bar below to pull or push images on \(rvm.selectedRegistry)."
+                        )
                     } else {
                         List(filteredImages) { image in
                             RegistryImageRow(
@@ -158,46 +153,17 @@ struct RegistryView: View {
         } message: {
             Text(rvm.errorMessage ?? "")
         }
-        .searchable(text: $searchText, prompt: "Search \(rvm.selectedRegistry) images…")
+        .searchable(text: $searchText, prompt: "Search \(registryShortName(for: rvm.selectedRegistry)) images…")
         .toolbar {
-            // 1. Navigation group — registry selector acts as a segment-picker for navigation context
-            ToolbarItemGroup(placement: .navigation) {
-                HStack(spacing: 4) {
+            // 1. Principal — segmented registry picker centred in the toolbar
+            ToolbarItem(placement: .principal) {
+                Picker("", selection: $rvm.selectedRegistry) {
                     ForEach(registries, id: \.self) { registry in
-                        let isSelected = registry == rvm.selectedRegistry
-                        let count = imageCount(for: registry)
-                        Button {
-                            rvm.selectedRegistry = registry
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: registryIcon(for: registry))
-                                    .font(.system(size: 11))
-                                Text(registryShortName(for: registry))
-                                    .font(.caption).fontWeight(.medium)
-                                if count > 0 {
-                                    Text("\(count)")
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .padding(.horizontal, 5).padding(.vertical, 1)
-                                        .background(
-                                            isSelected
-                                                ? Color.white.opacity(0.25)
-                                                : Color.primary.opacity(0.1),
-                                            in: Capsule()
-                                        )
-                                }
-                            }
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                        }
-                        .buttonStyle(.plain)
-                        .background(
-                            isSelected
-                                ? Color.accentColor
-                                : Color.primary.opacity(0.06),
-                            in: RoundedRectangle(cornerRadius: 6)
-                        )
-                        .foregroundStyle(isSelected ? .white : .primary)
+                        Text(registryShortName(for: registry)).tag(registry)
                     }
                 }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 360)
                 .onChange(of: registries) { _, newRegs in
                     if !newRegs.contains(rvm.selectedRegistry) {
                         rvm.selectedRegistry = newRegs.first ?? "ghcr.io"
@@ -205,21 +171,27 @@ struct RegistryView: View {
                 }
             }
 
-            // 2. Primary action — Browse Cirrus Labs catalogue (⌘N)
+            // 2. Primary action — Browse Cirrus Labs catalogue (⌘B)
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     rvm.showCirrusCatalogue = true
                 } label: {
                     Label("Cirrus Labs", systemImage: "building.columns")
                 }
-                .keyboardShortcut("n", modifiers: .command)
-                .help("Browse Cirrus Labs public macOS images (⌘N)")
+                .keyboardShortcut("b", modifiers: .command)
+                .help("Browse Cirrus Labs public macOS images (⌘B)")
             }
 
-            // 3. Secondary actions — delete selected image (⌘⌫)
-            ToolbarItemGroup(placement: .secondaryAction) {
-                // RegistryView has no concept of a selected-item state in the toolbar
-                // (row-level actions are in the row itself). No secondary actions here.
+            // 3. Hidden ⌘N — focuses the add-image bar TextField
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    newImageRefFocused = true
+                } label: {
+                    EmptyView()
+                }
+                .keyboardShortcut("n", modifiers: .command)
+                .opacity(0)
+                .accessibilityHidden(true)
             }
 
             // 4. Flexible space
@@ -255,10 +227,10 @@ struct RegistryView: View {
                         refreshRotation = 0
                     }
                 } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    Label("Sync from Tart", systemImage: "arrow.clockwise")
                 }
                 .keyboardShortcut("r", modifiers: .command)
-                .help("Sync images from tart (⌘R)")
+                .help("Sync registry images from local tart (⌘R)")
             }
         }
         .task { updateWindowTitle() }
@@ -352,7 +324,7 @@ struct RegistryView: View {
                                 .padding(.horizontal, 14).padding(.vertical, 4)
                             Spacer()
                         }
-                        .background(Color.primary.opacity(0.03))
+                        .background(.bar)
                         ForEach(imgs) { img in
                             CirrusLabsCatalogueRow(
                                 image: img,
@@ -379,6 +351,7 @@ struct RegistryView: View {
                       prompt: Text("ghcr.io/org/image:tag").foregroundColor(.secondary))
                 .textFieldStyle(.roundedBorder)
                 .font(.system(.callout, design: .monospaced))
+                .focused($newImageRefFocused)
             Button("Add") {
                 let ref = rvm.newImageRef.trimmingCharacters(in: .whitespaces)
                 guard !ref.isEmpty else { return }

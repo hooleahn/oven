@@ -8,6 +8,8 @@ struct VarsFileDetailPane: View {
     @Binding var editedContent: String
     @Binding var editedDisplayName: String
     @Binding var editedDescription: String
+    @Binding var editedOSName: String
+    @Binding var editedOSVersion: String
     @Binding var isDirty: Bool
     @Binding var isMetadataDirty: Bool
     @Binding var isSaving: Bool
@@ -20,7 +22,26 @@ struct VarsFileDetailPane: View {
     let onDelete: () -> Void
 
     @State private var copied = false
+    @State private var sofaVersions: [String] = []
+    @State private var isFetchingVersions = false
+
     private var isAnyDirty: Bool { isDirty || isMetadataDirty }
+
+    private var versionList: [String] {
+        sofaVersions.isEmpty
+            ? (MacOSRelease.Name(rawValue: editedOSName)?.fallbackVersions ?? [])
+            : sofaVersions
+    }
+
+    private func loadVersions(for osNameRaw: String) async {
+        guard let release = MacOSRelease.Name(rawValue: osNameRaw), !osNameRaw.isEmpty else {
+            sofaVersions = []
+            return
+        }
+        isFetchingVersions = true
+        sofaVersions = await SOFAService.shared.versions(for: release)
+        isFetchingVersions = false
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,6 +57,10 @@ struct VarsFileDetailPane: View {
                 onChange: { if !isLoadingContent { isDirty = true } }
             )
         }
+        .task { await loadVersions(for: editedOSName) }
+        .onChange(of: editedOSName) { _, newName in
+            Task { await loadVersions(for: newName) }
+        }
     }
 
     // MARK: - Toolbar
@@ -50,6 +75,7 @@ struct VarsFileDetailPane: View {
                             .font(.caption).fontWeight(.medium)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(Color.orange.opacity(0.15), in: Capsule())
+                            .background(.bar, in: Rectangle())
                             .foregroundStyle(.orange)
                     }
                 }
@@ -152,6 +178,31 @@ struct VarsFileDetailPane: View {
                 TextField("", text: $editedDescription, axis: .vertical)
                     .lineLimit(2...4)
                     .onChange(of: editedDescription) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
+            }
+            GridRow {
+                Text("Target OS").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                HStack(spacing: 8) {
+                    Picker("", selection: $editedOSName) {
+                        Text("Any").tag("")
+                        ForEach(MacOSRelease.Name.allCases, id: \.self) {
+                            Text($0.rawValue).tag($0.rawValue)
+                        }
+                    }
+                    .labelsHidden().frame(width: 120)
+                    .onChange(of: editedOSName) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
+
+                    if !editedOSName.isEmpty {
+                        Picker("", selection: $editedOSVersion) {
+                            Text("Any version").tag("")
+                            ForEach(versionList, id: \.self) { Text($0).tag($0) }
+                        }
+                        .labelsHidden().frame(width: 120)
+                        .onChange(of: editedOSVersion) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
+                        if isFetchingVersions {
+                            ProgressView().controlSize(.mini)
+                        }
+                    }
+                }
             }
             GridRow {
                 Text("File Path").foregroundStyle(.secondary).gridColumnAlignment(.trailing)

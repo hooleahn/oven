@@ -1,5 +1,13 @@
 import Foundation
 
+// MARK: - Notification names
+
+extension Notification.Name {
+    /// Posted by ToastCenter deep-links to navigate to the Activity Log.
+    /// `object` is the source string (String?) to pre-filter on.
+    static let navigateToLog = Notification.Name("oven.navigateToLog")
+}
+
 // MARK: - Log entry
 
 struct LogEntry: Identifiable, Sendable {
@@ -56,6 +64,22 @@ final class AppLogger: ObservableObject {
 
     func error(_ message: String, source: String = "Oven") {
         log(message, level: .error, source: source)
+        // Mirror to the global toast banner so errors surface immediately,
+        // regardless of which sidebar tab the user is viewing.
+        // The deep-link navigates to the Activity Log filtered to this source.
+        ToastCenter.shared.push(
+            message,
+            severity: .error,
+            source: source,
+            deepLink: {
+                // Routing is handled in ContentView via a notification so
+                // ToastCenter stays decoupled from the NavigationSplitView state.
+                NotificationCenter.default.post(
+                    name: .navigateToLog,
+                    object: source
+                )
+            }
+        )
     }
 
     func clear() { entries.removeAll() }

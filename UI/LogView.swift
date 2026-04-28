@@ -56,7 +56,7 @@ struct LogView: View {
                                             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 12))
                                             .listRowBackground(
                                                 index.isMultiple(of: 2)
-                                                    ? Color.primary.opacity(0.02)
+                                                    ? Color(nsColor: .quinaryLabel)
                                                     : Color.clear
                                             )
                                     }
@@ -107,6 +107,7 @@ struct LogView: View {
                 HStack(spacing: 8) {
                     Text("\(logger.entries.count) entries")
                         .font(.caption).foregroundStyle(.secondary)
+                        .padding(8)
 
                     Picker(selection: $filterLevel) {
                         Text("All").tag(Optional<LogEntry.Level>.none)

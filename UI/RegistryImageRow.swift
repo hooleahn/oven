@@ -85,6 +85,10 @@ struct RegistryImageRow: View {
             }
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(image.isPulled
+            ? "Image: \(image.imageRef), pulled"
+            : "Image: \(image.imageRef), not pulled")
     }
 
     private func formatBytes(_ bytes: Int64) -> String {

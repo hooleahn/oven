@@ -154,7 +154,7 @@ private struct CirrusLabsTemplateRow: View {
                 Text("Imported")
                     .font(.caption).fontWeight(.medium)
                     .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(Color.secondary.opacity(0.15), in: Capsule())
+                    .background(.quaternary, in: Capsule())
                     .foregroundStyle(.secondary)
             } else {
                 Button("Create Custom Copy", action: onImport)

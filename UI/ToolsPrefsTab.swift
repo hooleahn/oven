@@ -124,6 +124,8 @@ private struct ManagedDependencyRow: View {
                     Image(systemName: "circle").foregroundStyle(.tertiary)
                 case .error:
                     Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red)
+                case .skipped:
+                    Image(systemName: "minus.circle").foregroundStyle(.secondary)
                 }
             }
             .frame(width: 18)

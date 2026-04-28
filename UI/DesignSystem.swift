@@ -100,4 +100,48 @@ extension View {
     }
 }
 
+// MARK: - SelectableMonoText
 
+/// Renders a string in a monospaced callout font with native text selection and a
+/// "Copy" context-menu item.  Replaces the bespoke `CopyableText` / `VMCopyableText`
+/// helpers that were previously duplicated across detail-pane files.
+///
+/// Usage:
+/// ```swift
+/// Text(someValue).selectableMonoText(someValue)
+/// // or via the convenience wrapper:
+/// SelectableMonoText(someValue)
+/// ```
+struct SelectableMonoTextModifier: ViewModifier {
+    let value: String
+
+    func body(content: Content) -> some View {
+        content
+            .font(.system(.callout, design: .monospaced))
+            .foregroundStyle(.secondary)
+            .textSelection(.enabled)
+            .contextMenu {
+                Button("Copy") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(value, forType: .string)
+                }
+            }
+    }
+}
+
+extension View {
+    /// Applies monospaced callout styling with native text selection and a Copy context menu.
+    func selectableMonoText(_ value: String) -> some View {
+        modifier(SelectableMonoTextModifier(value: value))
+    }
+}
+
+/// Convenience wrapper — use when you need a standalone `Text` with selectable mono styling.
+struct SelectableMonoText: View {
+    let value: String
+    init(_ value: String) { self.value = value }
+
+    var body: some View {
+        Text(value).selectableMonoText(value)
+    }
+}

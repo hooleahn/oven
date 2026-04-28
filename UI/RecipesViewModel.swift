@@ -1,5 +1,16 @@
 import SwiftUI
 
+// MARK: - BlockSelection
+
+/// A unified selection value for the Building Blocks list, which contains
+/// both BuildingBlock and BootCommandBlock items. Using a single enum lets
+/// us pass one binding to `List(selection:)` so the list gets native
+/// keyboard navigation and proper highlight behaviour.
+enum BlockSelection: Hashable {
+    case block(UUID)
+    case bootCommand(UUID)
+}
+
 // MARK: - RecipesTab
 
 enum RecipesTab: String, CaseIterable {
@@ -27,6 +38,29 @@ final class RecipesViewModel {
     var selectedTemplateID: UUID? = nil
     var selectedBlockID: UUID? = nil
     var selectedBootCommandID: UUID? = nil
+
+    /// Unified selection for the Building Blocks list. Setting this keeps
+    /// `selectedBlockID` / `selectedBootCommandID` in sync automatically.
+    var selectedBlockItem: BlockSelection? {
+        get {
+            if let id = selectedBlockID { return .block(id) }
+            if let id = selectedBootCommandID { return .bootCommand(id) }
+            return nil
+        }
+        set {
+            switch newValue {
+            case .block(let id):
+                selectedBlockID = id
+                selectedBootCommandID = nil
+            case .bootCommand(let id):
+                selectedBootCommandID = id
+                selectedBlockID = nil
+            case nil:
+                selectedBlockID = nil
+                selectedBootCommandID = nil
+            }
+        }
+    }
 
     // Editor state
     var editedContent: String = ""
