@@ -89,6 +89,25 @@ struct RegistryImageRow: View {
         .accessibilityLabel(image.isPulled
             ? "Image: \(image.imageRef), pulled"
             : "Image: \(image.imageRef), not pulled")
+        .contextMenu {
+            if image.isPulled {
+                Button { onCreateVM() } label: {
+                    Label("Create VM", systemImage: "plus.rectangle.on.rectangle")
+                }
+                Divider()
+                Button { onPull() } label: {
+                    Label("Pull Again", systemImage: "arrow.down.circle")
+                }
+            } else {
+                Button { onPull() } label: {
+                    Label("Pull", systemImage: "arrow.down.circle")
+                }
+            }
+            Divider()
+            Button(role: .destructive, action: onDelete) {
+                Label("Remove from List", systemImage: "trash")
+            }
+        }
     }
 
     private func formatBytes(_ bytes: Int64) -> String {

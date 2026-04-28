@@ -386,6 +386,12 @@ final class DependencyManager: ObservableObject {
             try cpio.run()
             gunzip.waitUntilExit()
             cpio.waitUntilExit()
+            guard gunzip.terminationStatus == 0 else {
+                throw ProcessError.nonZeroExit(gunzip.terminationStatus, "gunzip failed — mist-cli download may be corrupt")
+            }
+            guard cpio.terminationStatus == 0 else {
+                throw ProcessError.nonZeroExit(cpio.terminationStatus, "cpio extraction failed")
+            }
 
             // Binary is at usr/local/bin/mist inside the extracted tree
             let binary = try findFile(named: "mist", in: cpioDir, exact: true)

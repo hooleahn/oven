@@ -74,6 +74,15 @@ struct MDMServersView: View {
             } else {
                 List(serverStore.servers, id: \.id, selection: $model.selectedServerID) { server in
                     MDMServerRow(server: server).tag(server.id)
+                        .contextMenu {
+                            Button { model.editingServer = server } label: {
+                                Label("Edit…", systemImage: "pencil")
+                            }
+                            Divider()
+                            Button(role: .destructive) { model.confirmDeleteServer = server } label: {
+                                Label("Delete…", systemImage: "trash")
+                            }
+                        }
                 }
                 .listStyle(.inset)
             }

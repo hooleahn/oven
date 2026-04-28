@@ -11,6 +11,7 @@ struct BaseVMDetailPane: View {
     @EnvironmentObject var vmStore: VMStore
     @EnvironmentObject var templateStore: PackerTemplateStore
     @EnvironmentObject var pushManager: PushManager
+    @EnvironmentObject var depManager: DependencyManager
     @State private var isPresentingPushSheet = false
     @State private var liveConfig: TartService.TartVMConfig? = nil
     @State private var isLoadingConfig = false
@@ -236,7 +237,8 @@ struct BaseVMDetailPane: View {
         .sheet(isPresented: $isPresentingPushSheet) {
             PushToRegistrySheet(vmName: baseVM.name) { imageRef, credentials in
                 isPresentingPushSheet = false
-                let tartPath = AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps/tart").path
+                let tartPath = depManager.dependencies.first { $0.id == "tart" }?.binaryPath.path
+                    ?? AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps/tart").path
                 Task { await pushManager.push(baseVM: baseVM, to: imageRef,
                                               credentials: credentials, tartPath: tartPath) }
             }
@@ -263,8 +265,8 @@ struct BaseVMDetailPane: View {
     // MARK: - Async helpers
 
     @MainActor private func loadLiveConfig() async {
-        let tartPath = AppSettings.defaultLocalStorageRoot
-            .appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
+        let tartPath = depManager.dependencies.first { $0.id == "tart" }?.binaryPath.path
+            ?? AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
         guard FileManager.default.fileExists(atPath: tartPath) else { return }
         isLoadingConfig = true
         let svc = TartService(runner: ProcessRunner(), tartPath: tartPath)
@@ -278,7 +280,7 @@ struct BaseVMDetailPane: View {
 
 // MARK: - Build Log Window
 
-private struct BuildLogWindow: View {
+struct BuildLogWindow: View {
     let baseVM: VirtualMachine
     @Environment(\.dismiss) private var dismiss
 

@@ -24,11 +24,11 @@ struct StatusPill: View {
         Text(status.label)
             .font(.caption)
             .fontWeight(.medium)
-            .foregroundStyle(pillColor)
+            .foregroundStyle(.primary)
             .padding(.horizontal, Spacing.sm + 2) // 10 pt
             .padding(.vertical, Spacing.xs)
-            .background(pillColor.opacity(reduceTransparency ? 1 : 0.12), in: Capsule())
-            .overlay(Capsule().strokeBorder(pillColor.opacity(0.25), lineWidth: 0.5))
+            .background(pillColor.opacity(reduceTransparency ? 0.35 : 0.15), in: Capsule())
+            .overlay(Capsule().strokeBorder(pillColor.opacity(0.4), lineWidth: 0.5))
             .accessibilityLabel("Status: \(status.label)")
     }
 

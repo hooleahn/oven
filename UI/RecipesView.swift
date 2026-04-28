@@ -236,11 +236,20 @@ struct RecipesView: View {
                                 PackerTemplateRow(template: tmpl)
                                     .tag(tmpl.id)
                                     .contextMenu {
-                                        Button("Rename") {
-                                            model.renamingTemplateID = tmpl.id
-                                            model.renameText = tmpl.url.deletingPathExtension().lastPathComponent
-                                        }
                                         Button("Duplicate") { _ = templateStore.duplicate(id: tmpl.id) }
+                                        Divider()
+                                        Button("Copy to Clipboard") {
+                                            if let content = try? String(contentsOf: tmpl.url, encoding: .utf8) {
+                                                NSPasteboard.general.clearContents()
+                                                NSPasteboard.general.setString(content, forType: .string)
+                                            }
+                                        }
+                                        Button("Show in Finder") {
+                                            NSWorkspace.shared.activateFileViewerSelecting([tmpl.url])
+                                        }
+                                        Button("Open in Editor") {
+                                            NSWorkspace.shared.open(tmpl.url)
+                                        }
                                         Divider()
                                         Button("Delete", role: .destructive) { model.confirmDeleteTemplateID = tmpl.id }
                                     }
@@ -288,11 +297,20 @@ struct RecipesView: View {
                             PackerTemplateRow(template: tmpl)
                                 .tag(tmpl.id)
                                 .contextMenu {
-                                    Button("Rename") {
-                                        model.renamingTemplateID = tmpl.id
-                                        model.renameText = tmpl.url.deletingPathExtension().lastPathComponent
-                                    }
                                     Button("Duplicate") { _ = templateStore.duplicate(id: tmpl.id) }
+                                    Divider()
+                                    Button("Copy to Clipboard") {
+                                        if let content = try? String(contentsOf: tmpl.url, encoding: .utf8) {
+                                            NSPasteboard.general.clearContents()
+                                            NSPasteboard.general.setString(content, forType: .string)
+                                        }
+                                    }
+                                    Button("Show in Finder") {
+                                        NSWorkspace.shared.activateFileViewerSelecting([tmpl.url])
+                                    }
+                                    Button("Open in Editor") {
+                                        NSWorkspace.shared.open(tmpl.url)
+                                    }
                                     Divider()
                                     Button("Delete", role: .destructive) { model.confirmDeleteTemplateID = tmpl.id }
                                 }

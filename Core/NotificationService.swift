@@ -218,31 +218,24 @@ final class NotificationService {
         // Verify the authorization status.
         guard (settings.authorizationStatus == .authorized) ||
                 (settings.authorizationStatus == .provisional) else {
-            AppLogger.shared.error("System Notifications are disabled for Oven", source:"NotificationService")
             do {
                 let _ = try await requestAuthorizationForSystemNotifications()
             } catch {
-                print(error.localizedDescription)
-                AppLogger.shared.error("System Notifications are disabled for Oven", source:"NotificationService")
+                AppLogger.shared.error("System Notifications are disabled for Oven", source: "NotificationService")
             }
-            AppLogger.shared.error("System Notifications are disabled for Oven", source:"NotificationService")
             return
         }
 
-
         if settings.alertSetting == .enabled {
-        
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        
-        do {
-            try await UNUserNotificationCenter.current().add(request)
-        } catch {
-            print(error)
-            
-        }
-            AppLogger.shared.success("System Notification sent", source:"NotificationService")
+            let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+            do {
+                try await UNUserNotificationCenter.current().add(request)
+                AppLogger.shared.success("System Notification sent", source: "NotificationService")
+            } catch {
+                AppLogger.shared.error("System Notification failed: \(error.localizedDescription)", source: "NotificationService")
+            }
         } else {
-            AppLogger.shared.error("System Notification failed", source:"NotificationService")
+            AppLogger.shared.error("System Notification failed — alerts disabled in System Settings", source: "NotificationService")
         }
     }
     

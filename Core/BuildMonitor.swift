@@ -161,7 +161,7 @@ final class BuildMonitor: ObservableObject {
             // Each phase occupies an equal slice; use elapsed vs phase midpoint
             let mid = phase.midProgress
             let nextMid = phase.rawValue < BuildPhase.allCases.count - 1
-                ? BuildPhase(rawValue: phase.rawValue + 1)!.midProgress
+                ? BuildPhase(rawValue: phase.rawValue + 1)?.midProgress ?? 0.99
                 : 0.99
             // Assume each phase takes roughly equal time at ~30 min total
             let estimatedTotal: Double = 30 * 60

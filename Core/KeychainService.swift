@@ -79,7 +79,7 @@ enum KeychainService {
     /// sees one Touch ID prompt regardless of how many credentials are accessed.
     private static var _sessionContext: LAContext?
     static var sessionContext: LAContext {
-        if let ctx = _sessionContext, !ctx.isCredentialSet(.applicationPassword) == false {
+        if let ctx = _sessionContext, ctx.isCredentialSet(.applicationPassword) {
             return ctx
         }
         let ctx = LAContext()

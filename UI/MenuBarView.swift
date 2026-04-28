@@ -47,8 +47,15 @@ struct MenuBarMenuContent: View {
         if !model.recentVMs.isEmpty {
             Text("Recent")
             ForEach(model.recentVMs) { vm in
-                Button(vm.displayName.isEmpty ? vm.name : vm.displayName) {
-                    model.focusVM(vm)
+                let label = vm.displayName.isEmpty ? vm.name : vm.displayName
+                Menu(label) {
+                    Button("Open in Oven") { model.focusVM(vm) }
+                    Divider()
+                    Text("Start as…")
+                    Button("Native") { model.startVM(vm, mode: .native) }
+                    Button("VNC / Screen Sharing") { model.startVM(vm, mode: .vnc) }
+                    Button("Headless (SSH only)") { model.startVM(vm, mode: .headless) }
+                    Button("Recovery") { model.startVM(vm, mode: .recovery) }
                 }
             }
             Divider()
@@ -58,8 +65,15 @@ struct MenuBarMenuContent: View {
         if !model.pinnedVMs.isEmpty {
             Text("Pinned")
             ForEach(model.pinnedVMs) { vm in
-                Button(vm.displayName.isEmpty ? vm.name : vm.displayName) {
-                    model.focusVM(vm)
+                let label = vm.displayName.isEmpty ? vm.name : vm.displayName
+                Menu(label) {
+                    Button("Open in Oven") { model.focusVM(vm) }
+                    Divider()
+                    Text("Start as…")
+                    Button("Native") { model.startVM(vm, mode: .native) }
+                    Button("VNC / Screen Sharing") { model.startVM(vm, mode: .vnc) }
+                    Button("Headless (SSH only)") { model.startVM(vm, mode: .headless) }
+                    Button("Recovery") { model.startVM(vm, mode: .recovery) }
                 }
             }
             Divider()

@@ -63,6 +63,7 @@ final class VMListViewModel {
     var cloneVM:       VirtualMachine?
     var pendingLaunchVM: VirtualMachine?
     var editingVM: VirtualMachine?
+    var pushVM: VirtualMachine?     // VM to push to registry from context menu
     var macOSLimitError: String?    // shown when 2 VMs already running
     var confirmStopAll = false      // Stop All confirmation
     var confirmBulkDelete = false   // bulk delete confirmation

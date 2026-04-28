@@ -38,7 +38,7 @@ func oklchToColor(L: Double, C: Double, H: Double) -> Color {
 
 extension TagStore {
     /// Eight perceptually-uniform hues, all at the same lightness/chroma.
-    static let palette: [Color] = (0..<8).map { i in
+    static let palette: [Color] = (0..<9).map { i in
         oklchToColor(L: 0.65, C: 0.14, H: Double(i) * 45.0)
     }
 

@@ -79,6 +79,15 @@ struct MDMEnrollmentView: View {
             } else {
                 List(model.profiles, id: \.id, selection: $model.selectedProfileID) { profile in
                     MDMProfileRow(profile: profile, servers: serverStore.servers).tag(profile.id)
+                        .contextMenu {
+                            Button { model.editingProfile = profile } label: {
+                                Label("Edit…", systemImage: "pencil")
+                            }
+                            Divider()
+                            Button(role: .destructive) { model.confirmDeleteProfile = profile } label: {
+                                Label("Delete…", systemImage: "trash")
+                            }
+                        }
                 }
                 .listStyle(.inset)
             }

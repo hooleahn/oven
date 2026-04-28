@@ -76,7 +76,7 @@ struct AppSettings: Codable {
         if let settings = try? decoder.decode(AppSettings.self, from: data) {
             return settings
         }
-        // Decode failed — new field likely added; fall back to defaults
+        Task { await AppLogger.shared.log("app-settings.json could not be decoded — resetting to defaults", source: "AppSettings") }
         return .default
     }
 

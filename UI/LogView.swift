@@ -8,6 +8,7 @@ struct LogView: View {
     @State private var searchText = ""
     @State private var isRefreshing: Bool = false
     @State private var refreshRotation: Double = 0
+    @State private var exportError: String? = nil
 
     var filtered: [LogEntry] {
         logger.entries
@@ -147,6 +148,11 @@ struct LogView: View {
         }
         .navigationTitle("Activity Log")
         .task { appState.windowTitle = "Logs"; appState.windowSubtitle = "" }
+        .alert("Export Failed", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+            Button("OK", role: .cancel) { exportError = nil }
+        } message: {
+            Text(exportError ?? "")
+        }
     }
 
     private func exportLog() {
@@ -160,7 +166,11 @@ struct LogView: View {
         panel.nameFieldStringValue = "oven-activity-log.txt"
         panel.allowedContentTypes = [.plainText]
         if panel.runModal() == .OK, let url = panel.url {
-            try? text.write(to: url, atomically: true, encoding: .utf8)
+            do {
+                try text.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                exportError = error.localizedDescription
+            }
         }
     }
 }
@@ -203,6 +213,16 @@ struct LogEntryRow: View {
         }
         .padding(.vertical, 4)
         .padding(.leading, 12)
+        .contextMenu {
+            Button {
+                let ts = entry.timestamp.formatted(date: .numeric, time: .standard)
+                let line = "[\(ts)] [\(entry.source)] \(entry.message)"
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(line, forType: .string)
+            } label: {
+                Label("Copy to Clipboard", systemImage: "doc.on.doc")
+            }
+        }
     }
 
     private var accentBarColor: Color {

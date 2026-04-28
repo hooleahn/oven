@@ -40,8 +40,9 @@ final class BaseVMStore: ObservableObject {
         if let ociVMs = try? await tartService.listOCI() {
             var seen = Set<String>()
             let deduped = ociVMs.filter { info in
-                if info.name.contains("@sha256:") {
-                    let canonical = String(info.name.prefix(upTo: info.name.range(of: "@sha256:")!.lowerBound))
+                if info.name.contains("@sha256:"),
+                   let range = info.name.range(of: "@sha256:") {
+                    let canonical = String(info.name[..<range.lowerBound])
                     return !seen.contains(canonical)
                 }
                 let base = info.name.components(separatedBy: ":").first ?? info.name
@@ -115,7 +116,6 @@ final class BaseVMStore: ObservableObject {
             return
         }
 
-        guard !isBuilding else { return }
         guard !isBuilding else { return }
         AppLogger.shared.log("Build queued: \(baseVM.name) — macOS \(baseVM.osName.rawValue) \(baseVM.osVersion)", source: "BaseVMStore")
         guard !baseVM.osVersion.isEmpty else {

@@ -562,6 +562,25 @@ struct IPSWFirmwareRow: View {
             .padding(.vertical, 6)
         }
         .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
+        .contextMenu {
+            if isDownloaded {
+                if let onCreateBaseVM {
+                    Button { onCreateBaseVM() } label: {
+                        Label("Create Base VM", systemImage: "plus.circle.fill")
+                    }
+                }
+                Divider()
+                if let onDelete {
+                    Button(role: .destructive) { isPresentingDeleteConfirm = true } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+            } else if downloadProgress == nil {
+                Button { onDownload() } label: {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+            }
+        }
     }
 }
 
@@ -647,6 +666,20 @@ struct LocalIPSWRow: View {
         }
         .padding(.vertical, 8)
         .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
+        .contextMenu {
+            Button { onCreateBaseVM() } label: {
+                Label("Create Base VM", systemImage: "plus.circle.fill")
+            }
+            Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: {
+                Label("Show in Finder", systemImage: "folder")
+            }
+            Divider()
+            if let onDelete {
+                Button(role: .destructive) { isPresentingDeleteConfirm = true } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
     }
 }
 

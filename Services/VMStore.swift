@@ -80,6 +80,8 @@ final class VMStore: ObservableObject {
         // Already have it — nothing to do
         if let existing = vms.first(where: { $0.id == vm.id })?.ipAddress,
            !existing.isEmpty { return }
+        // Bail if another caller is already polling for this VM's IP
+        guard vms.first(where: { $0.id == vm.id })?.isResolvingIP != true else { return }
 
         update(id: vm.id) { $0.isResolvingIP = true }
         defer { update(id: vm.id) { $0.isResolvingIP = false } }
@@ -89,7 +91,8 @@ final class VMStore: ObservableObject {
             // Stop if VM is no longer running
             guard vms.first(where: { $0.id == vm.id })?.status == .running else { break }
             do {
-                let ip = try await tartService.ip(name: vm.name, waitSeconds: 3)
+                // waitSeconds: 1 — let tart fail fast; sleep below handles the 3-s cadence
+                let ip = try await tartService.ip(name: vm.name, waitSeconds: 1)
                 if !ip.isEmpty {
                     update(id: vm.id) { $0.ipAddress = ip; $0.isResolvingIP = false }
                     saveToDisk()

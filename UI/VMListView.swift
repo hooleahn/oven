@@ -283,12 +283,26 @@ struct VMListView: View {
                 if showBulk {
                     // Start selected
                     Button {
-                        for vm in selectedVMs where vm.status == .stopped {
-                            Task {
-                                let stream = await vmStore.start(vm: vm, mode: .native)
-                                for await _ in stream {}
-                                await vmStore.sync()
+                        let runningCount = vmStore.vms.filter { $0.status == .running || $0.status == .suspended }.count
+                        let toStart = selectedVMs.filter { $0.status == .stopped }.prefix(max(0, 2 - runningCount))
+                        guard !toStart.isEmpty else {
+                            let names = vmStore.vms
+                                .filter { $0.status == .running || $0.status == .suspended }
+                                .map { $0.displayName.isEmpty ? $0.name : $0.displayName }
+                                .joined(separator: ", ")
+                            model.macOSLimitError = "macOS allows at most 2 simultaneous VMs. Currently running: \(names)."
+                            return
+                        }
+                        Task {
+                            await withTaskGroup(of: Void.self) { group in
+                                for vm in toStart {
+                                    group.addTask {
+                                        let stream = await vmStore.start(vm: vm, mode: .native)
+                                        for await _ in stream {}
+                                    }
+                                }
                             }
+                            await vmStore.sync()
                         }
                     } label: {
                         Label("Start", systemImage: "play.fill")
@@ -445,6 +459,8 @@ struct VMListView: View {
                     onEdit:  { model.editingVM = vm },
                     onClone: { model.cloneVM = vm },
                     onDelete: { model.confirmDelete = vm },
+                    onPin:   { vmStore.update(id: vm.id) { $0.isPinned.toggle() } },
+                    onPush:  { model.pushVM = vm },
                     onTagTap: { tag in
                         model.selectedTagFilters = [tag]
                     },
@@ -479,12 +495,26 @@ struct VMListView: View {
         let count = ids.count
         if count >= 2 {
             Button("Start \(count) VMs") {
-                for vm in vms where vm.status == .stopped {
-                    Task {
-                        let stream = await vmStore.start(vm: vm, mode: .native)
-                        for await _ in stream {}
-                        await vmStore.sync()
+                let runningCount = vmStore.vms.filter { $0.status == .running || $0.status == .suspended }.count
+                let toStart = Array(vms.filter { $0.status == .stopped }.prefix(max(0, 2 - runningCount)))
+                guard !toStart.isEmpty else {
+                    let names = vmStore.vms
+                        .filter { $0.status == .running || $0.status == .suspended }
+                        .map { $0.displayName.isEmpty ? $0.name : $0.displayName }
+                        .joined(separator: ", ")
+                    model.macOSLimitError = "macOS allows at most 2 simultaneous VMs. Currently running: \(names)."
+                    return
+                }
+                Task {
+                    await withTaskGroup(of: Void.self) { group in
+                        for vm in toStart {
+                            group.addTask {
+                                let stream = await vmStore.start(vm: vm, mode: .native)
+                                for await _ in stream {}
+                            }
+                        }
                     }
+                    await vmStore.sync()
                 }
             }
             Button("Stop \(count) VMs") {
@@ -503,17 +533,37 @@ struct VMListView: View {
                 model.confirmBulkDelete = true
             }
         } else if let vm = vms.first {
-            Button("Start…") { model.pendingLaunchVM = vm }
-            Button("Stop…") { model.confirmStop = vm }
-                .disabled(vm.status == .stopped)
-            Divider()
-            Button(vm.isPinned ? "Unpin from Menu Bar" : "Pin to Menu Bar") {
-                vmStore.update(id: vm.id) { $0.isPinned.toggle() }
+            Button { model.pendingLaunchVM = vm } label: {
+                Label(vm.status == .running || vm.status == .suspended ? "Stop…" : "Start…",
+                      systemImage: vm.status == .running || vm.status == .suspended ? "stop.fill" : "play.fill")
+            }
+            if vm.status == .running || vm.status == .suspended {
+                Button { model.confirmStop = vm } label: {
+                    Label("Stop…", systemImage: "stop.fill")
+                }
             }
             Divider()
-            Button("Edit…") { model.editingVM = vm }
-            Button("Clone…") { model.cloneVM = vm }
-            Button("Delete…", role: .destructive) { model.confirmDelete = vm }
+            Button { model.editingVM = vm } label: {
+                Label("Edit…", systemImage: "pencil")
+            }
+            Button { model.cloneVM = vm } label: {
+                Label("Clone…", systemImage: "doc.on.doc")
+            }
+            Divider()
+            Button {
+                vmStore.update(id: vm.id) { $0.isPinned.toggle() }
+            } label: {
+                Label(vm.isPinned ? "Unpin from Menu Bar" : "Pin to Menu Bar",
+                      systemImage: vm.isPinned ? "pin.slash" : "pin")
+            }
+            Button { model.pushVM = vm } label: {
+                Label("Push to Registry…", systemImage: "arrow.up.circle")
+            }
+            .disabled(vm.status != .stopped)
+            Divider()
+            Button(role: .destructive) { model.confirmDelete = vm } label: {
+                Label("Delete…", systemImage: "trash")
+            }
         }
     }
 
@@ -693,6 +743,37 @@ private struct VMListSheets: ViewModifier {
                 VMEditSheet(vm: vm)
                     .environmentObject(vmStore)
             }
+            .sheet(isPresented: Binding(
+                get: { model.pushVM != nil },
+                set: { if !$0 { model.pushVM = nil } }
+            )) {
+                if let vm = model.pushVM {
+                    PushToRegistrySheet(vmName: vm.name) { imageRef, credentials in
+                        model.pushVM = nil
+                        Task { await pushVM(vm, to: imageRef, credentials: credentials) }
+                    }
+                }
+            }
+    }
+
+    private func pushVM(_ vm: VirtualMachine, to imageRef: String, credentials: [RegistryCredential]) async {
+        let tartPath = AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps/tart").path
+        guard FileManager.default.fileExists(atPath: tartPath) else { return }
+        let host = imageRef.components(separatedBy: "/").first ?? ""
+        let cred = credentials.first(where: { $0.registry == host })
+        let tartSvc = TartService(runner: ProcessRunner(), tartPath: tartPath,
+                                  registryUsername: cred?.username,
+                                  registryPassword: cred?.password)
+        let stream = await tartSvc.push(name: vm.name, to: imageRef)
+        for await event in stream {
+            if case .exit(let code) = event {
+                if code == 0 {
+                    AppLogger.shared.success("Push complete: \(imageRef)", source: "VMListView")
+                } else {
+                    AppLogger.shared.error("Push failed (exit \(code))", source: "VMListView")
+                }
+            }
+        }
     }
 
     private func startVM(_ vmToStart: VirtualMachine, mode: TartService.RunMode, vmStore: VMStore, appState: AppState) async {
@@ -722,13 +803,26 @@ struct BulkActionsMenu: View {
     var body: some View {
         Menu {
             Button("Start All") {
-                for vm in selectedVMs where vm.status == .stopped {
-                    Task {
-                        let stream = await vmStore.start(vm: vm, mode: .native)
-                        // drain the stream; we don't show per-VM logs in bulk mode
-                        for await _ in stream {}
-                        await vmStore.sync()
+                let runningCount = vmStore.vms.filter { $0.status == .running || $0.status == .suspended }.count
+                let toStart = Array(selectedVMs.filter { $0.status == .stopped }.prefix(max(0, 2 - runningCount)))
+                guard !toStart.isEmpty else {
+                    let names = vmStore.vms
+                        .filter { $0.status == .running || $0.status == .suspended }
+                        .map { $0.displayName.isEmpty ? $0.name : $0.displayName }
+                        .joined(separator: ", ")
+                    model.macOSLimitError = "macOS allows at most 2 simultaneous VMs. Currently running: \(names)."
+                    return
+                }
+                Task {
+                    await withTaskGroup(of: Void.self) { group in
+                        for vm in toStart {
+                            group.addTask {
+                                let stream = await vmStore.start(vm: vm, mode: .native)
+                                for await _ in stream {}
+                            }
+                        }
                     }
+                    await vmStore.sync()
                 }
             }
             Button("Stop All") {
@@ -765,6 +859,8 @@ struct VMListRow: View {
     let onEdit:  () -> Void
     let onClone: () -> Void
     let onDelete: () -> Void
+    var onPin:  (() -> Void)? = nil
+    var onPush: (() -> Void)? = nil
     var onTagTap: ((String) -> Void)? = nil
     var onTagShiftTap: ((String) -> Void)? = nil
 
@@ -801,13 +897,27 @@ struct VMListRow: View {
             }
             Spacer()
             Menu {
-                Button("Start…") { onStart() }
-                Button("Stop…") { onStop() }
-                    .disabled(vm.status == .stopped)
+                if vm.status == .running || vm.status == .suspended {
+                    Button { onStop() } label: { Label("Stop…", systemImage: "stop.fill") }
+                } else {
+                    Button { onStart() } label: { Label("Start…", systemImage: "play.fill") }
+                }
                 Divider()
-                Button("Edit…") { onEdit() }
-                Button("Clone…") { onClone() }
-                Button("Delete…", role: .destructive) { onDelete() }
+                Button { onEdit() } label: { Label("Edit…", systemImage: "pencil") }
+                Button { onClone() } label: { Label("Clone…", systemImage: "doc.on.doc") }
+                Divider()
+                Button { onPin?() } label: {
+                    Label(vm.isPinned ? "Unpin from Menu Bar" : "Pin to Menu Bar",
+                          systemImage: vm.isPinned ? "pin.slash" : "pin")
+                }
+                Button { onPush?() } label: {
+                    Label("Push to Registry…", systemImage: "arrow.up.circle")
+                }
+                .disabled(vm.status != .stopped)
+                Divider()
+                Button(role: .destructive) { onDelete() } label: {
+                    Label("Delete…", systemImage: "trash")
+                }
             } label: {
                 Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
             }

@@ -91,7 +91,7 @@ struct VMDetailPane: View {
                         LabeledContent("VNC") {
                             HStack(spacing: 6) {
                                 SelectableMonoText(vncURL)
-                                Button("Open…") { NSWorkspace.shared.open(URL(string: vncURL)!) }
+                                Button("Open…") { if let url = URL(string: vncURL) { NSWorkspace.shared.open(url) } }
                                     .buttonStyle(.bordered).controlSize(.mini)
                             }
                         }
@@ -467,10 +467,7 @@ struct VMDetailPane: View {
     }
 
     private func loadProfileName(id: UUID) -> String? {
-        _ = AppSettings.defaultLocalStorageRoot
-        let profiles = AppDatabase.shared.readOrDefault(.mdmProfiles, default: [MDMProfile]())
-        guard !profiles.isEmpty || true
-        else { return nil }
+        let profiles: [MDMProfile] = AppDatabase.shared.readOrDefault(.mdmProfiles, default: [])
         return profiles.first(where: { $0.id == id })?.displayName
     }
 

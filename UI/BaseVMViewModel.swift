@@ -11,6 +11,11 @@ final class BaseVMViewModel {
     var createVMFromBase: VirtualMachine?
     var confirmDelete: VirtualMachine?
 
+    // Context menu / detail pane actions lifted so the list can trigger them
+    var editingBaseVM: VirtualMachine?          = nil
+    var showBuildLogForBaseVM: VirtualMachine?  = nil
+    var pushToRegistryBaseVM: VirtualMachine?   = nil
+
     // MARK: - Derived
 
     func selectedBaseVM(from baseVMs: [VirtualMachine]) -> VirtualMachine? {

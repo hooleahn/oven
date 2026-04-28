@@ -4,10 +4,12 @@ import SwiftUI
 
 struct BaseVMView: View {
     @EnvironmentObject var baseVMStore: BaseVMStore
+    @EnvironmentObject var vmStore: VMStore
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var theme: AppTheme
     @EnvironmentObject var templateStore: PackerTemplateStore
     @EnvironmentObject var blockStore: BuildingBlockStore
+    @EnvironmentObject var pushManager: PushManager
     @State private var lastRefreshedAt: Date? = nil
     @State private var isRefreshing: Bool = false
     @State private var refreshRotation: Double = 0
@@ -201,6 +203,33 @@ struct BaseVMView: View {
         .sheet(item: $model.createVMFromBase) { base in
             NewVMFromBaseSheet(baseVM: base)
         }
+        .sheet(item: $model.editingBaseVM) { vm in
+            BaseVMEditSheet(baseVM: vm)
+                .environmentObject(baseVMStore)
+                .environmentObject(vmStore)
+                .environmentObject(templateStore)
+        }
+        .sheet(isPresented: Binding(
+            get: { model.pushToRegistryBaseVM != nil },
+            set: { if !$0 { model.pushToRegistryBaseVM = nil } }
+        )) {
+            if let vm = model.pushToRegistryBaseVM {
+                PushToRegistrySheet(vmName: vm.name) { imageRef, credentials in
+                    model.pushToRegistryBaseVM = nil
+                    let tartPath = AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps/tart").path
+                    Task { await pushManager.push(baseVM: vm, to: imageRef,
+                                                  credentials: credentials, tartPath: tartPath) }
+                }
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { model.showBuildLogForBaseVM != nil },
+            set: { if !$0 { model.showBuildLogForBaseVM = nil } }
+        )) {
+            if let vm = model.showBuildLogForBaseVM {
+                BuildLogWindow(baseVM: vm)
+            }
+        }
     }
 
     @ViewBuilder private var listColumn: some View {
@@ -221,16 +250,7 @@ struct BaseVMView: View {
                     ForEach(localVMs) { vm in
                         BaseVMRow(vm: vm, theme: theme)
                             .tag(vm.id)
-                            .contextMenu {
-                                if vm.buildStatus == .ready {
-                                    Button { model.createVMFromBase = vm } label: {
-                                        Label("Clone as Working VM", systemImage: "doc.on.doc")
-                                    }
-                                }
-                                Button { model.selectedBaseVMID = vm.id } label: {
-                                    Label("Show Details", systemImage: "info.circle")
-                                }
-                            }
+                            .contextMenu { baseVMContextMenu(for: vm) }
                     }
                 }
             }
@@ -239,16 +259,41 @@ struct BaseVMView: View {
                     ForEach(registryVMs) { vm in
                         BaseVMRow(vm: vm, theme: theme)
                             .tag(vm.id)
-                            .contextMenu {
-                                Button { model.createVMFromBase = vm } label: {
-                                    Label("Clone as Working VM", systemImage: "doc.on.doc")
-                                }
-                            }
+                            .contextMenu { baseVMContextMenu(for: vm) }
                     }
                 }
             }
         }
         .listStyle(.inset)
+    }
+
+    @ViewBuilder
+    private func baseVMContextMenu(for vm: VirtualMachine) -> some View {
+        Button { model.selectedBaseVMID = vm.id } label: {
+            Label("Show Details", systemImage: "info.circle")
+        }
+        if vm.buildStatus == .ready {
+            Button { model.createVMFromBase = vm } label: {
+                Label("Clone as VM", systemImage: "doc.on.doc")
+            }
+        }
+        Divider()
+        Button { model.editingBaseVM = vm } label: {
+            Label("Edit…", systemImage: "pencil")
+        }
+        Button { model.showBuildLogForBaseVM = vm } label: {
+            Label("Show Build Log", systemImage: "terminal")
+        }
+        if vm.buildStatus == .ready && vm.vmSource == .local {
+            Button { model.pushToRegistryBaseVM = vm } label: {
+                Label("Push to Registry…", systemImage: "arrow.up.circle")
+            }
+        }
+        Divider()
+        Button(role: .destructive) { model.confirmDelete = vm } label: {
+            Label("Delete…", systemImage: "trash")
+        }
+        .disabled(vm.buildStatus == .building)
     }
 
     private var emptyState: some View {
