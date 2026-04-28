@@ -128,15 +128,15 @@ struct StatusDot: View {
             case .running:
                 Circle()
                     .fill(Color.green)
-                    .frame(width: 10, height: 10)
+                    .frame(width: 14, height: 14)
             case .stopped:
                 Rectangle()
                     .fill(Color.secondary)
-                    .frame(width: 10, height: 10)
+                    .frame(width: 13, height: 13)
             case .error:
                 TriangleShape()
                     .fill(Color.red)
-                    .frame(width: 10, height: 9)
+                    .frame(width: 13, height: 12)
             case .suspended:
                 Image(systemName: "pause.fill")
                     .font(.caption2.weight(.bold))
@@ -144,7 +144,7 @@ struct StatusDot: View {
             case .building:
                 Circle()
                     .stroke(Color.accentColor, lineWidth: 2)
-                    .frame(width: 9, height: 9)
+                    .frame(width: 12, height: 12)
             }
         }
         .frame(width: 12, height: 12)
