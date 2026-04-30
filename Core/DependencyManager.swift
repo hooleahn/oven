@@ -77,9 +77,6 @@ final class DependencyManager: ObservableObject {
         } else {
             log("Missing: \(missing.map(\.displayName).joined(separator: ", "))")
             AppLogger.shared.warning("Missing: \(missing.map(\.displayName).joined(separator: ", "))", source: "DependencyManager")
-            for dep in missing {
-                await install(dep)
-            }
         }
         isCheckingVersions = false
 

@@ -165,7 +165,7 @@ struct VMEditSheet: View {
                     }
                     HStack {
                         Picker("Version", selection: $osVersion) {
-                            Text("Unknown").tag("Unknown")
+                            Text("Unknown").tag("")
                             ForEach(versionList, id: \.self) { v in Text(v).tag(v) }
                         }
                         if isFetchingVersions {

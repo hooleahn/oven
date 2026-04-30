@@ -65,14 +65,8 @@ struct VMCard: View {
                         Text(showsDisplayName ? vm.name : " ")
                             .font(.cardMono)
                             .foregroundStyle(.tertiary).lineLimit(1)
-                        if !vm.osVersion.isEmpty {
-                            Text("\(vm.osName.rawValue) \(vm.osVersion)")
-                                .font(.cardSubtitle).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                        if vm.osName == .unknown && vm.osVersion.isEmpty {
-                            Text("Unknown OS")
-                                .font(.cardSubtitle).foregroundStyle(.secondary).lineLimit(1)
-                        }
+                        Text(osLabel)
+                            .font(.cardSubtitle).foregroundStyle(.secondary).lineLimit(1)
                         Text("\(vm.cpuCount) CPU · \(vm.memoryGB) GB RAM · \(vm.diskGB) GB SSD")
                         .font(.cardSubtitle).foregroundStyle(.secondary).lineLimit(1)
                         HStack(spacing: Spacing.xs) {
@@ -205,6 +199,16 @@ struct VMCard: View {
         let name = vm.displayName.isEmpty ? vm.name : vm.displayName
         let tags = vm.tags.isEmpty ? "" : ", tags: \(vm.tags.prefix(3).joined(separator: ", "))"
         return "\(vm.status.label): \(name)\(tags)"
+    }
+
+    private var osLabel: String {
+        if !vm.osVersion.isEmpty {
+            return "\(vm.osName.rawValue) \(vm.osVersion)"
+        } else if vm.osName != .unknown {
+            return vm.osName.rawValue
+        } else {
+            return "Unknown OS"
+        }
     }
 
     private var showsDisplayName: Bool {

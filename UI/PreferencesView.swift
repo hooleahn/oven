@@ -1,6 +1,5 @@
 import SwiftUI
 
-// MARK: - PreferencesView
 // MARK: - PreferencesView (tabbed)
 
 struct PreferencesView: View {
@@ -14,6 +13,9 @@ struct PreferencesView: View {
 
             StoragePrefsTab()
                 .tabItem { Label("Storage", systemImage: "externaldrive") }
+
+            ProfilesPrefsTab()
+                .tabItem { Label("Profiles", systemImage: "person.crop.circle") }
 
             NotificationPrefsTab()
                 .tabItem { Label("Notifications", systemImage: "bell.badge") }

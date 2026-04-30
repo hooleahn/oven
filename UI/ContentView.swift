@@ -462,6 +462,7 @@ struct SidebarView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var tagStore: TagStore
     @EnvironmentObject var pushManager: PushManager
+    @EnvironmentObject var profileStore: ProfileStore
     @Binding var selection: SidebarItem?
 
     private var runningVMCount: Int {
@@ -559,6 +560,11 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) { OvenStatusBar() }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if profileStore.profiles.count > 1 {
+                profileSwitcherHeader
+            }
+        }
         // Clear sidebar filters when navigating away from VMs.
         .onChange(of: selection) { _, newValue in
             if newValue != .virtualMachines {
@@ -566,6 +572,46 @@ struct SidebarView: View {
                 appState.sidebarStatusFilter = nil
             }
         }
+    }
+
+    // MARK: - Profile switcher header
+
+    private var profileSwitcherHeader: some View {
+        Menu {
+            ForEach(profileStore.profiles) { profile in
+                Button {
+                    profileStore.switchToProfile(id: profile.id)
+                } label: {
+                    if profile.id == profileStore.activeProfileID {
+                        Label(profile.name, systemImage: "checkmark")
+                    } else {
+                        Text(profile.name)
+                    }
+                }
+                .disabled(profile.id == profileStore.activeProfileID)
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "person.crop.circle")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(profileStore.activeProfile.name)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
+        .help("Switch profile")
     }
 
     // MARK: - Row builders

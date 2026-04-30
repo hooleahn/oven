@@ -13,8 +13,10 @@ private struct DiskUsageEntry: Identifiable {
 // MARK: - StoragePrefsTab
 
 struct StoragePrefsTab: View {
+    @EnvironmentObject var profileStore: ProfileStore
     @State private var settings = AppSettings.load()
     @State private var activePickerTarget: PickerTarget?
+    @State private var committedPickerTarget: PickerTarget?
     @State private var pendingTartHome: String? = nil
     @State private var showRebuildConfirm = false
     @State private var diskEntries: [DiskUsageEntry] = []
@@ -26,9 +28,9 @@ struct StoragePrefsTab: View {
         Form {
             Section {
                 tartHomeRow
-                storageRow(label: "IPSWs",            description: "Downloaded macOS firmware files.",  url: settings.ipswStorageRoot,     target: .ipsws,     helpText: "Where Oven stores downloaded IPSW firmware files. These can be several GB each.")
-                storageRow(label: "Packer templates",  description: ".pkr.hcl files and scripts.",      url: settings.packerTemplatesRoot, target: .templates, helpText: "Directory containing your Packer HCL templates and associated scripts.")
-                storageRow(label: "Dependencies",      description: "tart, packer, mist-cli, jq.",       url: settings.depsRoot,            target: .deps,      helpText: "Where Oven installs and manages its required tools (tart, packer, mist-cli, jq).")
+                storageRow(label: "IPSWs",           description: "Downloaded macOS firmware files.", url: settings.ipswStorageRoot,     target: .ipsws,     defaultURL: AppSettings.default.ipswStorageRoot,     helpText: "Where Oven stores downloaded IPSW firmware files. These can be several GB each.")
+                storageRow(label: "Packer templates", description: ".pkr.hcl files and scripts.",     url: settings.packerTemplatesRoot, target: .templates, defaultURL: AppSettings.default.packerTemplatesRoot, helpText: "Directory containing your Packer HCL templates and associated scripts.")
+                storageRow(label: "Dependencies",     description: "tart, packer, mist-cli, jq.",     url: settings.depsRoot,            target: .deps,      defaultURL: AppSettings.default.depsRoot,            helpText: "Where Oven installs and manages its required tools (tart, packer, mist-cli, jq).")
             } header: {
                 Text("Locations")
             } footer: {
@@ -60,9 +62,10 @@ struct StoragePrefsTab: View {
         .task { await computeDiskUsage() }
         .confirmationDialog("Rebuild Metadata?", isPresented: $showRebuildConfirm, titleVisibility: .visible) {
             Button("Rebuild & Restart", role: .destructive) {
-                let s = AppSettings.load()
-                let vmMeta   = s.vmStorageRoot.appendingPathComponent("vms/metadata.json")
-                let baseMeta = s.packerTemplatesRoot.appendingPathComponent("base-vms/metadata.json")
+                // Use AppDatabase.shared.url(for:) so the paths are always correct
+                // regardless of which profile is active or where settings point.
+                let vmMeta   = AppDatabase.shared.url(for: .vms)
+                let baseMeta = AppDatabase.shared.url(for: .baseVMs)
                 try? FileManager.default.removeItem(at: vmMeta)
                 try? FileManager.default.removeItem(at: baseMeta)
                 AppLogger.shared.log("Metadata deleted: \(vmMeta.path)", source: "Preferences")
@@ -84,10 +87,17 @@ struct StoragePrefsTab: View {
             isPresented: Binding(get: { activePickerTarget != nil }, set: { if !$0 { activePickerTarget = nil } }),
             allowedContentTypes: [.folder]
         ) { result in
+            defer { activePickerTarget = nil; committedPickerTarget = nil }
             guard let url = try? result.get() else { return }
-            switch activePickerTarget {
-            case .ipsws:     settings.ipswStorageRoot = url;     try? settings.save()
-            case .templates: settings.packerTemplatesRoot = url; try? settings.save()
+            switch committedPickerTarget {
+            case .ipsws:
+                settings.ipswStorageRoot = url; try? settings.save()
+                let ipswURL = url, pid = profileStore.activeProfileID
+                Task { @MainActor in profileStore.setIPSWRoot(id: pid, to: ipswURL) }
+            case .templates:
+                settings.packerTemplatesRoot = url; try? settings.save()
+                let tmplURL = url, pid = profileStore.activeProfileID
+                Task { @MainActor in profileStore.setPackerTemplatesRoot(id: pid, to: tmplURL) }
             case .deps:      settings.depsRoot = url;            try? settings.save()
             case .tartHome:
                 let oldPath = settings.tartHome
@@ -95,7 +105,6 @@ struct StoragePrefsTab: View {
                 if oldPath != nil { pendingTartHome = oldPath }
             default: break
             }
-            activePickerTarget = nil
         }
         .alert("Copy VMs to new location?", isPresented: Binding(
             get: { pendingTartHome != nil }, set: { if !$0 { pendingTartHome = nil } }
@@ -107,6 +116,17 @@ struct StoragePrefsTab: View {
             Button("Don't copy", role: .cancel) { pendingTartHome = nil }
         } message: {
             Text("Do you want to copy your existing tart VMs to the new location? This may take a while for large VMs.")
+        }
+        .onChange(of: settings.ipswStorageRoot) { _, newURL in
+            let isDefault = newURL == AppSettings.default.ipswStorageRoot
+            profileStore.setIPSWRoot(id: profileStore.activeProfileID, to: isDefault ? nil : newURL)
+        }
+        .onChange(of: settings.packerTemplatesRoot) { _, newURL in
+            let isDefault = newURL == AppSettings.default.packerTemplatesRoot
+            profileStore.setPackerTemplatesRoot(id: profileStore.activeProfileID, to: isDefault ? nil : newURL)
+        }
+        .onChange(of: profileStore.activeProfile) { _, _ in
+            settings = AppSettings.load()
         }
     }
 
@@ -129,7 +149,7 @@ struct StoragePrefsTab: View {
                 } label: { Image(systemName: "folder") }
                 .controlSize(.small).help("Open in Finder")
 
-                Button("Change…") { activePickerTarget = .tartHome }.controlSize(.small)
+                Button("Change…") { committedPickerTarget = .tartHome; activePickerTarget = .tartHome }.controlSize(.small)
 
                 if settings.tartHome != nil {
                     Button("Reset") { settings.tartHome = nil; try? settings.save() }
@@ -144,7 +164,7 @@ struct StoragePrefsTab: View {
     // MARK: - Generic storage row
 
     @ViewBuilder
-    private func storageRow(label: String, description: String, url: URL, target: PickerTarget, helpText: String) -> some View {
+    private func storageRow(label: String, description: String, url: URL, target: PickerTarget, defaultURL: URL, helpText: String) -> some View {
         LabeledContent(label) {
             HStack(spacing: 8) {
                 pathValidationIcon(for: url)
@@ -156,7 +176,23 @@ struct StoragePrefsTab: View {
                 Button { NSWorkspace.shared.open(url) } label: { Image(systemName: "folder") }
                     .controlSize(.small).help("Open in Finder")
 
-                Button("Change…") { activePickerTarget = target }.controlSize(.small)
+                Button("Change…") { committedPickerTarget = target; activePickerTarget = target }.controlSize(.small)
+
+                if url != defaultURL {
+                    Button("Reset") {
+                        switch target {
+                        case .ipsws:
+                            settings.ipswStorageRoot = defaultURL; try? settings.save()
+                        case .templates:
+                            settings.packerTemplatesRoot = defaultURL; try? settings.save()
+                        case .deps:
+                            settings.depsRoot = defaultURL; try? settings.save()
+                        default: break
+                        }
+                    }
+                    .controlSize(.small).tint(.secondary)
+                    .help("Revert to the default location")
+                }
             }
         }
         .help(helpText)

@@ -5,13 +5,13 @@ actor PackerService {
     private let runner: ProcessRunner
     private let packerPath: String
     private let pluginDir: String
-    private let templatesRoot: URL
+    // Read dynamically so profile switches are reflected without re-creating the service.
+    private var templatesRoot: URL { AppSettings.load().packerTemplatesRoot }
 
-    init(runner: ProcessRunner, packerPath: String, pluginDir: String, templatesRoot: URL) {
+    init(runner: ProcessRunner, packerPath: String, pluginDir: String) {
         self.runner = runner
         self.packerPath = packerPath
         self.pluginDir = pluginDir
-        self.templatesRoot = templatesRoot
     }
 
     // MARK: - Build pipeline

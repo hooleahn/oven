@@ -85,6 +85,9 @@ struct OvenApp: App {
     // to Scene-level bindings, so we keep a dedicated @AppStorage here that
     // reads/writes the same UserDefaults key.
     @AppStorage("menuBarItemEnabled") private var menuBarItemEnabled = true
+    // profileStore must be declared before vmStore/baseVMStore so ProfileStore.init()
+    // switches AppDatabase.root before the store factories read from it.
+    @State private var profileStore  = ProfileStore()
     @State private var depManager = DependencyManager(
         storageRoot: AppSettings.defaultLocalStorageRoot
     )
@@ -102,6 +105,12 @@ struct OvenApp: App {
     @State private var menuBarViewModel = MenuBarViewModel()
     @State private var pushManager = PushManager()
 
+    // Ensure AppDatabase uses the active profile's root before any @State store
+    // initialises — @State init order is not guaranteed in SwiftUI.
+    init() {
+        ProfileStore.bootstrapActiveProfile()
+    }
+
     // MARK: - Store factories (called once at app launch)
 
     private static func makeVMStore() -> VMStore {
@@ -112,7 +121,6 @@ struct OvenApp: App {
     }
 
     private static func makePackerService() -> PackerService {
-        let settings  = AppSettings.load()
         let packerPath = AppSettings.defaultLocalStorageRoot
             .appendingPathComponent("deps/packer").path
         let pluginDir  = FileManager.default.homeDirectoryForCurrentUser
@@ -120,8 +128,7 @@ struct OvenApp: App {
         return PackerService(
             runner: ProcessRunner(),
             packerPath: packerPath,
-            pluginDir: pluginDir,
-            templatesRoot: settings.packerTemplatesRoot
+            pluginDir: pluginDir
         )
     }
 
@@ -137,8 +144,7 @@ struct OvenApp: App {
         let packerSvc  = PackerService(
             runner: runner,
             packerPath: packerPath,
-            pluginDir: pluginDir,
-            templatesRoot: settings.packerTemplatesRoot
+            pluginDir: pluginDir
         )
         return BaseVMStore(packerService: packerSvc, tartService: tartSvc,
                            storageRoot: settings.packerTemplatesRoot)
@@ -193,10 +199,15 @@ struct OvenApp: App {
                         .environmentObject(templateStore)
                         .environmentObject(blockStore)
                         .environmentObject(pushManager)
+                        .environmentObject(profileStore)
                         .environment(recipesViewModel)
                 } else {
                     SetupView(depManager: depManager)
                 }
+            }
+            .onChange(of: profileStore.activeProfileID) { _, _ in
+                templateStore.load()
+                Task { await vmStore.reload() }
             }
             .task {
                 // Wire vmStore into baseVMStore (Option B architecture)
@@ -246,6 +257,7 @@ struct OvenApp: App {
                 .environmentObject(vmStore)
                 .environmentObject(baseVMStore)
                 .environmentObject(depManager)
+                .environmentObject(profileStore)
         }
 
         MenuBarExtra(isInserted: Binding(

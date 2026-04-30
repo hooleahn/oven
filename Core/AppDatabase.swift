@@ -69,13 +69,20 @@ final class AppDatabase {
 
     // MARK: - Storage root
 
-    private let root: URL
+    private var root: URL
 
     private init() {
         root = AppSettings.defaultLocalStorageRoot
     }
 
-    private func url(for file: File) -> URL {
+    /// Redirect all subsequent reads and writes to a different root directory.
+    /// Called by ProfileStore when the active profile changes.
+    func switchRoot(to url: URL) {
+        lock.lock(); defer { lock.unlock() }
+        root = url
+    }
+
+    func url(for file: File) -> URL {
         root.appendingPathComponent(file.rawValue)
     }
 

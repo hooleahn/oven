@@ -288,6 +288,13 @@ final class VMStore: ObservableObject {
                 if vms[idx].macOSVersion.isEmpty {
                     vms[idx].macOSVersion = inferMacOSVersion(from: info.name)
                 }
+                if vms[idx].osName == .unknown {
+                    let (inferred, ver) = inferOSRelease(from: info.name)
+                    if inferred != .unknown {
+                        vms[idx].osName = inferred
+                        if vms[idx].osVersion.isEmpty { vms[idx].osVersion = ver }
+                    }
+                }
                 // Refresh createdAt from filesystem
                 let fsDate = vmCreationDate(name: info.name)
                 if fsDate < vms[idx].createdAt { vms[idx].createdAt = fsDate }
@@ -302,8 +309,10 @@ final class VMStore: ObservableObject {
                 // Unknown to Oven — add with inferred metadata
                 var vm = VirtualMachine(fromTart: info)
                 vm.actualDiskGB = info.size
-                vm.macOSVersion = inferMacOSVersion(from: info.name)
                 vm.createdAt = vmCreationDate(name: info.name)
+                vm.macOSVersion = inferMacOSVersion(from: info.name)
+                let (inferred, ver) = inferOSRelease(from: info.name)
+                if inferred != .unknown { vm.osName = inferred; vm.osVersion = ver }
                 if info.name.hasPrefix("base-") {
                     vm.isBaseVM = true
                     vm.buildStatus = .ready  // exists in tart = already built
@@ -326,25 +335,29 @@ final class VMStore: ObservableObject {
 
     // MARK: - Metadata inference
 
-    /// Infer macOS version from VM name e.g. "sequoia-15-6-1-nomdm-abc" → "macOS Sequoia 15.6.1"
-    private func inferMacOSVersion(from name: String) -> String {
-        // Strip registry prefix for OCI names (e.g. "ghcr.io/cirruslabs/macos-sequoia-base:latest")
+    /// Returns the inferred `MacOSRelease.Name` and dotted version string from a VM name.
+    /// e.g. "base-sequoia-15-6-1-nomdm" → (.sequoia, "15.6.1")
+    private func inferOSRelease(from name: String) -> (MacOSRelease.Name, String) {
         let bare = name.components(separatedBy: "/").last ?? name
         let lower = bare.lowercased()
-        let osName: String
-        if lower.contains("tahoe")         { osName = "Tahoe" }
-        else if lower.contains("sequoia")  { osName = "Sequoia" }
-        else if lower.contains("sonoma")   { osName = "Sonoma" }
-        else if lower.contains("ventura")  { osName = "Ventura" }
-        else if lower.contains("monterey") { osName = "Monterey" }
-        else { return "" }
-        // Try to extract a version number like "15-6-1" or "15.6.1"
+        let osName: MacOSRelease.Name
+        if lower.contains("tahoe")         { osName = .tahoe }
+        else if lower.contains("sequoia")  { osName = .sequoia }
+        else if lower.contains("sonoma")   { osName = .sonoma }
+        else if lower.contains("ventura")  { osName = .ventura }
+        else if lower.contains("monterey") { osName = .monterey }
+        else { return (.unknown, "") }
         let versionPattern = #"(\d+[-\.]\d+(?:[-\.]\d+)?)"#
-        if let range = bare.range(of: versionPattern, options: .regularExpression) {
-            let ver = bare[range].replacingOccurrences(of: "-", with: ".")
-            return "macOS \(osName) \(ver)"
-        }
-        return "macOS \(osName)"
+        let ver = bare.range(of: versionPattern, options: .regularExpression)
+            .map { bare[$0].replacingOccurrences(of: "-", with: ".") } ?? ""
+        return (osName, ver)
+    }
+
+    /// Infer display string from VM name e.g. "sequoia-15-6-1-nomdm-abc" → "macOS Sequoia 15.6.1"
+    private func inferMacOSVersion(from name: String) -> String {
+        let (osName, ver) = inferOSRelease(from: name)
+        guard osName != .unknown else { return "" }
+        return ver.isEmpty ? "macOS \(osName.rawValue)" : "macOS \(osName.rawValue) \(ver)"
     }
     private func vmCreationDate(name: String) -> Date {
         let tartHome = AppSettings.load().resolvedTartHome
@@ -370,7 +383,7 @@ final class VMStore: ObservableObject {
 
     // MARK: - Persistence
 
-    /// Delete all saved metadata and rebuild from tart list.
+    /// Drop all metadata and rebuild from tart list.
     /// Preserves nothing — use when metadata is corrupted or out of date.
     func resetMetadata() async {
         vms = []
@@ -379,7 +392,14 @@ final class VMStore: ObservableObject {
         await sync()
     }
 
-    private func loadFromDisk() {
+    /// Reload metadata from disk (e.g. after a profile switch) then re-sync with tart.
+    func reload() async {
+        vms = []
+        loadFromDisk()
+        await sync()
+    }
+
+    func loadFromDisk() {
         let loaded: [VirtualMachine] = AppDatabase.shared.readOrDefault(.vms, default: [])
         vms = loaded
         AppLogger.shared.log("Loaded \(vms.count) VMs from disk", source: "VMStore")

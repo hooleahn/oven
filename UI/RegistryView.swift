@@ -62,80 +62,76 @@ struct RegistryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Middle: ZStack so banner never shifts content centre ────────
-            ZStack(alignment: .top) {
-                // Content fills full height — empty state centres within it
-                VStack(spacing: 0) {
-                    // "Showing N images on [registry]" context label
-                    if !filteredImages.isEmpty {
-                        HStack {
-                            Text("Showing \(filteredImages.count) image\(filteredImages.count == 1 ? "" : "s") on \(rvm.selectedRegistry)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            if let cred = credentialForSelected {
-                                Label(cred.username, systemImage: "person.badge.key.fill")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
+            // ── Middle content area ──────────────────────────────────────────
+            VStack(spacing: 0) {
+                // Credentials banner — part of layout flow so it doesn't overlap the list
+                if credentialForSelected == nil {
+                    HStack(spacing: 10) {
+                        Image(systemName: "shield.slash.fill")
+                            .foregroundStyle(.orange)
+                            .font(.callout)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("No credentials for \(rvm.selectedRegistry)")
+                                .font(.callout).fontWeight(.medium)
+                            Text("Add them in Preferences to push or pull private images.")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
-                        .padding(.horizontal, 14).padding(.vertical, 6)
-                        .background(.bar)
-                        Divider()
-                    }
-
-                    if filteredImages.isEmpty {
-                        EmptyStateView(
-                            "No Images",
-                            systemImage: "externaldrive.connected.to.line.below",
-                            description: "Add an image reference in the bar below to pull or push images on \(rvm.selectedRegistry)."
-                        )
-                    } else {
-                        List(filteredImages) { image in
-                            RegistryImageRow(
-                                image: image,
-                                downloadProgress: appState.registryDownloads[image.imageRef],
-                                onPull: { rvm.pendingPull = image },
-                                onCreateVM: { Task { await createVMFromImage(image) } },
-                                onDelete: {
-                                    rvm.images.removeAll { $0.id == image.id }
-                                    rvm.saveImages()
-                                }
-                            )
+                        Spacer()
+                        SettingsLink {
+                            Text("Add credentials")
+                                .font(.callout)
+                                .foregroundStyle(Color.accentColor)
                         }
-                        .listStyle(.inset)
+                        .buttonStyle(.plain)
                     }
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(Color.orange.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(Color.orange.opacity(0.25), lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(.horizontal, 12).padding(.vertical, 10)
+                    Divider()
                 }
 
-                // Credentials banner overlaid at top — does not affect layout
-                if credentialForSelected == nil {
-                    VStack(spacing: 0) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "shield.slash.fill")
-                                .foregroundStyle(.orange)
-                                .font(.callout)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text("No credentials for \(rvm.selectedRegistry)")
-                                    .font(.callout).fontWeight(.medium)
-                                Text("Add them in Preferences to push or pull private images.")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            SettingsLink {
-                                Text("Add credentials")
-                                    .font(.callout)
-                                    .foregroundStyle(Color.accentColor)
-                            }
-                            .buttonStyle(.plain)
+                // "Showing N images on [registry]" context label
+                if !filteredImages.isEmpty {
+                    HStack {
+                        Text("Showing \(filteredImages.count) image\(filteredImages.count == 1 ? "" : "s") on \(rvm.selectedRegistry)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if let cred = credentialForSelected {
+                            Label(cred.username, systemImage: "person.badge.key.fill")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
-                        .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(Color.orange.opacity(0.08))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .strokeBorder(Color.orange.opacity(0.25), lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .padding(.horizontal, 12).padding(.top, 10)
                     }
+                    .padding(.horizontal, 14).padding(.vertical, 6)
+                    .background(.bar)
+                    Divider()
+                }
+
+                if filteredImages.isEmpty {
+                    EmptyStateView(
+                        "No Images",
+                        systemImage: "externaldrive.connected.to.line.below",
+                        description: "Add an image reference in the bar below to pull or push images on \(rvm.selectedRegistry)."
+                    )
+                } else {
+                    List(filteredImages) { image in
+                        RegistryImageRow(
+                            image: image,
+                            downloadProgress: appState.registryDownloads[image.imageRef],
+                            onPull: { rvm.pendingPull = image },
+                            onCreateVM: { Task { await createVMFromImage(image) } },
+                            onDelete: {
+                                rvm.images.removeAll { $0.id == image.id }
+                                rvm.saveImages()
+                            }
+                        )
+                    }
+                    .listStyle(.inset)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -144,6 +140,12 @@ struct RegistryView: View {
             Divider()
             addImageBar
         }
+        .background(
+            Button("") { newImageRefFocused = true }
+                .keyboardShortcut("n", modifiers: .command)
+                .opacity(0)
+                .allowsHitTesting(false)
+        )
         .navigationTitle("Image Registry")
         .alert("Error", isPresented: Binding(
             get: { rvm.errorMessage != nil },
@@ -182,26 +184,7 @@ struct RegistryView: View {
                 .help("Browse Cirrus Labs public macOS images (⌘B)")
             }
 
-            // 3. Hidden ⌘N — focuses the add-image bar TextField
-            ToolbarItem(placement: .secondaryAction) {
-                Button {
-                    newImageRefFocused = true
-                } label: {
-                    EmptyView()
-                }
-                .keyboardShortcut("n", modifiers: .command)
-                .opacity(0)
-                .accessibilityHidden(true)
-            }
-
-            // 4. Flexible space
-            ToolbarItem(placement: .automatic) {
-                Spacer()
-            }
-
-            // 5. Search provided by .searchable
-
-            // 6. Last-synced label (no sort menu)
+            // Last-synced label
             ToolbarItem(placement: .automatic) {
                 if let refreshed = lastRefreshedAt {
                     Text("Synced " + coarseAge(of: refreshed))
@@ -210,7 +193,7 @@ struct RegistryView: View {
                 }
             }
 
-            // 7. Refresh (⌘R)
+            // Refresh (⌘R)
             ToolbarItem(placement: .automatic) {
                 Button {
                     guard !isRefreshing else { return }
