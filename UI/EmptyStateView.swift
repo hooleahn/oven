@@ -20,40 +20,17 @@ struct EmptyStateView<Actions: View, Content: View>: View {
     }
 
     var body: some View {
-        ZStack {
-            // Subtle radial gradient background
-            RadialGradient(
-                colors: [Color.primary.opacity(0.03), Color.clear],
-                center: .center,
-                startRadius: 0,
-                endRadius: 260
-            )
-            .ignoresSafeArea()
-
-            VStack(spacing: 20) {
-                Image(systemName: systemImage)
-                    .font(.system(.largeTitle, weight: .light))
-                    .foregroundStyle(.secondary)
-
-                VStack(spacing: 8) {
-                    Text(title)
-                        .font(.title3)
-                        .fontWeight(.semibold)
-
-                    if let description {
-                        Text(description)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 400)
-                    }
-                }
-
+        ContentUnavailableView {
+            Label(title, systemImage: systemImage)
+        } description: {
+            if let description {
+                Text(description)
+            }
+        } actions: {
+            VStack(spacing: 12) {
                 content()
-
                 actions()
             }
-            .padding(40)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

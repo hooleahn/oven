@@ -12,17 +12,21 @@ struct ToastStackView: View {
 
     var body: some View {
         if !toastsDisabled {
-            VStack(spacing: 6) {
-                ForEach(center.toasts) { toast in
-                    ToastCapsule(toast: toast)
-                        .transition(
-                            .move(edge: .top).combined(with: .opacity)
-                        )
+            GeometryReader { geo in
+                let w = min(geo.size.width, min(720, max(360, geo.size.width * 0.65)))
+                VStack(spacing: 6) {
+                    ForEach(center.toasts) { toast in
+                        ToastCapsule(toast: toast)
+                            .transition(
+                                .move(edge: .top).combined(with: .opacity)
+                            )
+                    }
                 }
+                .padding(.top, 10)
+                .padding(.horizontal, 12)
+                .frame(width: w)
+                .frame(maxWidth: .infinity, alignment: .top)
             }
-            .padding(.top, 10)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: 560)
             .animation(.snappy, value: center.toasts.map(\.id))
         }
     }
@@ -34,6 +38,7 @@ private struct ToastCapsule: View {
 
     let toast: ToastCenter.Toast
     @Environment(\.openURL) private var openURL
+    @State private var isExpanded = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -53,7 +58,9 @@ private struct ToastCapsule: View {
                 Text(toast.message)
                     .font(.caption)
                     .foregroundStyle(.primary)
-                    .lineLimit(2)
+                    .lineLimit(isExpanded ? nil : 2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .onTapGesture { withAnimation(.snappy) { isExpanded.toggle() } }
             }
 
             Spacer(minLength: 0)
@@ -66,6 +73,21 @@ private struct ToastCapsule: View {
                 .font(.caption)
                 .buttonStyle(.plain)
                 .foregroundStyle(.accent)
+            }
+
+            // Copy button (errors only)
+            if toast.severity == .error {
+                Button {
+                    let pb = NSPasteboard.general
+                    pb.clearContents()
+                    pb.setString("[\(toast.source)] \(toast.message)", forType: .string)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Copy message")
             }
 
             // Dismiss button
