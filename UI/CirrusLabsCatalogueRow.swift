@@ -1,11 +1,25 @@
 import SwiftUI
 
-
 struct CirrusLabsCatalogueRow: View {
     let image: CirrusLabsImage
-    let isTracked: Bool
-    let downloadProgress: Double?
-    let onAdd: () -> Void
+    let trackedRefs: Set<String>
+    let activeDownloads: [String: Double]
+    let onAdd: (String) -> Void
+
+    @State private var selectedTag: String
+
+    init(image: CirrusLabsImage, trackedRefs: Set<String>, activeDownloads: [String: Double],
+         onAdd: @escaping (String) -> Void) {
+        self.image = image
+        self.trackedRefs = trackedRefs
+        self.activeDownloads = activeDownloads
+        self.onAdd = onAdd
+        _selectedTag = State(initialValue: image.defaultTag)
+    }
+
+    private var selectedRef: String { image.ref(tag: selectedTag) }
+    private var isTracked: Bool { trackedRefs.contains(selectedRef) }
+    private var downloadProgress: Double? { activeDownloads[selectedRef] }
 
     private var variantIcon: String {
         switch image.variant {
@@ -33,11 +47,20 @@ struct CirrusLabsCatalogueRow: View {
                 HStack(spacing: 6) {
                     Text(image.variant).fontWeight(.medium)
                     Text("·").foregroundStyle(.tertiary)
-                    Text(image.imageRef
-                        .components(separatedBy: "/").last?
-                        .components(separatedBy: ":").first ?? "")
+                    if image.tags.count > 1 {
+                        Picker("", selection: $selectedTag) {
+                            ForEach(image.tags, id: \.self) { Text($0).tag($0) }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
                         .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                    } else {
+                        Text(image.imageRef
+                            .components(separatedBy: "/").last?
+                            .components(separatedBy: ":").first ?? "")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Text(image.description)
                     .font(.caption).foregroundStyle(.secondary)
@@ -54,7 +77,7 @@ struct CirrusLabsCatalogueRow: View {
                 Label("Added", systemImage: "checkmark.circle.fill")
                     .font(.caption).foregroundStyle(.green)
             } else {
-                Button("Add", action: onAdd)
+                Button("Add") { onAdd(selectedRef) }
                     .buttonStyle(.bordered).controlSize(.small)
             }
         }

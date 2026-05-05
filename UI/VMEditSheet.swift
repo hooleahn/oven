@@ -29,14 +29,29 @@ struct VMEditSheet: View {
     @State private var sshPassword: String = ""
     @State private var isBaseVM: Bool = false
     @State private var osName: MacOSRelease.Name
-    @State private var osVersion: String
+    @State private var versionPickerSel: String       // picker binding; "__custom__" means custom
+    @State private var customVersionText: String      // text when Custom version selected
+    @State private var isBetaOS: Bool
+    @State private var betaLabel: String
+    @State private var customOSMajorVersion: String
+    @State private var customOSReleaseName: String
+    @State private var majorVersionError: String? = nil
+    @State private var customVersionError: String? = nil
+
+    private static let ipswVersionRegex = /^\d+(\.\d+)*$/
     @State private var serialNumber: String
     @State private var sofaVersions: [String] = []
     @State private var isFetchingVersions = false
     @State private var mdmServerID: UUID?
 
+    private static let customVersionSentinel = "__custom__"
+
     private var versionList: [String] {
         sofaVersions.isEmpty ? osName.fallbackVersions : sofaVersions
+    }
+
+    private var resolvedOSVersion: String {
+        versionPickerSel == Self.customVersionSentinel ? customVersionText : versionPickerSel
     }
 
     private let displayPresets = [
@@ -46,21 +61,29 @@ struct VMEditSheet: View {
 
     init(vm: VirtualMachine) {
         self.vm = vm
-        _displayName       = State(initialValue: vm.displayName == vm.name ? "" : vm.displayName)
-        _tartName          = State(initialValue: vm.name)
-        _tartNameError     = State(initialValue: nil)
-        _description       = State(initialValue: vm.description)
-        _tags              = State(initialValue: vm.tags)
-        _sshUsername       = State(initialValue: vm.sshUsername)
-        _isBaseVM          = State(initialValue: vm.isBaseVM)
-        _osName            = State(initialValue: vm.osName)
-        _osVersion         = State(initialValue: vm.osVersion)
-        _serialNumber      = State(initialValue: vm.serialNumber)
-        _mdmServerID       = State(initialValue: vm.mdmServerID)
-        _sharedFolders     = State(initialValue: vm.sharedFolders)
-        _cpuCount          = State(initialValue: vm.cpuCount)
-        _memoryGB          = State(initialValue: vm.memoryGB)
-        _displayResolution = State(initialValue: "1920x1080")
+        _displayName          = State(initialValue: vm.displayName == vm.name ? "" : vm.displayName)
+        _tartName             = State(initialValue: vm.name)
+        _tartNameError        = State(initialValue: nil)
+        _description          = State(initialValue: vm.description)
+        _tags                 = State(initialValue: vm.tags)
+        _sshUsername          = State(initialValue: vm.sshUsername)
+        _isBaseVM             = State(initialValue: vm.isBaseVM)
+        _osName               = State(initialValue: vm.osName)
+        _isBetaOS             = State(initialValue: vm.isBetaOS)
+        _betaLabel            = State(initialValue: vm.betaLabel)
+        _customOSMajorVersion = State(initialValue: vm.customOSMajorVersion)
+        _customOSReleaseName  = State(initialValue: vm.customOSReleaseName)
+        _serialNumber         = State(initialValue: vm.serialNumber)
+        _mdmServerID          = State(initialValue: vm.mdmServerID)
+        _sharedFolders        = State(initialValue: vm.sharedFolders)
+        _cpuCount             = State(initialValue: vm.cpuCount)
+        _memoryGB             = State(initialValue: vm.memoryGB)
+        _displayResolution    = State(initialValue: "1920x1080")
+        // Determine if the stored version is custom (not in the static fallback list)
+        let fallback = vm.osName.fallbackVersions
+        let isCustom = !vm.osVersion.isEmpty && !fallback.contains(vm.osVersion)
+        _versionPickerSel  = State(initialValue: isCustom ? "__custom__" : vm.osVersion)
+        _customVersionText = State(initialValue: isCustom ? vm.osVersion : "")
     }
 
     private var allKnownTags: [String] {
@@ -160,16 +183,68 @@ struct VMEditSheet: View {
                         }
                     }
                     .onChange(of: osName) { _, newOS in
-                        osVersion = ""
+                        versionPickerSel = ""
+                        customVersionText = ""
+                        customOSMajorVersion = ""
+                        customOSReleaseName = ""
                         Task { await loadVersions(for: newOS) }
                     }
+                    if osName == .custom {
+                        LabeledContent("Major version") {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                TextField("e.g. 27", text: $customOSMajorVersion)
+                                    .multilineTextAlignment(.trailing)
+                                    .onChange(of: customOSMajorVersion) { _, v in
+                                        let filtered = v.filter { $0.isNumber }
+                                        if filtered != v { customOSMajorVersion = filtered }
+                                        majorVersionError = (!filtered.isEmpty && Int(filtered) == nil)
+                                            ? "Must be a positive integer" : nil
+                                    }
+                                if let err = majorVersionError {
+                                    Text(err).font(.caption).foregroundStyle(.red)
+                                }
+                            }
+                        }
+                        LabeledContent("Release name") {
+                            TextField("e.g. Yuba", text: $customOSReleaseName)
+                                .multilineTextAlignment(.trailing)
+                        }
+                    }
                     HStack {
-                        Picker("Version", selection: $osVersion) {
-                            Text("Unknown").tag("")
+                        Picker("Version", selection: $versionPickerSel) {
+                            Text("Any").tag("")
                             ForEach(versionList, id: \.self) { v in Text(v).tag(v) }
+                            Divider()
+                            Text("Custom…").tag(Self.customVersionSentinel)
+                        }
+                        .onChange(of: versionPickerSel) { _, sel in
+                            if sel != Self.customVersionSentinel { customVersionText = "" }
                         }
                         if isFetchingVersions {
                             ProgressView().controlSize(.mini).padding(.leading, 4)
+                        }
+                    }
+                    if versionPickerSel == Self.customVersionSentinel {
+                        LabeledContent("Custom version") {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                TextField("e.g. 26.5", text: $customVersionText)
+                                    .multilineTextAlignment(.trailing)
+                                    .font(.system(.body, design: .monospaced))
+                                    .onChange(of: customVersionText) { _, v in
+                                        customVersionError = (!v.isEmpty && v.wholeMatch(of: Self.ipswVersionRegex) == nil)
+                                            ? "Use digits and dots only" : nil
+                                    }
+                                if let err = customVersionError {
+                                    Text(err).font(.caption).foregroundStyle(.red)
+                                }
+                            }
+                        }
+                    }
+                    Toggle("Beta OS", isOn: $isBetaOS)
+                    if isBetaOS {
+                        LabeledContent("Beta label") {
+                            TextField("e.g. Beta 1, RC 2", text: $betaLabel)
+                                .multilineTextAlignment(.trailing)
                         }
                     }
                     LabeledContent("Serial Number") {
@@ -270,7 +345,15 @@ struct VMEditSheet: View {
             .formStyle(.grouped)
         }
         .frame(minWidth: 460, idealWidth: 500, minHeight: 480)
-        .task { await loadVersions(for: osName) }
+        .task {
+            await loadVersions(for: osName)
+            // After SOFA loads, if the current version is now in the list switch to it
+            if versionPickerSel == Self.customVersionSentinel
+                && versionList.contains(customVersionText) {
+                versionPickerSel = customVersionText
+                customVersionText = ""
+            }
+        }
         .onAppear {
             // Clamp stored values to current host limits in case hardware changed
             cpuCount  = min(cpuCount, maxCPU)
@@ -301,9 +384,13 @@ struct VMEditSheet: View {
             v.sharedFolders = sharedFolders
             v.cpuCount      = cpuCount
             v.memoryGB      = memoryGB
-            v.osName        = osName
-            v.osVersion     = osVersion
-            v.serialNumber  = serialNumber
+            v.osName               = osName
+            v.osVersion            = resolvedOSVersion
+            v.isBetaOS             = isBetaOS
+            v.betaLabel            = betaLabel.trimmingCharacters(in: .whitespaces)
+            v.customOSMajorVersion = customOSMajorVersion.trimmingCharacters(in: .whitespaces)
+            v.customOSReleaseName  = customOSReleaseName.trimmingCharacters(in: .whitespaces)
+            v.serialNumber         = serialNumber
             v.mdmServerID   = mdmServerID
             v.sshPassword   = sshPassword.isEmpty ? nil : sshPassword
             if !v.isOCIBased { v.isBaseVM = isBaseVM }

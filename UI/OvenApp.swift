@@ -104,6 +104,8 @@ struct OvenApp: App {
     @State private var recipesViewModel = RecipesViewModel()
     @State private var menuBarViewModel = MenuBarViewModel()
     @State private var pushManager = PushManager()
+    @State private var customOSStore = CustomOSStore()
+    @State private var customInstallerStore = CustomInstallerStore()
 
     // Ensure AppDatabase uses the active profile's root before any @State store
     // initialises — @State init order is not guaranteed in SwiftUI.
@@ -200,6 +202,8 @@ struct OvenApp: App {
                         .environmentObject(blockStore)
                         .environmentObject(pushManager)
                         .environmentObject(profileStore)
+                        .environmentObject(customOSStore)
+                        .environmentObject(customInstallerStore)
                         .environment(recipesViewModel)
                 } else {
                     SetupView(depManager: depManager)

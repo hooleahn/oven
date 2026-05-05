@@ -40,6 +40,8 @@ final class AppDatabase {
         case packerBlocks      = "packer-blocks.json"
         case packerBootCommands = "packer-boot-commands.json"
         case buildHistory      = "build-history.json"
+        case customOS          = "custom-os.json"
+        case customInstallers  = "custom-installers.json"
 
         /// Schema version — bump when the model gains non-optional fields
         /// that can't be decoded from older files via decodeIfPresent.
@@ -56,6 +58,8 @@ final class AppDatabase {
             case .packerBlocks:      return 2   // v2: added osName, osVersion fields
             case .packerBootCommands: return 1
             case .buildHistory:      return 1
+            case .customOS:          return 1
+            case .customInstallers:  return 1
             }
         }
     }

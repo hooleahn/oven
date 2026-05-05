@@ -202,13 +202,8 @@ struct VMCard: View {
     }
 
     private var osLabel: String {
-        if !vm.osVersion.isEmpty {
-            return "\(vm.osName.rawValue) \(vm.osVersion)"
-        } else if vm.osName != .unknown {
-            return vm.osName.rawValue
-        } else {
-            return "Unknown OS"
-        }
+        let label = vm.osDisplayLabel
+        return label == "—" ? "Unknown OS" : label
     }
 
     private var showsDisplayName: Bool {

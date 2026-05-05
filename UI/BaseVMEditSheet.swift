@@ -13,12 +13,26 @@ struct BaseVMEditSheet: View {
     @State private var sshPassword: String = ""
     @State private var isBaseVM: Bool = true
     @State private var osName: MacOSRelease.Name
-    @State private var osVersion: String
+    @State private var versionPickerSel: String
+    @State private var customVersionText: String
+    @State private var isBetaOS: Bool
+    @State private var betaLabel: String
+    @State private var customOSMajorVersion: String
+    @State private var customOSReleaseName: String
     @State private var sofaVersions: [String] = []
     @State private var isFetchingVersions = false
+    @State private var majorVersionError: String? = nil
+    @State private var customVersionError: String? = nil
+
+    private static let customVersionSentinel = "__custom__"
+    private static let ipswVersionRegex = /^\d+(\.\d+)*$/
 
     private var versionList: [String] {
         sofaVersions.isEmpty ? osName.fallbackVersions : sofaVersions
+    }
+
+    private var resolvedOSVersion: String {
+        versionPickerSel == Self.customVersionSentinel ? customVersionText : versionPickerSel
     }
 
     // Template selection (v5: UUID-based)
@@ -33,15 +47,18 @@ struct BaseVMEditSheet: View {
 
     init(baseVM: VirtualMachine) {
         self.baseVM = baseVM
-        _displayName        = State(initialValue: baseVM.displayName)
-        _description        = State(initialValue: baseVM.description)
-        _defaultUsername    = State(initialValue: baseVM.sshUsername)
-        _isBaseVM           = State(initialValue: baseVM.isBaseVM)
-        _osName             = State(initialValue: baseVM.osName)
-        _osVersion          = State(initialValue: baseVM.osVersion)
-        _selectedTemplateID = State(initialValue: baseVM.customTemplateID)
-        _selectedVarsFileID = State(initialValue: baseVM.customVarsFileID)
-        _customTemplatePath = State(initialValue: baseVM.customTemplatePath ?? "")
+        _displayName          = State(initialValue: baseVM.displayName)
+        _description          = State(initialValue: baseVM.description)
+        _defaultUsername      = State(initialValue: baseVM.sshUsername)
+        _isBaseVM             = State(initialValue: baseVM.isBaseVM)
+        _osName               = State(initialValue: baseVM.osName)
+        _isBetaOS             = State(initialValue: baseVM.isBetaOS)
+        _betaLabel            = State(initialValue: baseVM.betaLabel)
+        _customOSMajorVersion = State(initialValue: baseVM.customOSMajorVersion)
+        _customOSReleaseName  = State(initialValue: baseVM.customOSReleaseName)
+        _selectedTemplateID   = State(initialValue: baseVM.customTemplateID)
+        _selectedVarsFileID   = State(initialValue: baseVM.customVarsFileID)
+        _customTemplatePath   = State(initialValue: baseVM.customTemplatePath ?? "")
         // Infer source from stored values
         if baseVM.customTemplateID != nil {
             _templateSource = State(initialValue: .library)
@@ -50,6 +67,10 @@ struct BaseVMEditSheet: View {
         } else {
             _templateSource = State(initialValue: .none)
         }
+        let fallback = baseVM.osName.fallbackVersions
+        let isCustom = !baseVM.osVersion.isEmpty && !fallback.contains(baseVM.osVersion)
+        _versionPickerSel  = State(initialValue: isCustom ? "__custom__" : baseVM.osVersion)
+        _customVersionText = State(initialValue: isCustom ? baseVM.osVersion : "")
     }
 
     var body: some View {
@@ -175,16 +196,68 @@ struct BaseVMEditSheet: View {
                         }
                     }
                     .onChange(of: osName) { _, newOS in
-                        osVersion = ""
+                        versionPickerSel = ""
+                        customVersionText = ""
+                        customOSMajorVersion = ""
+                        customOSReleaseName = ""
                         Task { await loadVersions(for: newOS) }
                     }
+                    if osName == .custom {
+                        LabeledContent("Major version") {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                TextField("e.g. 27", text: $customOSMajorVersion)
+                                    .multilineTextAlignment(.trailing)
+                                    .onChange(of: customOSMajorVersion) { _, v in
+                                        let filtered = v.filter { $0.isNumber }
+                                        if filtered != v { customOSMajorVersion = filtered }
+                                        majorVersionError = (!filtered.isEmpty && Int(filtered) == nil)
+                                            ? "Must be a positive integer" : nil
+                                    }
+                                if let err = majorVersionError {
+                                    Text(err).font(.caption).foregroundStyle(.red)
+                                }
+                            }
+                        }
+                        LabeledContent("Release name") {
+                            TextField("e.g. Yuba", text: $customOSReleaseName)
+                                .multilineTextAlignment(.trailing)
+                        }
+                    }
                     HStack {
-                        Picker("Version", selection: $osVersion) {
-                            Text("Unknown").tag("")
+                        Picker("Version", selection: $versionPickerSel) {
+                            Text("Any").tag("")
                             ForEach(versionList, id: \.self) { v in Text(v).tag(v) }
+                            Divider()
+                            Text("Custom…").tag(Self.customVersionSentinel)
+                        }
+                        .onChange(of: versionPickerSel) { _, sel in
+                            if sel != Self.customVersionSentinel { customVersionText = "" }
                         }
                         if isFetchingVersions {
                             ProgressView().controlSize(.mini).padding(.leading, 4)
+                        }
+                    }
+                    if versionPickerSel == Self.customVersionSentinel {
+                        LabeledContent("Custom version") {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                TextField("e.g. 26.5", text: $customVersionText)
+                                    .multilineTextAlignment(.trailing)
+                                    .font(.system(.body, design: .monospaced))
+                                    .onChange(of: customVersionText) { _, v in
+                                        customVersionError = (!v.isEmpty && v.wholeMatch(of: Self.ipswVersionRegex) == nil)
+                                            ? "Use digits and dots only" : nil
+                                    }
+                                if let err = customVersionError {
+                                    Text(err).font(.caption).foregroundStyle(.red)
+                                }
+                            }
+                        }
+                    }
+                    Toggle("Beta OS", isOn: $isBetaOS)
+                    if isBetaOS {
+                        LabeledContent("Beta label") {
+                            TextField("e.g. Beta 1, RC 2", text: $betaLabel)
+                                .multilineTextAlignment(.trailing)
                         }
                     }
                 }
@@ -202,7 +275,14 @@ struct BaseVMEditSheet: View {
             .formStyle(.grouped)
         }
         .frame(minWidth: 420, idealWidth: 460, minHeight: 300)
-        .task { await loadVersions(for: osName) }
+        .task {
+            await loadVersions(for: osName)
+            if versionPickerSel == Self.customVersionSentinel
+                && versionList.contains(customVersionText) {
+                versionPickerSel = customVersionText
+                customVersionText = ""
+            }
+        }
     }
 
     private func loadVersions(for release: MacOSRelease.Name) async {
@@ -228,18 +308,26 @@ struct BaseVMEditSheet: View {
         }
 
         baseVMStore.update(id: baseVM.id) { v in
-            v.displayName  = displayName.trimmingCharacters(in: .whitespaces)
-            v.description  = description
-            v.sshUsername  = defaultUsername.trimmingCharacters(in: .whitespaces)
-            v.sshPassword  = sshPassword.isEmpty ? nil : sshPassword
-            v.osName       = osName
-            v.osVersion    = osVersion
+            v.displayName          = displayName.trimmingCharacters(in: .whitespaces)
+            v.description          = description
+            v.sshUsername          = defaultUsername.trimmingCharacters(in: .whitespaces)
+            v.sshPassword          = sshPassword.isEmpty ? nil : sshPassword
+            v.osName               = osName
+            v.osVersion            = resolvedOSVersion
+            v.isBetaOS             = isBetaOS
+            v.betaLabel            = betaLabel.trimmingCharacters(in: .whitespaces)
+            v.customOSMajorVersion = customOSMajorVersion.trimmingCharacters(in: .whitespaces)
+            v.customOSReleaseName  = customOSReleaseName.trimmingCharacters(in: .whitespaces)
             if !v.isOCIBased { v.isBaseVM = isBaseVM }
             applyTemplate(&v)
         }
         vmStore.update(id: baseVM.id) { v in
-            v.osName    = osName
-            v.osVersion = osVersion
+            v.osName               = osName
+            v.osVersion            = resolvedOSVersion
+            v.isBetaOS             = isBetaOS
+            v.betaLabel            = betaLabel.trimmingCharacters(in: .whitespaces)
+            v.customOSMajorVersion = customOSMajorVersion.trimmingCharacters(in: .whitespaces)
+            v.customOSReleaseName  = customOSReleaseName.trimmingCharacters(in: .whitespaces)
             if !v.isOCIBased { v.isBaseVM = isBaseVM }
             applyTemplate(&v)
         }

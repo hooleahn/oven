@@ -58,12 +58,7 @@ struct VMDetailPane: View {
                     let mem = liveConfig?.memory.map { "\($0 / 1024) GB" } ?? "\(vm.memoryGB) GB"
                     let diskMax = liveConfig?.disk.map { "\($0) GB" } ?? "\(vm.diskGB) GB"
                     let disk = vm.actualDiskGB.map { "\(diskMax) max · \($0) GB used" } ?? diskMax
-                    let osLabel: String = {
-                        if vm.osName == .unknown && vm.osVersion.isEmpty { return "—" }
-                        if vm.osName == .unknown { return vm.osVersion }
-                        if vm.osVersion.isEmpty  { return vm.osName.rawValue }
-                        return "\(vm.osName.rawValue) \(vm.osVersion)"
-                    }()
+                    let osLabel = vm.osDisplayLabel
 
                     LabeledContent("CPU")    { Text(cpu).foregroundStyle(.secondary) }
                     LabeledContent("Memory") { Text(mem).foregroundStyle(.secondary) }

@@ -72,7 +72,8 @@ struct BaseVMRow: View {
             }
             return "From registry"
         }
-        var parts = ["macOS \(vm.osName.rawValue) \(vm.osVersion)"]
+        let osStr = vm.osDisplayLabel
+        var parts = [osStr == "—" ? "macOS" : "macOS \(osStr)"]
         parts.append("\(vm.cpuCount) CPU · \(vm.memoryGB) GB · \(vm.diskGB) GB")
         return parts.joined(separator: " · ")
     }

@@ -9,6 +9,7 @@ struct RegistryView: View {
     @State private var lastRefreshedAt: Date? = nil
     @State private var isRefreshing: Bool = false
     @State private var refreshRotation: Double = 0
+    @State private var showBrowseGHCR = false
     @FocusState private var newImageRefFocused: Bool
 
     private func coarseAge(of date: Date) -> String {
@@ -44,6 +45,10 @@ struct RegistryView: View {
         let tartPath = AppSettings.defaultLocalStorageRoot
             .appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
         return rvm.makeRegistryService(tartPath: tartPath)
+    }
+
+    private var ghcrToken: String? {
+        rvm.credentials.first(where: { $0.registry == "ghcr.io" })?.password
     }
 
     var filteredImages: [RegistryImage] {
@@ -184,6 +189,16 @@ struct RegistryView: View {
                 .help("Browse Cirrus Labs public macOS images (⌘B)")
             }
 
+            // 3. Primary action — Browse any GHCR org / user
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showBrowseGHCR = true
+                } label: {
+                    Label("Browse GHCR", systemImage: "rectangle.stack.badge.person.crop")
+                }
+                .help("Browse a GitHub org or user's container packages")
+            }
+
             // Last-synced label
             ToolbarItem(placement: .automatic) {
                 if let refreshed = lastRefreshedAt {
@@ -228,9 +243,29 @@ struct RegistryView: View {
         .sheet(isPresented: $rvm.showCirrusCatalogue) {
             CirrusCatalogueSheet(
                 trackedRefs: Set(rvm.images.map { $0.imageRef }),
+                activeDownloads: appState.registryDownloads,
+                token: ghcrToken
+            ) { imageRef in
+                guard !rvm.images.contains(where: { $0.imageRef == imageRef }) else { return }
+                let host = imageRef.components(separatedBy: "/").first ?? "ghcr.io"
+                let img = RegistryImage(id: UUID(), registry: host, imageRef: imageRef, isPulled: false)
+                rvm.images.append(img)
+                rvm.saveImages()
+                rvm.pendingPull = img
+            }
+        }
+        .sheet(isPresented: $showBrowseGHCR) {
+            BrowseGHCRSheet(
+                token: ghcrToken,
+                trackedRefs: Set(rvm.images.map { $0.imageRef }),
                 activeDownloads: appState.registryDownloads
-            ) { img in
-                rvm.addCirrusImage(img)
+            ) { imageRef in
+                guard !rvm.images.contains(where: { $0.imageRef == imageRef }) else { return }
+                let host = imageRef.components(separatedBy: "/").first ?? "ghcr.io"
+                let img = RegistryImage(id: UUID(), registry: host, imageRef: imageRef, isPulled: false)
+                rvm.images.append(img)
+                rvm.saveImages()
+                rvm.pendingPull = img
             }
         }
         .sheet(item: $rvm.pendingPull) { image in
@@ -311,10 +346,15 @@ struct RegistryView: View {
                         ForEach(imgs) { img in
                             CirrusLabsCatalogueRow(
                                 image: img,
-                                isTracked: rvm.images.contains(where: { $0.imageRef == img.imageRef }),
-                                downloadProgress: appState.registryDownloads[img.imageRef]
-                            ) {
-                                rvm.addCirrusImage(img)
+                                trackedRefs: Set(rvm.images.map { $0.imageRef }),
+                                activeDownloads: appState.registryDownloads
+                            ) { imageRef in
+                                guard !rvm.images.contains(where: { $0.imageRef == imageRef }) else { return }
+                                let host = imageRef.components(separatedBy: "/").first ?? "ghcr.io"
+                                let regImg = RegistryImage(id: UUID(), registry: host, imageRef: imageRef, isPulled: false)
+                                rvm.images.append(regImg)
+                                rvm.saveImages()
+                                rvm.pendingPull = regImg
                             }
                             Divider().padding(.leading, 52)
                         }

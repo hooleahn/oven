@@ -12,8 +12,7 @@ private struct ReleaseSource {
         case rawBinary
         case tarGz(binaryPath: String)
         case zip(binaryNamePrefix: String)
-        case packerPluginInit               // use `packer plugins install github.com/cirruslabs/tart`
-        case pkgWithInstaller(binaryName: String) // copy binary out after expanding pkg payload
+case pkgWithInstaller(binaryName: String) // copy binary out after expanding pkg payload
     }
 }
 
@@ -399,20 +398,35 @@ final class DependencyManager: ObservableObject {
             return dest.path
 
         // ── packer-plugin-tart ────────────────────────────────────────────────
-        // The cleanest install method is `packer plugins install github.com/cirruslabs/tart`
-        // which handles the naming convention, SHA verification, and plugin directory
-        // placement automatically. We just need packer to already be installed first.
+        // Download directly from GitHub releases and place at the path Packer
+        // expects: ~/.packer.d/plugins/github.com/cirruslabs/tart/<binary>
+        // This avoids relying on `packer plugins install` making network calls,
+        // which can fail when the app sandbox restricts subprocess networking.
         case "tart-packer-plugin":
-            let packerPath = depsDirectory.appendingPathComponent("packer").path
-            guard FileManager.default.fileExists(atPath: packerPath) else {
-                throw ProcessError.launchFailed("packer must be installed before packer-plugin-tart")
-            }
-            log("  Running: packer plugins install github.com/cirruslabs/tart…")
-            // Set PACKER_PLUGIN_PATH to our deps dir so the plugin lands there
-            try runSync(packerPath, args: ["plugins", "install", "github.com/cirruslabs/tart"],
-                        env: ["HOME": FileManager.default.homeDirectoryForCurrentUser.path])
-            // Return the path to wherever packer installed it
-            return try path(for: "tart-packer-plugin")
+            let tag = try await fetchLatestGitHubTag(owner: "cirruslabs", repo: "packer-plugin-tart")
+            let version = tag.hasPrefix("v") ? tag : "v\(tag)"
+            let binaryName = "packer-plugin-tart_\(version)_x5.0_darwin_arm64"
+            let assetName = "\(binaryName).zip"
+
+            log("  Downloading packer-plugin-tart \(version)…")
+            let assetURL = try await fetchGitHubAssetURL(
+                owner: "cirruslabs", repo: "packer-plugin-tart", tag: tag,
+                matching: { $0 == assetName }
+            )
+            let downloaded = try await download(from: assetURL)
+            let extractDir = makeTempDir()
+            try runSync("/usr/bin/unzip", args: ["-o", downloaded.path, "-d", extractDir.path])
+            let binary = try findFile(named: binaryName, in: extractDir, exact: true)
+
+            let pluginDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".packer.d/plugins/github.com/cirruslabs/tart", isDirectory: true)
+            try FileManager.default.createDirectory(at: pluginDir, withIntermediateDirectories: true)
+
+            let dest = pluginDir.appendingPathComponent(binaryName)
+            try? FileManager.default.removeItem(at: dest)
+            try FileManager.default.copyItem(at: binary, to: dest)
+            try setExecutable(dest)
+            return dest.path
 
         // ── jq ────────────────────────────────────────────────────────────────
         // Release: jq-macos-arm64  →  raw binary

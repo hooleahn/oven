@@ -12,6 +12,8 @@ private enum FirmwareSortOrder: String, CaseIterable {
 
 struct InstallerView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var customInstallerStore: CustomInstallerStore
+    @EnvironmentObject var customOSStore: CustomOSStore
     @State private var firmwares: [IPSWFirmware] = []
     @State private var localIPSWs: [URL] = []
     @State private var isLoading = false
@@ -22,6 +24,8 @@ struct InstallerView: View {
     @State private var isPresentingBaseVMSheet = false
     @State private var selectedIPSWForBaseVM: URL? = nil
     @State private var sortOrder: FirmwareSortOrder = .date
+    @State private var isPresentingAddCustomInstaller = false
+    @State private var selectedCustomInstallerForBaseVM: CustomInstaller? = nil
 
     private var settings: AppSettings { AppSettings.load() }
 
@@ -137,12 +141,48 @@ struct InstallerView: View {
         .sheet(isPresented: $isPresentingBaseVMSheet) {
             NewBaseVMSheetWithIPSW(preselectedIPSW: selectedIPSWForBaseVM)
         }
+        .sheet(isPresented: $isPresentingAddCustomInstaller) {
+            AddCustomInstallerSheet()
+                .environmentObject(customInstallerStore)
+                .environmentObject(customOSStore)
+        }
     }
 
     // MARK: List
 
     private var firmwareList: some View {
         List {
+            // Custom Installers section
+            let visibleCustom = customInstallerStore.installers.filter {
+                searchText.isEmpty
+                || $0.displayName.localizedCaseInsensitiveContains(searchText)
+                || $0.osDisplayLabel.localizedCaseInsensitiveContains(searchText)
+            }
+            if !visibleCustom.isEmpty || true {
+                Section {
+                    ForEach(visibleCustom) { inst in
+                        CustomInstallerRow(
+                            installer: inst,
+                            onCreateBaseVM: {
+                                selectedCustomInstallerForBaseVM = inst
+                                isPresentingBaseVMSheet = true
+                                // Bridge: set the file URL so NewBaseVMSheetWithIPSW picks it up
+                                selectedIPSWForBaseVM = inst.fileURL
+                            },
+                            onDelete: { customInstallerStore.delete(inst) }
+                        )
+                    }
+                    Button {
+                        isPresentingAddCustomInstaller = true
+                    } label: {
+                        Label("Add Custom Installer…", systemImage: "plus.circle")
+                    }
+                    .buttonStyle(.borderless)
+                } header: {
+                    Text("Custom Installers")
+                }
+            }
+
             if !filteredLocalIPSWs.isEmpty {
                 Section("Downloaded") {
                     ForEach(filteredLocalIPSWs, id: \.path) { url in
@@ -678,6 +718,101 @@ struct LocalIPSWRow: View {
                 Button(role: .destructive) { isPresentingDeleteConfirm = true } label: {
                     Label("Delete", systemImage: "trash")
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Custom Installer Row
+
+private struct CustomInstallerRow: View {
+    let installer: CustomInstaller
+    let onCreateBaseVM: () -> Void
+    let onDelete: () -> Void
+
+    @State private var isPresentingDeleteConfirm = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: installer.fileExists ? "doc.zipper" : "doc.badge.exclamationmark")
+                    .font(.title3)
+                    .foregroundStyle(installer.fileExists ? .blue : .orange)
+                    .frame(width: 28, height: 28)
+                if installer.isBeta {
+                    Image(systemName: "bolt.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.white, .orange)
+                        .offset(x: 4, y: 4)
+                }
+            }
+            .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(installer.displayName).fontWeight(.medium)
+                HStack(spacing: 8) {
+                    Text(installer.osDisplayLabel)
+                        .font(.caption).foregroundStyle(.secondary)
+                    if !installer.fileExists {
+                        Text("File not found")
+                            .font(.caption2).fontWeight(.medium)
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal, 4).padding(.vertical, 2)
+                            .background(Color.orange.opacity(0.12), in: Capsule())
+                    } else if installer.isManagedCopy {
+                        Text("Managed")
+                            .font(.caption2).fontWeight(.medium)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4).padding(.vertical, 2)
+                            .background(.quaternary, in: Capsule())
+                    }
+                }
+            }
+
+            Spacer()
+
+            HStack(spacing: 8) {
+                if installer.fileExists {
+                    Button(action: onCreateBaseVM) {
+                        Label("Create Base VM", systemImage: "plus.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent).controlSize(.small)
+                }
+                Button(role: .destructive, action: { isPresentingDeleteConfirm = true }) {
+                    Image(systemName: "trash").font(.caption).foregroundStyle(.red)
+                }
+                .buttonStyle(.bordered).controlSize(.small)
+                .help(installer.isManagedCopy ? "Delete IPSW and remove from library" : "Remove from library")
+                .confirmationDialog(
+                    "Remove \"\(installer.displayName)\"?",
+                    isPresented: $isPresentingDeleteConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("Remove", role: .destructive, action: onDelete)
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text(installer.isManagedCopy
+                         ? "This will also delete the IPSW file from Oven's storage."
+                         : "The IPSW file will not be deleted from disk.")
+                }
+            }
+        }
+        .padding(.vertical, 6)
+        .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
+        .contextMenu {
+            if installer.fileExists {
+                Button { onCreateBaseVM() } label: {
+                    Label("Create Base VM", systemImage: "plus.circle.fill")
+                }
+                Button {
+                    NSWorkspace.shared.activateFileViewerSelecting([installer.fileURL])
+                } label: {
+                    Label("Show in Finder", systemImage: "folder")
+                }
+                Divider()
+            }
+            Button(role: .destructive) { isPresentingDeleteConfirm = true } label: {
+                Label("Remove", systemImage: "trash")
             }
         }
     }

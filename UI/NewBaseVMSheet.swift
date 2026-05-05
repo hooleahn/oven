@@ -14,6 +14,7 @@ struct NewBaseVMSheet: View {
     @EnvironmentObject var theme: AppTheme
     @EnvironmentObject var templateStore: PackerTemplateStore
     @EnvironmentObject var blockStore: BuildingBlockStore
+    @EnvironmentObject var customInstallerStore: CustomInstallerStore
     @Environment(\.dismiss) var dismiss
 
     // MARK: - Top-level path selection
@@ -23,9 +24,19 @@ struct NewBaseVMSheet: View {
     // MARK: - Common fields
     @State private var displayName   = ""
     @State private var osName: MacOSRelease.Name = .sequoia
-    @State private var osVersion     = ""
+    @State private var versionPickerSel = ""
+    @State private var customVersionText = ""
+    @State private var isBetaOS = false
+    @State private var betaLabel = ""
+    @State private var customOSMajorVersion = ""
+    @State private var customOSReleaseName = ""
     @State private var liveFirmwares: [IPSWFirmware] = []
     @State private var isFetchingVersions = false
+    @State private var majorVersionError: String? = nil
+    @State private var customVersionError: String? = nil
+
+    private static let customVersionSentinel = "__custom__"
+    private static let ipswVersionRegex = /^\d+(\.\d+)*$/
 
     // MARK: - From-template path
     enum TemplateSource { case library, customPath }
@@ -50,11 +61,12 @@ struct NewBaseVMSheet: View {
     @State private var manualStep: ManualStep = .ipsw
 
     // IPSW source
-    enum IPSWSourceChoice { case auto, filePath, remoteURL }
+    enum IPSWSourceChoice { case auto, filePath, remoteURL, customInstaller }
     @State private var ipswChoice: IPSWSourceChoice = .auto
     @State private var customIPSWPath = ""
     @State private var customIPSWURL  = ""
     @State private var isPresentingIPSWPicker = false
+    @State private var selectedCustomInstallerID: UUID? = nil
     @State private var settings = AppSettings.load()
 
     // Hardware
@@ -95,13 +107,17 @@ struct NewBaseVMSheet: View {
         return live.filter { seen.insert($0).inserted }
     }
 
+    private var resolvedOSVersion: String {
+        versionPickerSel == Self.customVersionSentinel ? customVersionText : versionPickerSel
+    }
+
     private var tartName: String {
-        VirtualMachine.uniqueAutoName(osName: osName, version: osVersion,
+        VirtualMachine.uniqueAutoName(osName: osName, version: resolvedOSVersion,
                                      existing: baseVMStore.baseVMs)
     }
 
     private var canProceedFromTemplate: Bool {
-        guard !osVersion.isEmpty else { return false }
+        guard !resolvedOSVersion.isEmpty else { return false }
         switch templateSource {
         case .library:    return selectedTemplateID != nil
         case .customPath: return !externalTemplatePath.isEmpty
@@ -109,10 +125,16 @@ struct NewBaseVMSheet: View {
     }
 
     private var canProceedIPSW: Bool {
+        let hasVersion = !resolvedOSVersion.isEmpty
         switch ipswChoice {
-        case .auto:      return !osVersion.isEmpty
-        case .filePath:  return !customIPSWPath.isEmpty && !osVersion.isEmpty
-        case .remoteURL: return !customIPSWURL.isEmpty && !osVersion.isEmpty
+        case .auto:             return hasVersion && osName != .any && osName != .custom
+        case .filePath:         return !customIPSWPath.isEmpty && hasVersion
+        case .remoteURL:        return !customIPSWURL.isEmpty && hasVersion
+        case .customInstaller:
+            guard let id = selectedCustomInstallerID,
+                  let inst = customInstallerStore.installers.first(where: { $0.id == id })
+            else { return false }
+            return inst.fileExists
         }
     }
 
@@ -121,7 +143,18 @@ struct NewBaseVMSheet: View {
         case .auto:      return .auto
         case .filePath:  return .filePath(URL(fileURLWithPath: customIPSWPath))
         case .remoteURL: return .url(customIPSWURL)
+        case .customInstaller:
+            if let id = selectedCustomInstallerID,
+               let inst = customInstallerStore.installers.first(where: { $0.id == id }) {
+                return .filePath(inst.fileURL)
+            }
+            return .auto
         }
+    }
+
+    private var selectedCustomInstaller: CustomInstaller? {
+        guard let id = selectedCustomInstallerID else { return nil }
+        return customInstallerStore.installers.first { $0.id == id }
     }
 
     private var selectedBootCommandBlock: BootCommandBlock? {
@@ -160,14 +193,17 @@ struct NewBaseVMSheet: View {
             loadMDMData()
             await fetchLiveVersions()
             let versions = versionList
-            if osVersion.isEmpty || !versions.contains(osVersion), let first = versions.first {
-                osVersion = first
+            if versionPickerSel.isEmpty || (!versions.contains(versionPickerSel) && versionPickerSel != Self.customVersionSentinel),
+               let first = versions.first {
+                versionPickerSel = first
             }
             if let url = preselectedIPSWURL { detectOS(from: url) }
         }
         .onChange(of: liveFirmwares) { _, _ in
             let versions = versionList
-            if !versions.isEmpty && !versions.contains(osVersion) { osVersion = versions[0] }
+            if !versions.isEmpty && !versions.contains(versionPickerSel) && versionPickerSel != Self.customVersionSentinel {
+                versionPickerSel = versions[0]
+            }
         }
     }
 
@@ -243,23 +279,77 @@ struct NewBaseVMSheet: View {
 
         Section("macOS version") {
             Picker("OS", selection: $osName) {
-                ForEach(MacOSRelease.Name.allCases.filter { $0 != .unknown }, id: \.self) {
+                ForEach(MacOSRelease.Name.allCases.filter { $0 != .unknown && $0 != .any }, id: \.self) {
                     Text($0.displayLabel).tag($0)
                 }
             }
+            .onChange(of: osName) { _, _ in
+                versionPickerSel = ""; customVersionText = ""
+                customOSMajorVersion = ""; customOSReleaseName = ""
+                customIPSWPath = ""; customIPSWURL = ""
+                selectedTemplateID = nil
+                majorVersionError = nil; customVersionError = nil
+                Task { await fetchLiveVersions() }
+            }
+            if osName == .custom {
+                LabeledContent("Major version") {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        TextField("e.g. 27", text: $customOSMajorVersion)
+                            .multilineTextAlignment(.trailing)
+                            .onChange(of: customOSMajorVersion) { _, v in
+                                let filtered = v.filter { $0.isNumber }
+                                if filtered != v { customOSMajorVersion = filtered }
+                                majorVersionError = (!filtered.isEmpty && Int(filtered) == nil)
+                                    ? "Must be a positive integer" : nil
+                            }
+                        if let err = majorVersionError {
+                            Text(err).font(.caption).foregroundStyle(.red)
+                        }
+                    }
+                }
+                LabeledContent("Release name") {
+                    TextField("e.g. Yuba", text: $customOSReleaseName)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
             HStack {
-                Picker("Version", selection: $osVersion) {
+                Picker("Version", selection: $versionPickerSel) {
                     Text("Select a version…").tag("")
                     ForEach(versionList, id: \.self) { Text($0).tag($0) }
+                    Divider()
+                    Text("Custom…").tag(Self.customVersionSentinel)
+                }
+                .onChange(of: versionPickerSel) { _, sel in
+                    if sel != Self.customVersionSentinel {
+                        customVersionText = ""
+                        selectedTemplateID = nil
+                    }
                 }
                 if isFetchingVersions { ProgressView().controlSize(.mini) }
             }
-            .onChange(of: osName) { _, _ in
-                osVersion = ""; customIPSWPath = ""; customIPSWURL = ""
-                selectedTemplateID = nil
-                Task { await fetchLiveVersions() }
+            if versionPickerSel == Self.customVersionSentinel {
+                LabeledContent("Custom version") {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        TextField("e.g. 26.5", text: $customVersionText)
+                            .multilineTextAlignment(.trailing)
+                            .font(.system(.body, design: .monospaced))
+                            .onChange(of: customVersionText) { _, v in
+                                customVersionError = (!v.isEmpty && v.wholeMatch(of: Self.ipswVersionRegex) == nil)
+                                    ? "Use digits and dots only" : nil
+                            }
+                        if let err = customVersionError {
+                            Text(err).font(.caption).foregroundStyle(.red)
+                        }
+                    }
+                }
             }
-            .onChange(of: osVersion) { _, _ in selectedTemplateID = nil }
+            Toggle("Beta OS", isOn: $isBetaOS)
+            if isBetaOS {
+                LabeledContent("Beta label") {
+                    TextField("e.g. Beta 1, RC 2", text: $betaLabel)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
         }
     }
 
@@ -282,7 +372,7 @@ struct NewBaseVMSheet: View {
 
             switch templateSource {
             case .library:
-                let matching = templateStore.fullTemplates(for: osName.rawValue, version: osVersion)
+                let matching = templateStore.fullTemplates(for: osName.rawValue, version: resolvedOSVersion)
                 let all      = templateStore.customFullTemplates
                 let options  = matching.isEmpty ? all : matching
                 if options.isEmpty {
@@ -315,7 +405,7 @@ struct NewBaseVMSheet: View {
                 }
             }
         } header: { Text("Packer template") }
-          footer: { Text("Templates filtered to \(osName.rawValue) \(osVersion). Change OS/version above to see more.") }
+          footer: { Text("Templates filtered to \(osName.rawValue) \(resolvedOSVersion). Change OS/version above to see more.") }
 
         // Vars file
         Section {
@@ -412,9 +502,15 @@ struct NewBaseVMSheet: View {
                 Text("Download automatically (via \(settings.ipswDownloadMode == .mistCli ? "mist-cli" : "ipsw.me"))").tag(IPSWSourceChoice.auto)
                 Text("Custom file path").tag(IPSWSourceChoice.filePath)
                 Text("Download from URL").tag(IPSWSourceChoice.remoteURL)
+                if !customInstallerStore.installers.isEmpty {
+                    Text("Custom Installer library").tag(IPSWSourceChoice.customInstaller)
+                }
             }
             .pickerStyle(.radioGroup)
-            .onChange(of: ipswChoice) { _, _ in customIPSWPath = ""; customIPSWURL = "" }
+            .onChange(of: ipswChoice) { _, _ in
+                customIPSWPath = ""; customIPSWURL = ""
+                selectedCustomInstallerID = nil
+            }
 
             switch ipswChoice {
             case .auto:
@@ -438,6 +534,44 @@ struct NewBaseVMSheet: View {
                           prompt: Text("https://example.com/macOS.ipsw").foregroundColor(.secondary))
                 Text("Oven will download the IPSW to the configured IPSW storage folder before building.")
                     .font(.caption).foregroundStyle(.secondary)
+            case .customInstaller:
+                Picker("Installer", selection: $selectedCustomInstallerID) {
+                    Text("Select…").tag(Optional<UUID>.none)
+                    ForEach(customInstallerStore.installers) { inst in
+                        Text(inst.fileExists
+                             ? "\(inst.displayName) — \(inst.osDisplayLabel)"
+                             : "\(inst.displayName) (file not found)")
+                            .tag(Optional(inst.id))
+                    }
+                }
+                .onChange(of: selectedCustomInstallerID) { _, id in
+                    if let inst = customInstallerStore.installers.first(where: { $0.id == id }) {
+                        // Auto-populate OS fields from the custom installer
+                        let installerOS = inst.osName
+                        if installerOS != .unknown { osName = installerOS }
+                        if installerOS == .custom {
+                            customOSReleaseName = inst.customOSReleaseName
+                            customOSMajorVersion = inst.customOSMajorVersion
+                        }
+                        if !inst.osVersion.isEmpty {
+                            let known = versionList
+                            if known.contains(inst.osVersion) {
+                                versionPickerSel = inst.osVersion
+                            } else {
+                                versionPickerSel = Self.customVersionSentinel
+                                customVersionText = inst.osVersion
+                            }
+                        }
+                        if inst.isBeta {
+                            isBetaOS = true
+                            betaLabel = inst.betaLabel
+                        }
+                    }
+                }
+                if let inst = selectedCustomInstaller, !inst.fileExists {
+                    Label("IPSW file not found at its registered path.", systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                }
             }
         } header: { Text("IPSW source") }
           footer: { Text("Select a macOS version above. The IPSW download mode can be changed in Preferences.") }
@@ -480,7 +614,7 @@ struct NewBaseVMSheet: View {
 
         if automateSetupAssistant {
             // Boot command block picker
-            let compatibleCmds = blockStore.bootCommands(for: osName.rawValue, version: osVersion)
+            let compatibleCmds = blockStore.bootCommands(for: osName.rawValue, version: resolvedOSVersion)
             Section {
                 Picker("Boot command", selection: $bootCommandID) {
                     Text("None").tag(Optional<UUID>.none)
@@ -495,7 +629,7 @@ struct NewBaseVMSheet: View {
                     }
                 }
                 if compatibleCmds.isEmpty {
-                    Text("No boot command blocks for \(osName.rawValue) \(osVersion). Add one in \(theme.recipes).")
+                    Text("No boot command blocks for \(osName.rawValue) \(resolvedOSVersion). Add one in \(theme.recipes).")
                         .font(.caption).foregroundStyle(.orange)
                 }
             } header: { Text("Boot command") }
@@ -594,7 +728,8 @@ struct NewBaseVMSheet: View {
                     .font(.system(.body, design: .monospaced)).foregroundStyle(.secondary)
             }
             LabeledContent("OS") {
-                Text("\(osName.rawValue) \(osVersion)").foregroundStyle(.secondary)
+                let betaSuffix = isBetaOS ? (betaLabel.isEmpty ? " β" : " \(betaLabel)") : ""
+                Text("\(osName.rawValue) \(resolvedOSVersion)\(betaSuffix)").foregroundStyle(.secondary)
             }
             LabeledContent("Hardware") {
                 Text("\(cpuCount) CPU · \(memoryGB) GB RAM · \(diskGB) GB disk")
@@ -649,7 +784,7 @@ struct NewBaseVMSheet: View {
             displayName: displayName.isEmpty ? tartName : displayName,
             tartName: tartName,
             osName: osName.rawValue,
-            osVersion: osVersion,
+            osVersion: resolvedOSVersion,
             ipswSource: resolvedIPSWSource,
             cpuCount: cpuCount,
             memoryGB: memoryGB,
@@ -670,8 +805,12 @@ struct NewBaseVMSheet: View {
         )
         vm.displayName         = displayName.isEmpty ? tartName : displayName
         vm.osName              = osName
-        vm.osVersion           = osVersion
-        vm.macOSVersion        = "macOS \(osName.rawValue) \(osVersion)"
+        vm.osVersion           = resolvedOSVersion
+        vm.isBetaOS            = isBetaOS
+        vm.betaLabel           = betaLabel.trimmingCharacters(in: .whitespaces)
+        vm.customOSMajorVersion = customOSMajorVersion.trimmingCharacters(in: .whitespaces)
+        vm.customOSReleaseName  = customOSReleaseName.trimmingCharacters(in: .whitespaces)
+        vm.macOSVersion        = "macOS \(osName.rawValue) \(resolvedOSVersion)"
         vm.sshUsername         = tmplUsername
         vm.sshPassword         = tmplPassword.isEmpty ? nil : tmplPassword
         vm.cpuCount            = tmplCPU
@@ -704,10 +843,14 @@ struct NewBaseVMSheet: View {
         let config = buildManualConfig()
         let effectivelyAutomates = config.automateSetupAssistant
         var vm = VirtualMachine(name: tartName, isBaseVM: true)
-        vm.displayName  = config.displayName
-        vm.osName       = osName
-        vm.osVersion    = osVersion
-        vm.macOSVersion = "macOS \(osName.rawValue) \(osVersion)"
+        vm.displayName          = config.displayName
+        vm.osName               = osName
+        vm.osVersion            = resolvedOSVersion
+        vm.isBetaOS             = isBetaOS
+        vm.betaLabel            = betaLabel.trimmingCharacters(in: .whitespaces)
+        vm.customOSMajorVersion = customOSMajorVersion.trimmingCharacters(in: .whitespaces)
+        vm.customOSReleaseName  = customOSReleaseName.trimmingCharacters(in: .whitespaces)
+        vm.macOSVersion         = "macOS \(osName.rawValue) \(resolvedOSVersion)"
         vm.sshUsername  = effectivelyAutomates ? manualUsername : "admin"
         vm.sshPassword  = effectivelyAutomates ? (manualPassword.isEmpty ? nil : manualPassword) : nil
         vm.cpuCount     = cpuCount
@@ -732,9 +875,9 @@ struct NewBaseVMSheet: View {
                 _ = try? templateStore.create(
                     kind: .fullTemplate,
                     displayName: config.displayName,
-                    description: "Generated by Oven for \(osName.rawValue) \(osVersion)",
+                    description: "Generated by Oven for \(osName.rawValue) \(resolvedOSVersion)",
                     osName: osName.rawValue,
-                    osVersion: osVersion,
+                    osVersion: resolvedOSVersion,
                     filename: fname,
                     starterContent: generatedHCL
                 )
@@ -766,14 +909,22 @@ struct NewBaseVMSheet: View {
         for part in parts {
             let nums = part.components(separatedBy: ".")
             if nums.count >= 2, let major = Int(nums[0]), major >= 12 {
-                osVersion = part
                 switch major {
                 case 26: osName = .tahoe
                 case 15: osName = .sequoia
                 case 14: osName = .sonoma
                 case 13: osName = .ventura
                 case 12: osName = .monterey
-                default: break
+                default: osName = .custom
+                }
+                // Use custom sentinel if version isn't in the known list
+                let known = versionList
+                if known.contains(part) {
+                    versionPickerSel = part
+                    customVersionText = ""
+                } else {
+                    versionPickerSel = Self.customVersionSentinel
+                    customVersionText = part
                 }
                 return
             }

@@ -27,6 +27,10 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
     // Build metadata (only relevant when isBaseVM == true)
     var osName: MacOSRelease.Name = .unknown
     var osVersion: String = ""          // e.g. "15.3.2"
+    var isBetaOS: Bool = false
+    var betaLabel: String = ""              // e.g. "Beta 1", "RC 2" — shown when isBetaOS is true
+    var customOSMajorVersion: String = ""   // only used when osName == .custom
+    var customOSReleaseName: String = ""     // only used when osName == .custom
     var ipswLocalPath: String?
     var ipswRemoteURL: String?
     var installRosetta: Bool = true
@@ -219,9 +223,13 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         lastStartedAt    = try c.decodeIfPresent(Date.self,           forKey: .lastStartedAt)
         registryImageRef = try c.decodeIfPresent(String.self,        forKey: .registryImageRef)
         isBaseVM         = try c.decodeIfPresent(Bool.self,           forKey: .isBaseVM) ?? false
-        osName              = try c.decodeIfPresent(MacOSRelease.Name.self, forKey: .osName) ?? .unknown
-        osVersion           = try c.decodeIfPresent(String.self,              forKey: .osVersion) ?? ""
-        ipswLocalPath       = try c.decodeIfPresent(String.self,   forKey: .ipswLocalPath)
+        osName                = try c.decodeIfPresent(MacOSRelease.Name.self, forKey: .osName) ?? .unknown
+        osVersion             = try c.decodeIfPresent(String.self,           forKey: .osVersion) ?? ""
+        isBetaOS              = try c.decodeIfPresent(Bool.self,             forKey: .isBetaOS) ?? false
+        betaLabel             = try c.decodeIfPresent(String.self,           forKey: .betaLabel) ?? ""
+        customOSMajorVersion  = try c.decodeIfPresent(String.self,           forKey: .customOSMajorVersion) ?? ""
+        customOSReleaseName   = try c.decodeIfPresent(String.self,           forKey: .customOSReleaseName) ?? ""
+        ipswLocalPath         = try c.decodeIfPresent(String.self,           forKey: .ipswLocalPath)
         ipswRemoteURL       = try c.decodeIfPresent(String.self,   forKey: .ipswRemoteURL)
         installRosetta      = try c.decodeIfPresent(Bool.self,     forKey: .installRosetta) ?? true
         installHomebrew     = try c.decodeIfPresent(Bool.self,     forKey: .installHomebrew) ?? true
@@ -310,16 +318,18 @@ struct MacOSRelease {
         case ventura  = "Ventura"
         case monterey = "Monterey"
         case unknown  = "Unknown"
+        case any      = "Any"
+        case custom   = "Custom"
 
         // Major version prefix used to filter mist-cli results
         var majorVersion: Int {
             switch self {
-            case .tahoe:    return 26
-            case .sequoia:  return 15
-            case .sonoma:   return 14
-            case .ventura:  return 13
-            case .monterey: return 12
-            case .unknown:  return 0
+            case .tahoe:            return 26
+            case .sequoia:          return 15
+            case .sonoma:           return 14
+            case .ventura:          return 13
+            case .monterey:         return 12
+            case .unknown, .any, .custom: return 0
             }
         }
 
@@ -332,6 +342,8 @@ struct MacOSRelease {
             case .ventura:  return "macOS 13 Ventura"
             case .monterey: return "macOS 12 Monterey"
             case .unknown:  return "Unknown"
+            case .any:      return "Any"
+            case .custom:   return "Custom"
             }
         }
 
@@ -343,11 +355,37 @@ struct MacOSRelease {
             case .sonoma:   return ["14.7.6","14.7.5","14.7.4","14.7.3","14.7.2","14.7.1","14.7","14.6.1","14.6","14.5","14.4.1","14.4","14.3.1","14.3","14.2.1","14.2","14.1.2","14.1.1","14.1","14.0"]
             case .ventura:  return ["13.7.5","13.7.4","13.7.3","13.7.2","13.7.1","13.7","13.6.9","13.6.8","13.6.7","13.6.6","13.6.5","13.6.4","13.6.3","13.6.2","13.6.1","13.6"]
             case .monterey: return ["12.7.6","12.7.5","12.7.4","12.7.3","12.7.2","12.7.1","12.7","12.6.8","12.6.7","12.6.6","12.6.5"]
-            case .unknown:  return []
+            case .unknown, .any, .custom: return []
             }
         }
 
         // For backward compatibility in existing callers
         var versions: [String] { fallbackVersions }
+    }
+}
+
+// MARK: - OS display helpers
+
+extension VirtualMachine {
+    /// Human-readable OS label combining name, version, and beta indicator.
+    var osDisplayLabel: String {
+        let beta = isBetaOS ? (betaLabel.isEmpty ? " β" : " \(betaLabel)") : ""
+        switch osName {
+        case .unknown:
+            if osVersion.isEmpty { return "—" }
+            return osVersion + beta
+        case .any:
+            return "Any" + (osVersion.isEmpty ? "" : " \(osVersion)") + beta
+        case .custom:
+            let name = customOSReleaseName
+            let vers = osVersion.isEmpty ? customOSMajorVersion : osVersion
+            if !name.isEmpty && !vers.isEmpty { return "\(name) \(vers)\(beta)" }
+            if !name.isEmpty { return name + beta }
+            if !vers.isEmpty { return vers + beta }
+            return "Custom OS" + beta
+        default:
+            if osVersion.isEmpty { return osName.rawValue + beta }
+            return "\(osName.rawValue) \(osVersion)\(beta)"
+        }
     }
 }

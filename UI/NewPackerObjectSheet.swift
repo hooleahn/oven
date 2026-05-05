@@ -145,10 +145,15 @@ private struct FullTemplateCreationForm: View {
     @State private var displayName = ""
     @State private var description = ""
     @State private var osName: MacOSRelease.Name = .sequoia
-    @State private var osVersion = ""
+    @State private var versionPickerSel = ""
+    @State private var customVersionText = ""
+    @State private var customOSMajorVersion = ""
+    @State private var customOSReleaseName = ""
     @State private var liveFirmwares: [MistFirmwareInfo] = []
     @State private var isFetchingVersions = false
     @State private var createError: String?
+
+    private static let customVersionSentinel = "__custom__"
 
     private var versionList: [String] {
         let major = osName.majorVersion
@@ -156,6 +161,10 @@ private struct FullTemplateCreationForm: View {
         if live.isEmpty { return osName.fallbackVersions }
         var seen = Set<String>()
         return live.filter { seen.insert($0).inserted }
+    }
+
+    private var resolvedOSVersion: String {
+        versionPickerSel == Self.customVersionSentinel ? customVersionText : versionPickerSel
     }
 
     private var filename: String {
@@ -180,18 +189,44 @@ private struct FullTemplateCreationForm: View {
 
             Section {
                 Picker("OS", selection: $osName) {
-                    ForEach(MacOSRelease.Name.allCases, id: \.self) {
+                    ForEach(MacOSRelease.Name.allCases.filter { $0 != .unknown && $0 != .any }, id: \.self) {
                         Text($0.displayLabel).tag($0)
                     }
                 }
+                .onChange(of: osName) { _, _ in
+                    versionPickerSel = ""; customVersionText = ""
+                    customOSMajorVersion = ""; customOSReleaseName = ""
+                    Task { await fetchVersions() }
+                }
+                if osName == .custom {
+                    LabeledContent("Major version") {
+                        TextField("e.g. 27", text: $customOSMajorVersion)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    LabeledContent("Release name") {
+                        TextField("e.g. Yuba", text: $customOSReleaseName)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
                 HStack {
-                    Picker("Version", selection: $osVersion) {
+                    Picker("Version", selection: $versionPickerSel) {
                         Text("Select a version…").tag("")
                         ForEach(versionList, id: \.self) { Text($0).tag($0) }
+                        Divider()
+                        Text("Custom…").tag(Self.customVersionSentinel)
+                    }
+                    .onChange(of: versionPickerSel) { _, sel in
+                        if sel != Self.customVersionSentinel { customVersionText = "" }
                     }
                     if isFetchingVersions { ProgressView().controlSize(.mini) }
                 }
-                .onChange(of: osName) { _, _ in osVersion = ""; Task { await fetchVersions() } }
+                if versionPickerSel == Self.customVersionSentinel {
+                    LabeledContent("Custom version") {
+                        TextField("e.g. 26.5", text: $customVersionText)
+                            .multilineTextAlignment(.trailing)
+                            .font(.system(.body, design: .monospaced))
+                    }
+                }
             } header: { Text("Target OS") }
               footer: {
                   VStack(alignment: .leading, spacing: 4) {
@@ -208,7 +243,7 @@ private struct FullTemplateCreationForm: View {
             Button("Create") { create() }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
-                .disabled(displayName.trimmingCharacters(in: .whitespaces).isEmpty || osVersion.isEmpty)
+                .disabled(displayName.trimmingCharacters(in: .whitespaces).isEmpty || resolvedOSVersion.isEmpty)
                 .padding(16)
         }
         .background(.bar)
@@ -227,15 +262,16 @@ private struct FullTemplateCreationForm: View {
 
     private func create() {
         let name = displayName.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty, !osVersion.isEmpty else { return }
-        let starter = starterTemplate(osName: osName, osVersion: osVersion)
+        let version = resolvedOSVersion
+        guard !name.isEmpty, !version.isEmpty else { return }
+        let starter = starterTemplate(osName: osName, osVersion: version)
         do {
             let id = try templateStore.create(
                 kind: .fullTemplate,
                 displayName: name,
                 description: description,
                 osName: osName.rawValue,
-                osVersion: osVersion,
+                osVersion: version,
                 filename: filename,
                 starterContent: starter
             )

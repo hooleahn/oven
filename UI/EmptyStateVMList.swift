@@ -81,7 +81,8 @@ struct EmptyStateVMList: View {
         .sheet(isPresented: $showCirrusCatalogue) {
             CirrusCatalogueSheet(
                 trackedRefs: [],
-                activeDownloads: [:]
+                activeDownloads: [:],
+                token: nil
             ) { _ in
                 showCirrusCatalogue = false
             }

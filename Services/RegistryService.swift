@@ -172,15 +172,224 @@ struct CirrusLabsImage: Identifiable, Sendable {
     let os: String          // "macOS 26 Tahoe"
     let variant: String     // "Base", "Vanilla", "Xcode"
     let description: String
+    let tags: [String]      // available version tags; "latest" first when present
+
+    var defaultTag: String { tags.contains("latest") ? "latest" : (tags.first ?? "latest") }
+
+    func ref(tag: String) -> String {
+        let base = imageRef.components(separatedBy: ":").first ?? imageRef
+        return "\(base):\(tag)"
+    }
 
     var registryImage: RegistryImage {
         RegistryImage(id: UUID(), registry: "ghcr.io", imageRef: imageRef, isPulled: false)
     }
+
+    init(id: String, imageRef: String, os: String, variant: String, description: String, tags: [String] = ["latest"]) {
+        self.id = id; self.imageRef = imageRef; self.os = os
+        self.variant = variant; self.description = description; self.tags = tags
+    }
+}
+
+// MARK: - GitHub Container Registry browsing
+
+enum GHCRFetchError: LocalizedError {
+    case authRequired
+
+    var errorDescription: String? {
+        "Authentication required. Add a GitHub PAT with read:packages scope for ghcr.io in Integrations."
+    }
+}
+
+struct GHCRPackageInfo: Identifiable, Sendable {
+    let id: String       // e.g. "cirruslabs/macos-sequoia-base"
+    let name: String
+    let owner: String
+    let description: String?
+    let tags: [String]   // "latest" first, then version tags descending
+
+    var defaultTag: String { tags.contains("latest") ? "latest" : (tags.first ?? "latest") }
+    var defaultRef: String { "ghcr.io/\(owner)/\(name):\(defaultTag)" }
+    func ref(tag: String) -> String { "ghcr.io/\(owner)/\(name):\(tag)" }
 }
 
 extension RegistryService {
-    /// All publicly available Cirrus Labs macOS images.
-    /// These are static and well-known — no API call needed.
+
+    // MARK: Version tag fetching
+
+    /// Fetches up to 10 recent version tags for a single GHCR package.
+    /// Returns ["latest"] on any failure so callers always get a usable default.
+    private static func fetchVersionTags(owner: String, scope: String, package: String,
+                                         headers: [String: String]) async -> [String] {
+        let encoded = package.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? package
+        guard let url = URL(string: "https://api.github.com/\(scope)/\(owner)/packages/container/\(encoded)/versions?per_page=10") else {
+            return ["latest"]
+        }
+        var request = URLRequest(url: url)
+        headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+
+        struct Version: Decodable {
+            struct Metadata: Decodable {
+                struct Container: Decodable { let tags: [String] }
+                let container: Container
+            }
+            let metadata: Metadata
+        }
+
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse,
+              http.statusCode == 200,
+              let versions = try? JSONDecoder().decode([Version].self, from: data)
+        else { return ["latest"] }
+
+        var allTags = versions.flatMap { $0.metadata.container.tags }.filter { !$0.isEmpty }
+        let hasLatest = allTags.contains("latest")
+        allTags = allTags.filter { $0 != "latest" }.sorted(by: >)
+        if hasLatest { allTags.insert("latest", at: 0) }
+        return allTags.isEmpty ? ["latest"] : allTags
+    }
+
+    // MARK: Browse any GHCR org / user
+
+    /// Lists all container packages for a GitHub org or user, including version tags.
+    /// Tries /orgs/ first, falls back to /users/ on 404.
+    /// Throws GHCRFetchError.authRequired on 401/403.
+    static func fetchGHCRPackages(owner: String, token: String?) async throws -> [GHCRPackageInfo] {
+        var headers: [String: String] = [
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28"
+        ]
+        if let token { headers["Authorization"] = "Bearer \(token)" }
+
+        struct Package: Decodable {
+            let name: String
+            let description: String?
+        }
+
+        var packages: [Package] = []
+        var resolvedScope = ""
+
+        for scope in ["orgs", "users"] {
+            guard let url = URL(string: "https://api.github.com/\(scope)/\(owner)/packages?package_type=container&per_page=100") else { continue }
+            var request = URLRequest(url: url)
+            headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+            guard let (data, response) = try? await URLSession.shared.data(for: request),
+                  let http = response as? HTTPURLResponse
+            else { continue }
+
+            switch http.statusCode {
+            case 200:
+                packages = (try? JSONDecoder().decode([Package].self, from: data)) ?? []
+                resolvedScope = scope
+            case 401, 403:
+                throw GHCRFetchError.authRequired
+            default:
+                break
+            }
+            if !resolvedScope.isEmpty { break }
+        }
+
+        guard !packages.isEmpty, !resolvedScope.isEmpty else { return [] }
+
+        // Fetch version tags for all packages in parallel
+        return try await withThrowingTaskGroup(of: GHCRPackageInfo.self) { group in
+            for pkg in packages {
+                let name = pkg.name; let desc = pkg.description
+                group.addTask {
+                    let tags = await fetchVersionTags(owner: owner, scope: resolvedScope, package: name, headers: headers)
+                    return GHCRPackageInfo(id: "\(owner)/\(name)", name: name, owner: owner, description: desc, tags: tags)
+                }
+            }
+            var result: [GHCRPackageInfo] = []
+            for try await info in group { result.append(info) }
+            return result.sorted { $0.name < $1.name }
+        }
+    }
+
+    // MARK: Dynamic Cirrus Labs catalogue
+
+    /// Fetches the live Cirrus Labs macOS catalogue including per-package version tags.
+    /// Requires a GitHub PAT with `read:packages` scope.
+    /// Falls back to `cirrusLabsCatalogue` if the package list fetch fails.
+    static func fetchCirrusCatalogue(token: String) async throws -> [CirrusLabsImage] {
+        guard let url = URL(string: "https://api.github.com/orgs/cirruslabs/packages?package_type=container&per_page=100") else {
+            return cirrusLabsCatalogue
+        }
+        let headers: [String: String] = [
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Authorization": "Bearer \(token)"
+        ]
+        var request = URLRequest(url: url)
+        headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+
+        struct Package: Decodable {
+            let name: String
+            let description: String?
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            return cirrusLabsCatalogue
+        }
+        let packages = try JSONDecoder().decode([Package].self, from: data)
+
+        // Build CirrusLabsImage entries in parallel, fetching version tags for each
+        let fetched: [CirrusLabsImage] = try await withThrowingTaskGroup(of: CirrusLabsImage?.self) { group in
+            for pkg in packages.filter({ $0.name.hasPrefix("macos-") }) {
+                let name = pkg.name; let pkgDesc = pkg.description
+                group.addTask {
+                    let parts = name.dropFirst("macos-".count).components(separatedBy: "-")
+                    guard parts.count >= 2 else { return nil }
+
+                    let os: String
+                    switch parts[0] {
+                    case "tahoe":    os = "macOS 26 Tahoe"
+                    case "sequoia":  os = "macOS 15 Sequoia"
+                    case "sonoma":   os = "macOS 14 Sonoma"
+                    case "ventura":  os = "macOS 13 Ventura"
+                    case "monterey": os = "macOS 12 Monterey"
+                    default:         os = "macOS \(parts[0].capitalized)"
+                    }
+
+                    let variantSlug = parts[1...].joined(separator: "-")
+                    let variant: String; let desc: String
+                    switch variantSlug {
+                    case "vanilla": (variant, desc) = ("Vanilla", "Clean macOS install, no extras.")
+                    case "base":    (variant, desc) = ("Base",    "Includes Homebrew, Git, common build tools.")
+                    case "xcode":   (variant, desc) = ("Xcode",   "Base + latest Xcode release.")
+                    default:        (variant, desc) = (variantSlug.capitalized, pkgDesc ?? "\(name) image from Cirrus Labs.")
+                    }
+
+                    let tags = await fetchVersionTags(owner: "cirruslabs", scope: "orgs", package: name, headers: headers)
+                    let ref = "ghcr.io/cirruslabs/\(name):latest"
+                    return CirrusLabsImage(id: ref, imageRef: ref, os: os, variant: variant, description: desc, tags: tags)
+                }
+            }
+            var result: [CirrusLabsImage] = []
+            for try await img in group { if let img { result.append(img) } }
+            return result
+        }
+
+        // Merge: fetched is authoritative; keep any static entries not found remotely
+        var result = fetched
+        let fetchedRefs = Set(fetched.map { $0.imageRef })
+        for img in cirrusLabsCatalogue where !fetchedRefs.contains(img.imageRef) {
+            result.append(img)
+        }
+
+        let osOrder = ["macOS 26 Tahoe", "macOS 15 Sequoia", "macOS 14 Sonoma",
+                       "macOS 13 Ventura", "macOS 12 Monterey"]
+        result.sort {
+            let i0 = osOrder.firstIndex(of: $0.os) ?? osOrder.count
+            let i1 = osOrder.firstIndex(of: $1.os) ?? osOrder.count
+            return i0 != i1 ? i0 < i1 : $0.variant < $1.variant
+        }
+        return result
+    }
+
+    // MARK: Static fallback catalogue
+
     static let cirrusLabsCatalogue: [CirrusLabsImage] = [
         // macOS 26 Tahoe
         CirrusLabsImage(id: "ghcr.io/cirruslabs/macos-tahoe-vanilla:latest",

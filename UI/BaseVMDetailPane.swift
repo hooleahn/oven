@@ -71,9 +71,8 @@ struct BaseVMDetailPane: View {
             Form {
                 Section {
                     LabeledContent("macOS") {
-                        let label = "\(baseVM.osName.rawValue) \(baseVM.osVersion)"
-                            .trimmingCharacters(in: .whitespaces)
-                        Text(label.isEmpty ? baseVM.name : label)
+                        let label = baseVM.osDisplayLabel
+                        Text(label == "—" ? baseVM.name : label)
                             .foregroundStyle(.secondary)
                     }
                     let cpu  = liveConfig?.cpu.map    { "\($0) vCPU" }  ?? "\(baseVM.cpuCount) cores"
