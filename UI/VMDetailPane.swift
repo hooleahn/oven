@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import LocalAuthentication
 
 
 struct VMDetailPane: View {
@@ -17,6 +18,15 @@ struct VMDetailPane: View {
     @State private var isLoadingConfig = false
     @State private var confirmStop: VirtualMachine? = nil
     @SceneStorage("vmDetailPane.logInspectorOpen") private var logInspectorOpen = false
+
+    // Service reachability
+    @State private var vncReachable: Bool? = nil
+    @State private var sshReachable: Bool? = nil
+    @State private var isCheckingPorts = false
+
+    // Password reveal
+    @State private var revealedPassword: String? = nil
+    @State private var isAuthenticating = false
 
     // MDM enrollment status
     @State private var enrollmentStatus: JamfEnrollmentStatus? = nil
@@ -76,30 +86,76 @@ struct VMDetailPane: View {
                 Section("Network") {
                     LabeledContent("IP Address") {
                         if let ip = vm.ipAddress, !ip.isEmpty {
-                            SelectableMonoText(ip)
+                            HStack(spacing: 6) {
+                                SelectableMonoText(ip)
+                                CopyButton(value: ip)
+                            }
                         } else {
                             Text("—").foregroundStyle(.secondary)
                         }
                     }
                     if let ip = vm.ipAddress, !ip.isEmpty {
-                        let vncURL = "vnc://\(ip)"
+                        let sshUser = vm.sshUsername.isEmpty ? "baker" : vm.sshUsername
+                        let vncURL = vm.sshUsername.isEmpty ? "vnc://\(ip)" : "vnc://\(vm.sshUsername)@\(ip)"
                         LabeledContent("VNC") {
                             HStack(spacing: 6) {
                                 SelectableMonoText(vncURL)
+                                PortStatusDot(reachable: vncReachable, isChecking: isCheckingPorts)
+                                CopyButton(value: vncURL)
                                 Button("Open…") { if let url = URL(string: vncURL) { NSWorkspace.shared.open(url) } }
                                     .buttonStyle(.bordered).controlSize(.mini)
                             }
                         }
+
+                        let sshCmd = "ssh \(sshUser)@\(ip)"
+                        LabeledContent("SSH") {
+                            HStack(spacing: 6) {
+                                SelectableMonoText(sshCmd)
+                                PortStatusDot(reachable: sshReachable, isChecking: isCheckingPorts)
+                                CopyButton(value: sshCmd)
+                                Button("Open…") { openSSH(vm: vm) }
+                                    .buttonStyle(.bordered).controlSize(.mini)
+                            }
+                        }
+                    } else {
+                        LabeledContent("SSH") { Text("Port 22").foregroundStyle(.secondary) }
                     }
-                    LabeledContent("SSH") { Text("Port 22").foregroundStyle(.secondary) }
                     if !vm.sshUsername.isEmpty {
                         LabeledContent("Username") {
-                            SelectableMonoText(vm.sshUsername)
+                            HStack(spacing: 6) {
+                                SelectableMonoText(vm.sshUsername)
+                                CopyButton(value: vm.sshUsername)
+                            }
                         }
                     }
                     if vm.sshPassword != nil {
                         LabeledContent("Password") {
-                            Text("Stored in Keychain").foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                if let pwd = revealedPassword {
+                                    SelectableMonoText(pwd)
+                                    CopyButton(value: pwd)
+                                    Button {
+                                        revealedPassword = nil
+                                    } label: {
+                                        Image(systemName: "eye.slash")
+                                    }
+                                    .buttonStyle(.bordered).controlSize(.mini)
+                                    .help("Hide password")
+                                } else {
+                                    Text("Stored in Keychain").foregroundStyle(.secondary)
+                                    if isAuthenticating {
+                                        ProgressView().controlSize(.mini)
+                                    } else {
+                                        Button {
+                                            Task { await revealPassword() }
+                                        } label: {
+                                            Image(systemName: "eye")
+                                        }
+                                        .buttonStyle(.bordered).controlSize(.mini)
+                                        .help("Reveal password")
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -345,6 +401,7 @@ struct VMDetailPane: View {
             // Reset transient state when VM selection changes
             enrollmentStatus = nil
             enrollmentError  = nil
+            revealedPassword = nil
             // Start IP polling immediately when detail pane opens for a running VM
             if vm.status == .running && (vm.ipAddress == nil || vm.ipAddress?.isEmpty == true) {
                 await vmStore.refreshIP(for: vm)
@@ -359,6 +416,9 @@ struct VMDetailPane: View {
             if newStatus == .running && vm.ipAddress == nil {
                 Task { await vmStore.refreshIP(for: vm) }
             }
+        }
+        .task(id: vm.ipAddress) {
+            await checkServiceReachability()
         }
     }
 
@@ -467,6 +527,56 @@ struct VMDetailPane: View {
     }
 
     @MainActor
+    private func revealPassword() async {
+        guard let pwd = vm.sshPassword, !pwd.isEmpty else { return }
+        isAuthenticating = true
+        let context = LAContext()
+        let name = vm.displayName.isEmpty ? vm.name : vm.displayName
+        let granted = await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in
+            context.evaluatePolicy(.deviceOwnerAuthentication,
+                                   localizedReason: "Reveal SSH password for \(name)") { ok, _ in
+                c.resume(returning: ok)
+            }
+        }
+        if granted { revealedPassword = pwd }
+        isAuthenticating = false
+    }
+
+    @MainActor
+    private func checkServiceReachability() async {
+        guard let ip = vm.ipAddress, !ip.isEmpty else {
+            vncReachable = nil
+            sshReachable = nil
+            return
+        }
+        isCheckingPorts = true
+        async let vncCheck = checkPort(ip: ip, port: 5900)
+        async let sshCheck = checkPort(ip: ip, port: 22)
+        let (vnc, ssh) = await (vncCheck, sshCheck)
+        vncReachable = vnc
+        sshReachable = ssh
+        isCheckingPorts = false
+    }
+
+    private func checkPort(ip: String, port: Int) async -> Bool {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
+                process.arguments = ["-z", "-w", "2", ip, "\(port)"]
+                process.standardOutput = Pipe()
+                process.standardError = Pipe()
+                guard (try? process.run()) != nil else {
+                    continuation.resume(returning: false)
+                    return
+                }
+                process.waitUntilExit()
+                continuation.resume(returning: process.terminationStatus == 0)
+            }
+        }
+    }
+
+    @MainActor
     private func lookUpEnrollment() async {
         guard canLookUpEnrollment,
               let serverID = vm.mdmServerID,
@@ -483,6 +593,42 @@ struct VMDetailPane: View {
             enrollmentError = error.localizedDescription
         }
         isLookingUpEnrollment = false
+    }
+}
+
+// MARK: - PortStatusDot
+
+private struct PortStatusDot: View {
+    let reachable: Bool?
+    let isChecking: Bool
+
+    var body: some View {
+        Group {
+            if isChecking {
+                ProgressView().controlSize(.mini).frame(width: 12, height: 12)
+            } else if let ok = reachable {
+                Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .foregroundStyle(ok ? .green : .red)
+                    .font(.caption)
+            }
+        }
+    }
+}
+
+// MARK: - CopyButton
+
+private struct CopyButton: View {
+    let value: String
+
+    var body: some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(value, forType: .string)
+        } label: {
+            Image(systemName: "doc.on.doc")
+        }
+        .buttonStyle(.bordered).controlSize(.mini)
+        .help("Copy to clipboard")
     }
 }
 

@@ -146,5 +146,7 @@ final class VMListViewModel {
         })
         appState.finishOperation(id: opID)
         await vmStore.sync()
+        let vmName = vm.displayName.isEmpty ? vm.name : vm.displayName
+        await NotificationService.shared.notifyVMStopped(vmName: vmName)
     }
 }

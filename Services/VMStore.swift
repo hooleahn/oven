@@ -256,7 +256,6 @@ final class VMStore: ObservableObject {
     func update(id: UUID, _ apply: (inout VirtualMachine) -> Void) {
         guard let idx = vms.firstIndex(where: { $0.id == id }) else { return }
         apply(&vms[idx])
-        saveToDisk()
     }
 
     /// Merge tart list output into our records:

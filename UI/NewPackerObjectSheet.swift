@@ -1,8 +1,9 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - NewPackerObjectSheet
 // Unified creation sheet: lets the user pick Full Template, Template Variables,
-// or Building Block before filling in details.
+// Building Block, or Boot Command Block before filling in details.
 
 struct NewPackerObjectSheet: View {
     @EnvironmentObject var theme: AppTheme
@@ -127,10 +128,32 @@ struct NewPackerObjectSheet: View {
         case .varsFile:
             VarsFileCreationForm(onCreated: { id in onCreatedTemplate(id); dismiss() })
         case .block:
-            BuildingBlockEditSheet(block: nil) { block in onCreatedBlock(block); dismiss() }
+            BuildingBlockCreationForm { block in onCreatedBlock(block); dismiss() }
         case .bootCommand:
-            BootCommandEditSheet(cmd: nil) { cmd in onCreatedBootCommand(cmd); dismiss() }
+            BootCommandCreationForm { cmd in onCreatedBootCommand(cmd); dismiss() }
         }
+    }
+}
+
+// MARK: - Shared footer helper
+
+private struct CreationFooter: View {
+    let isCreateDisabled: Bool
+    let onImport: () -> Void
+    let onCreate: () -> Void
+
+    var body: some View {
+        HStack {
+            Button("Import from File", action: onImport)
+                .buttonStyle(.bordered)
+            Spacer()
+            Button("Create", action: onCreate)
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(isCreateDisabled)
+        }
+        .padding(16)
+        .background(.bar)
     }
 }
 
@@ -152,6 +175,8 @@ private struct FullTemplateCreationForm: View {
     @State private var liveFirmwares: [MistFirmwareInfo] = []
     @State private var isFetchingVersions = false
     @State private var createError: String?
+    @State private var isImporting = false
+    @State private var pendingImportURL: URL? = nil
 
     private static let customVersionSentinel = "__custom__"
 
@@ -238,15 +263,19 @@ private struct FullTemplateCreationForm: View {
         .formStyle(.grouped)
 
         Divider()
-        HStack {
-            Spacer()
-            Button("Create") { create() }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-                .disabled(displayName.trimmingCharacters(in: .whitespaces).isEmpty || resolvedOSVersion.isEmpty)
-                .padding(16)
+        CreationFooter(
+            isCreateDisabled: displayName.trimmingCharacters(in: .whitespaces).isEmpty || resolvedOSVersion.isEmpty,
+            onImport: { isImporting = true },
+            onCreate: create
+        )
+        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.text, .data]) { result in
+            if case .success(let url) = result { pendingImportURL = url }
         }
-        .background(.bar)
+        .onChange(of: pendingImportURL) { _, url in
+            guard let url else { return }
+            pendingImportURL = nil
+            handleImport(url: url)
+        }
         .task { await fetchVersions() }
     }
 
@@ -264,16 +293,31 @@ private struct FullTemplateCreationForm: View {
         let name = displayName.trimmingCharacters(in: .whitespaces)
         let version = resolvedOSVersion
         guard !name.isEmpty, !version.isEmpty else { return }
-        let starter = starterTemplate(osName: osName, osVersion: version)
+        doCreate(content: starterTemplate(osName: osName, osVersion: version))
+    }
+
+    private func handleImport(url: URL) {
+        guard url.startAccessingSecurityScopedResource() else { return }
+        defer { url.stopAccessingSecurityScopedResource() }
+        guard let content = try? String(contentsOf: url, encoding: .utf8) else { return }
+        if displayName.trimmingCharacters(in: .whitespaces).isEmpty {
+            displayName = url.deletingPathExtension().lastPathComponent
+        }
+        doCreate(content: content)
+    }
+
+    private func doCreate(content: String) {
+        let name = displayName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
         do {
             let id = try templateStore.create(
                 kind: .fullTemplate,
                 displayName: name,
                 description: description,
                 osName: osName.rawValue,
-                osVersion: version,
+                osVersion: resolvedOSVersion,
                 filename: filename,
-                starterContent: starter
+                starterContent: content
             )
             onCreated(id)
         } catch {
@@ -331,6 +375,8 @@ private struct VarsFileCreationForm: View {
     @State private var displayName = ""
     @State private var description = ""
     @State private var createError: String?
+    @State private var isImporting = false
+    @State private var pendingImportURL: URL? = nil
 
     private var filename: String {
         let base = displayName.trimmingCharacters(in: .whitespaces)
@@ -364,15 +410,19 @@ private struct VarsFileCreationForm: View {
         .formStyle(.grouped)
 
         Divider()
-        HStack {
-            Spacer()
-            Button("Create") { create() }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-                .disabled(displayName.trimmingCharacters(in: .whitespaces).isEmpty)
-                .padding(16)
+        CreationFooter(
+            isCreateDisabled: displayName.trimmingCharacters(in: .whitespaces).isEmpty,
+            onImport: { isImporting = true },
+            onCreate: create
+        )
+        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.text, .data]) { result in
+            if case .success(let url) = result { pendingImportURL = url }
         }
-        .background(.bar)
+        .onChange(of: pendingImportURL) { _, url in
+            guard let url else { return }
+            pendingImportURL = nil
+            handleImport(url: url)
+        }
     }
 
     private func create() {
@@ -392,6 +442,22 @@ vm_name          = "my-vm"
 # memory_gb      = 8
 # disk_size_gb   = 80
 """
+        doCreate(content: starter)
+    }
+
+    private func handleImport(url: URL) {
+        guard url.startAccessingSecurityScopedResource() else { return }
+        defer { url.stopAccessingSecurityScopedResource() }
+        guard let content = try? String(contentsOf: url, encoding: .utf8) else { return }
+        if displayName.trimmingCharacters(in: .whitespaces).isEmpty {
+            displayName = url.deletingPathExtension().lastPathComponent
+        }
+        doCreate(content: content)
+    }
+
+    private func doCreate(content: String) {
+        let name = displayName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
         do {
             let id = try templateStore.create(
                 kind: .varsFile,
@@ -400,11 +466,180 @@ vm_name          = "my-vm"
                 osName: "",
                 osVersion: "",
                 filename: filename,
-                starterContent: starter
+                starterContent: content
             )
             onCreated(id)
         } catch {
             createError = error.localizedDescription
         }
+    }
+}
+
+// MARK: - Building Block Creation Form
+
+private struct BuildingBlockCreationForm: View {
+    let onCreated: (BuildingBlock) -> Void
+
+    @State private var displayName = ""
+    @State private var description = ""
+    @State private var provisioner: BuildingBlock.ProvisionerType = .shell
+    @State private var isImporting = false
+    @State private var pendingImportURL: URL? = nil
+
+    var body: some View {
+        Form {
+            Section("Details") {
+                LabeledContent("Name") {
+                    TextField("", text: $displayName,
+                              prompt: Text("e.g. Install Rosetta").foregroundStyle(.tertiary))
+                }
+                LabeledContent("Description") {
+                    TextField("", text: $description, axis: .vertical).lineLimit(2...5)
+                }
+                Picker("Provisioner type", selection: $provisioner) {
+                    ForEach(BuildingBlock.ProvisionerType.allCases, id: \.self) {
+                        Label($0.label, systemImage: $0.systemImage).tag($0)
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+
+        Divider()
+        CreationFooter(
+            isCreateDisabled: displayName.trimmingCharacters(in: .whitespaces).isEmpty,
+            onImport: { isImporting = true },
+            onCreate: create
+        )
+        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.text, .data]) { result in
+            if case .success(let url) = result { pendingImportURL = url }
+        }
+        .onChange(of: pendingImportURL) { _, url in
+            guard let url else { return }
+            pendingImportURL = nil
+            handleImport(url: url)
+        }
+    }
+
+    private func create() {
+        let name = displayName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        onCreated(BuildingBlock(
+            displayName: name,
+            blockDescription: description,
+            provisioner: provisioner,
+            hclContent: """
+  provisioner "shell" {
+    inline = [
+      "echo 'Hello from Packer'"
+    ]
+  }
+"""
+        ))
+    }
+
+    private func handleImport(url: URL) {
+        guard url.startAccessingSecurityScopedResource() else { return }
+        defer { url.stopAccessingSecurityScopedResource() }
+        guard let content = try? String(contentsOf: url, encoding: .utf8) else { return }
+        if displayName.trimmingCharacters(in: .whitespaces).isEmpty {
+            displayName = url.deletingPathExtension().lastPathComponent
+        }
+        let name = displayName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        onCreated(BuildingBlock(
+            displayName: name,
+            blockDescription: description,
+            provisioner: provisioner,
+            hclContent: content
+        ))
+    }
+}
+
+// MARK: - Boot Command Creation Form
+
+private struct BootCommandCreationForm: View {
+    let onCreated: (BootCommandBlock) -> Void
+
+    @State private var displayName = ""
+    @State private var description = ""
+    @State private var osName: MacOSRelease.Name = .sequoia
+    @State private var osVersion = ""
+    @State private var isImporting = false
+    @State private var pendingImportURL: URL? = nil
+
+    var body: some View {
+        Form {
+            Section("Details") {
+                LabeledContent("Name") {
+                    TextField("", text: $displayName,
+                              prompt: Text("e.g. macOS 15 Setup Assistant").foregroundStyle(.tertiary))
+                }
+                LabeledContent("Description") {
+                    TextField("", text: $description, axis: .vertical).lineLimit(2...5)
+                }
+            }
+            Section("OS Compatibility") {
+                Picker("OS", selection: $osName) {
+                    ForEach(MacOSRelease.Name.allCases, id: \.self) {
+                        Text($0.displayLabel).tag($0)
+                    }
+                }
+                LabeledContent("Version") {
+                    TextField("", text: $osVersion,
+                              prompt: Text("Leave empty to match any version").foregroundStyle(.tertiary))
+                }
+            }
+        }
+        .formStyle(.grouped)
+
+        Divider()
+        CreationFooter(
+            isCreateDisabled: displayName.trimmingCharacters(in: .whitespaces).isEmpty,
+            onImport: { isImporting = true },
+            onCreate: create
+        )
+        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.text, .data]) { result in
+            if case .success(let url) = result { pendingImportURL = url }
+        }
+        .onChange(of: pendingImportURL) { _, url in
+            guard let url else { return }
+            pendingImportURL = nil
+            handleImport(url: url)
+        }
+    }
+
+    private func create() {
+        let name = displayName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        onCreated(BootCommandBlock(
+            displayName: name,
+            blockDescription: description,
+            commandLines: ["\"<wait60s><spacebar>\""],
+            osName: osName.rawValue,
+            osVersion: osVersion.trimmingCharacters(in: .whitespaces)
+        ))
+    }
+
+    private func handleImport(url: URL) {
+        guard url.startAccessingSecurityScopedResource() else { return }
+        defer { url.stopAccessingSecurityScopedResource() }
+        guard let content = try? String(contentsOf: url, encoding: .utf8) else { return }
+        if displayName.trimmingCharacters(in: .whitespaces).isEmpty {
+            displayName = url.deletingPathExtension().lastPathComponent
+        }
+        let name = displayName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        let lines = content
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        onCreated(BootCommandBlock(
+            displayName: name,
+            blockDescription: description,
+            commandLines: lines,
+            osName: osName.rawValue,
+            osVersion: osVersion.trimmingCharacters(in: .whitespaces)
+        ))
     }
 }

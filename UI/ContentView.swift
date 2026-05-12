@@ -476,8 +476,9 @@ struct SidebarView: View {
     private var activePushCount: Int {
         pushManager.active.count
     }
-
+    
     var body: some View {
+//        Spacer()
         List(selection: $selection) {
 
             // MARK: Library
@@ -604,7 +605,7 @@ struct SidebarView: View {
                 Spacer()
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .padding(.vertical, 10)
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }

@@ -108,6 +108,33 @@ final class NotificationService {
         }
     }
 
+    func notifyVMStopped(vmName: String) async {
+        let pushEnabled   = UserDefaults.standard.bool(forKey: "pushoverEnabled")
+        let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
+        let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
+        let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
+        guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
+
+        let title   = "🛑 Oven: VM Stopped"
+        let message = "VM '\(vmName)' has stopped."
+        let eventKey = "notif.%@.vmStopped"
+
+        await withTaskGroup(of: Void.self) { group in
+            if pushEnabled   && UserDefaults.standard.bool(forKey: String(format: eventKey, "pushover")) {
+                group.addTask { await self.sendPushover(title: title, message: message) }
+            }
+            if slackEnabled  && UserDefaults.standard.bool(forKey: String(format: eventKey, "slack")) {
+                group.addTask { await self.sendSlack(title: title, message: message, success: nil) }
+            }
+            if teamsEnabled  && UserDefaults.standard.bool(forKey: String(format: eventKey, "teams")) {
+                group.addTask { await self.sendTeams(title: title, message: message, success: nil) }
+            }
+            if systemEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "system")) {
+                group.addTask { await self.sendSystemNotification(title: title, message: message, success: nil) }
+            }
+        }
+    }
+
     func notifyBuildStarted(vmName: String) async {
         let pushEnabled   = UserDefaults.standard.bool(forKey: "pushoverEnabled")
         let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")

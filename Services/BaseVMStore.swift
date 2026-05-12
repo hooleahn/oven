@@ -87,7 +87,7 @@ final class BaseVMStore: ObservableObject {
         if lower.contains("sonoma")   { return .sonoma }
         if lower.contains("ventura")  { return .ventura }
         if lower.contains("monterey") { return .monterey }
-        return .sequoia
+        return .unknown
     }
 
     func update(id: UUID, _ apply: (inout VirtualMachine) -> Void) {
@@ -191,70 +191,8 @@ final class BaseVMStore: ObservableObject {
                         try await downloadWithMistCLI(baseVM: baseVM, ipswRoot: ipswRoot,
                                                       ipswPath: &ipswPath)
                     } else {
-                    // ipsw.me API branch (default) — no external tools required
-
-                    AppLogger.shared.log("Looking up IPSW for macOS \(baseVM.osVersion) via ipsw.me…", source: "BaseVMStore")
-                    update(id: baseVM.id) { $0.buildLog.append("==> Looking up IPSW for macOS \(baseVM.osVersion) via ipsw.me…") }
-
-                    // Check if already cached locally
-                    let cached = (try? FileManager.default
-                        .contentsOfDirectory(at: ipswRoot, includingPropertiesForKeys: nil))?
-                        .first {
-                            let name = $0.lastPathComponent
-                            return $0.pathExtension == "ipsw" && (
-                                name == "macOS \(baseVM.osVersion).ipsw"
-                                || name.contains(baseVM.osVersion.replacingOccurrences(of: ".", with: "_"))
-                                || name.contains(baseVM.osVersion)
-                            )
-                        }
-
-                    if let found = cached {
-                        ipswPath = found.path
-                        AppLogger.shared.log("Found cached IPSW: \(found.lastPathComponent)", source: "BaseVMStore")
-                        update(id: baseVM.id) { $0.buildLog.append("==> Using cached IPSW: \(found.lastPathComponent)") }
-                    } else {
-                        let firmwares = try await IPSWService.shared.listFirmware()
-                        guard let firmware = firmwares.first(where: { $0.version == baseVM.osVersion }) else {
-                            let available = firmwares.prefix(5).map { $0.version }.joined(separator: ", ")
-                            update(id: baseVM.id) { $0.buildLog.append("==> ERROR: macOS \(baseVM.osVersion) not found in ipsw.me. Available: \(available)…") }
-                            AppLogger.shared.error("ipsw.me: version \(baseVM.osVersion) not found. Available: \(available)", source: "BaseVMStore")
-                            throw BuildError.ipswDownloadFailed(baseVM.osVersion)
-                        }
-                        let standardName = "macOS \(baseVM.osVersion).ipsw"
-                        let standardURL = ipswRoot.appendingPathComponent(standardName)
-                        AppLogger.shared.log("Downloading \(firmware.displayName) (\(firmware.formattedSize))…", source: "BaseVMStore")
-                        update(id: baseVM.id) { $0.buildLog.append("==> Downloading \(firmware.displayName) (\(firmware.formattedSize)) → \(standardName)") }
-
-                        var lastPct = -1
-                        // Download to standard filename directly
-                        for await event in await IPSWService.shared.download(firmware, to: ipswRoot) {
-                            switch event {
-                            case .progress(let fraction, let written, let total):
-                                let pct = Int(fraction * 100)
-                                if pct / 5 > lastPct / 5 {
-                                    lastPct = pct
-                                    let wGB = String(format: "%.1f", Double(written) / 1_000_000_000)
-                                    let tGB = String(format: "%.1f", Double(total) / 1_000_000_000)
-                                    update(id: baseVM.id) { $0.buildLog.append("==> \(pct)%  \(wGB) / \(tGB) GB") }
-                                    BuildMonitor.shared.ping()
-                                }
-                            case .completed(let url):
-                                // Rename to standard filename if needed
-                                let dest = url.deletingLastPathComponent().appendingPathComponent(standardName)
-                                if url != dest { try? FileManager.default.moveItem(at: url, to: dest) }
-                                ipswPath = dest.path
-                                AppLogger.shared.success("IPSW saved: \(standardName)", source: "BaseVMStore")
-                                update(id: baseVM.id) { $0.buildLog.append("==> Download complete: \(standardName)") }
-                            case .failed(let error):
-                                throw BuildError.ipswDownloadFailed("\(baseVM.osVersion): \(error.localizedDescription)")
-                            }
-                        }
-                        guard !ipswPath.isEmpty else {
-                            update(id: baseVM.id) { $0.buildLog.append("==> ERROR: No IPSW downloaded for macOS \(baseVM.osVersion). Check the version is available.") }
-                        throw BuildError.ipswDownloadFailed(baseVM.osVersion)
-                        }
-                    }  // end ipsw.me branch
-                    }  // end ipswDownloadMode else
+                        try await downloadIPSWViaIPSWMe(for: baseVM, ipswRoot: ipswRoot, ipswPath: &ipswPath)
+                    }
                 }
 
                 // Load MDM profile if attached
@@ -451,6 +389,7 @@ final class BaseVMStore: ObservableObject {
             vmStore?.vms[idx].buildStatus = .error
         }
         isBuilding = false
+        vmStore?.saveToDisk()
         AppLogger.shared.warning("Build cancelled by user", source: "BaseVMStore")
     }
 
@@ -545,47 +484,12 @@ extension BaseVMStore {
                     ipswPath = destURL.path
                     update(id: baseVM.id) { $0.buildLog.append("==> IPSW downloaded: \(destURL.lastPathComponent)") }
                 case .auto:
-                    // Same auto-download logic as the template path
                     let settings = AppSettings.load()
                     let ipswRoot = settings.ipswStorageRoot
                     if settings.ipswDownloadMode == .mistCli {
                         try await downloadWithMistCLI(baseVM: baseVM, ipswRoot: ipswRoot, ipswPath: &ipswPath)
                     } else {
-                        update(id: baseVM.id) { $0.buildLog.append("==> Looking up IPSW for macOS \(baseVM.osVersion) via ipsw.me…") }
-                        let cached = (try? FileManager.default.contentsOfDirectory(at: ipswRoot, includingPropertiesForKeys: nil))?
-                            .first { $0.pathExtension == "ipsw" && $0.lastPathComponent.contains(baseVM.osVersion) }
-                        if let found = cached {
-                            ipswPath = found.path
-                            update(id: baseVM.id) { $0.buildLog.append("==> Using cached IPSW: \(found.lastPathComponent)") }
-                        } else {
-                            let firmwares = try await IPSWService.shared.listFirmware()
-                            guard let firmware = firmwares.first(where: { $0.version == baseVM.osVersion }) else {
-                                throw BuildError.ipswDownloadFailed(baseVM.osVersion)
-                            }
-                            let standardName = "macOS \(baseVM.osVersion).ipsw"
-                            update(id: baseVM.id) { $0.buildLog.append("==> Downloading \(firmware.displayName) (\(firmware.formattedSize)) → \(standardName)") }
-                            var lastPct = -1
-                            for await event in await IPSWService.shared.download(firmware, to: ipswRoot) {
-                                switch event {
-                                case .progress(let fraction, let written, let total):
-                                    let pct = Int(fraction * 100)
-                                    if pct / 5 > lastPct / 5 {
-                                        lastPct = pct
-                                        let wGB = String(format: "%.1f", Double(written) / 1_000_000_000)
-                                        let tGB = String(format: "%.1f", Double(total) / 1_000_000_000)
-                                        update(id: baseVM.id) { $0.buildLog.append("==> \(pct)%  \(wGB) / \(tGB) GB") }
-                                        BuildMonitor.shared.ping()
-                                    }
-                                case .completed(let url):
-                                    let dest = url.deletingLastPathComponent().appendingPathComponent(standardName)
-                                    if url != dest { try? FileManager.default.moveItem(at: url, to: dest) }
-                                    ipswPath = dest.path
-                                    update(id: baseVM.id) { $0.buildLog.append("==> Download complete: \(standardName)") }
-                                case .failed(let error):
-                                    throw BuildError.ipswDownloadFailed("\(baseVM.osVersion): \(error.localizedDescription)")
-                                }
-                            }
-                        }
+                        try await downloadIPSWViaIPSWMe(for: baseVM, ipswRoot: ipswRoot, ipswPath: &ipswPath)
                     }
                 }
 
@@ -725,9 +629,72 @@ extension BaseVMStore {
     }
 }
 
-// MARK: - mist-cli download helper
+// MARK: - IPSW download helpers
 
 extension BaseVMStore {
+    private func downloadIPSWViaIPSWMe(for baseVM: VirtualMachine, ipswRoot: URL, ipswPath: inout String) async throws {
+        AppLogger.shared.log("Looking up IPSW for macOS \(baseVM.osVersion) via ipsw.me…", source: "BaseVMStore")
+        update(id: baseVM.id) { $0.buildLog.append("==> Looking up IPSW for macOS \(baseVM.osVersion) via ipsw.me…") }
+
+        let cached = (try? FileManager.default
+            .contentsOfDirectory(at: ipswRoot, includingPropertiesForKeys: nil))?
+            .first {
+                let name = $0.lastPathComponent
+                return $0.pathExtension == "ipsw" && (
+                    name == "macOS \(baseVM.osVersion).ipsw"
+                    || name.contains(baseVM.osVersion.replacingOccurrences(of: ".", with: "_"))
+                    || name.contains(baseVM.osVersion)
+                )
+            }
+
+        if let found = cached {
+            ipswPath = found.path
+            AppLogger.shared.log("Found cached IPSW: \(found.lastPathComponent)", source: "BaseVMStore")
+            update(id: baseVM.id) { $0.buildLog.append("==> Using cached IPSW: \(found.lastPathComponent)") }
+            return
+        }
+
+        let firmwares = try await IPSWService.shared.listFirmware()
+        guard let firmware = firmwares.first(where: { $0.version == baseVM.osVersion }) else {
+            let available = firmwares.prefix(5).map { $0.version }.joined(separator: ", ")
+            update(id: baseVM.id) { $0.buildLog.append("==> ERROR: macOS \(baseVM.osVersion) not found in ipsw.me. Available: \(available)…") }
+            AppLogger.shared.error("ipsw.me: version \(baseVM.osVersion) not found. Available: \(available)", source: "BaseVMStore")
+            throw BuildError.ipswDownloadFailed(baseVM.osVersion)
+        }
+
+        let standardName = "macOS \(baseVM.osVersion).ipsw"
+        AppLogger.shared.log("Downloading \(firmware.displayName) (\(firmware.formattedSize))…", source: "BaseVMStore")
+        update(id: baseVM.id) { $0.buildLog.append("==> Downloading \(firmware.displayName) (\(firmware.formattedSize)) → \(standardName)") }
+
+        var lastPct = -1
+        for await event in await IPSWService.shared.download(firmware, to: ipswRoot) {
+            switch event {
+            case .progress(let fraction, let written, let total):
+                let pct = Int(fraction * 100)
+                if pct / 5 > lastPct / 5 {
+                    lastPct = pct
+                    let wGB = String(format: "%.1f", Double(written) / 1_000_000_000)
+                    let tGB = String(format: "%.1f", Double(total) / 1_000_000_000)
+                    update(id: baseVM.id) { $0.buildLog.append("==> \(pct)%  \(wGB) / \(tGB) GB") }
+                    BuildMonitor.shared.ping()
+                }
+            case .completed(let url):
+                let dest = url.deletingLastPathComponent().appendingPathComponent(standardName)
+                if url != dest { try? FileManager.default.moveItem(at: url, to: dest) }
+                ipswPath = dest.path
+                AppLogger.shared.success("IPSW saved: \(standardName)", source: "BaseVMStore")
+                update(id: baseVM.id) { $0.buildLog.append("==> Download complete: \(standardName)") }
+            case .failed(let error):
+                throw BuildError.ipswDownloadFailed("\(baseVM.osVersion): \(error.localizedDescription)")
+            }
+        }
+
+        guard !ipswPath.isEmpty else {
+            update(id: baseVM.id) { $0.buildLog.append("==> ERROR: No IPSW downloaded for macOS \(baseVM.osVersion). Check the version is available.") }
+            throw BuildError.ipswDownloadFailed(baseVM.osVersion)
+        }
+    }
+
     func downloadWithMistCLI(baseVM: VirtualMachine, ipswRoot: URL,
                              ipswPath: inout String) async throws {
         AppLogger.shared.log("Downloading macOS \(baseVM.osVersion) via mist-cli…", source: "BaseVMStore")

@@ -148,16 +148,24 @@ struct TagPickerField: View {
     var existingTags: [String] = []
     @EnvironmentObject var tagStore: TagStore
     @State private var input = ""
-    @State private var showSuggestions = false
+    @FocusState private var isFieldFocused: Bool
+    @State private var isHoveringSuggestions = false
+    @State private var selectedSuggestionIndex: Int? = nil
     @State private var pendingNewTag: String? = nil
     @State private var pendingColorIndex: Int = 0
 
     private var suggestions: [String] {
         let q = input.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return [] }
-        return existingTags
-            .filter { !tags.contains($0) && $0.lowercased().hasPrefix(q) }
-            .prefix(8).map { $0 }
+        let available = existingTags.filter { !tags.contains($0) }
+        guard !available.isEmpty else { return [] }
+        if q.isEmpty {
+            return Array(available.prefix(5))
+        }
+        return available.filter { $0.lowercased().hasPrefix(q) }.prefix(8).map { $0 }
+    }
+
+    private var showSuggestions: Bool {
+        (isFieldFocused || isHoveringSuggestions) && !suggestions.isEmpty
     }
 
     var body: some View {
@@ -176,36 +184,56 @@ struct TagPickerField: View {
 
             // Inline palette picker for new tags
             if let newTag = pendingNewTag {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Text("Color for \"\(newTag)\"")
-                            .font(.caption).foregroundStyle(.secondary)
-                        PaletteSwatchGrid(selectedIndex: $pendingColorIndex)
-                        Button("Set") {
-                            tagStore.setPaletteIndex(pendingColorIndex, for: newTag)
-                            tags.append(newTag)
-                            pendingNewTag = nil
-                        }
-                        .buttonStyle(.borderedProminent).controlSize(.mini)
-                        Button("Skip") {
-                            let hash = newTag.unicodeScalars.reduce(5381) { $0 &* 31 &+ Int($1.value) }
-                            tagStore.setPaletteIndex(abs(hash) % TagStore.palette.count, for: newTag)
-                            tags.append(newTag)
-                            pendingNewTag = nil
-                        }
-                        .buttonStyle(.bordered).controlSize(.mini)
+                HStack(spacing: 8) {
+                    Text("Color for \"\(newTag)\"")
+                        .font(.caption).foregroundStyle(.secondary)
+                    PaletteSwatchGrid(selectedIndex: $pendingColorIndex)
+                    Button("Set") {
+                        tagStore.setPaletteIndex(pendingColorIndex, for: newTag)
+                        tags.append(newTag)
+                        pendingNewTag = nil
                     }
-                    .padding(8)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: CornerRadius.button))
+                    .buttonStyle(.borderedProminent).controlSize(.mini)
+                    Button("Skip") {
+                        let hash = newTag.unicodeScalars.reduce(5381) { $0 &* 31 &+ Int($1.value) }
+                        tagStore.setPaletteIndex(abs(hash) % TagStore.palette.count, for: newTag)
+                        tags.append(newTag)
+                        pendingNewTag = nil
+                    }
+                    .buttonStyle(.bordered).controlSize(.mini)
                 }
+                .padding(8)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: CornerRadius.button))
             }
 
             HStack(spacing: 6) {
                 TextField("Add tag…", text: $input)
                     .textFieldStyle(.plain)
-                    .onSubmit { commitInput() }
-                    .onChange(of: input) { _, v in
-                        showSuggestions = !v.trimmingCharacters(in: .whitespaces).isEmpty
+                    .focused($isFieldFocused)
+                    .onSubmit {
+                        if let idx = selectedSuggestionIndex, idx < suggestions.count {
+                            applyTag(suggestions[idx])
+                        } else {
+                            commitInput()
+                        }
+                    }
+                    .onChange(of: input) { _, _ in selectedSuggestionIndex = nil }
+                    .onKeyPress(.downArrow) {
+                        guard !suggestions.isEmpty else { return .ignored }
+                        selectedSuggestionIndex = selectedSuggestionIndex
+                            .map { min($0 + 1, suggestions.count - 1) } ?? 0
+                        return .handled
+                    }
+                    .onKeyPress(.upArrow) {
+                        guard let idx = selectedSuggestionIndex else { return .ignored }
+                        selectedSuggestionIndex = idx > 0 ? idx - 1 : nil
+                        return .handled
+                    }
+                    .onKeyPress(.tab) {
+                        let tag = selectedSuggestionIndex.map { suggestions[$0] } ?? suggestions.first
+                        guard let tag else { return .ignored }
+                        applyTag(tag)
+                        return .handled
                     }
                 if !input.isEmpty {
                     Button("Add") { commitInput() }
@@ -213,28 +241,55 @@ struct TagPickerField: View {
                 }
             }
 
-            if showSuggestions && !suggestions.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                        ForEach(Array(suggestions.enumerated()), id: \.offset) { _, s in
-                            Button {
-                                tags.append(s); input = ""; showSuggestions = false
-                            } label: {
-                                TagChip(tag: s)
+            if showSuggestions {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(input.trimmingCharacters(in: .whitespaces).isEmpty
+                             ? "Available tags" : "Matching tags")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        Spacer()
+                        Text("↓↑ navigate · ↵ or Tab to apply")
+                            .font(.caption2)
+                            .foregroundStyle(.quaternary)
+                    }
+                    .padding(.horizontal, 2)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 4) {
+                            ForEach(Array(suggestions.enumerated()), id: \.offset) { i, tag in
+                                Button { applyTag(tag) } label: {
+                                    TagChip(tag: tag)
+                                        .overlay(
+                                            selectedSuggestionIndex == i
+                                                ? Capsule().strokeBorder(.primary.opacity(0.45), lineWidth: 1.5)
+                                                : nil
+                                        )
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
+                .padding(8)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: CornerRadius.button))
+                .onHover { isHoveringSuggestions = $0 }
             }
         }
+    }
+
+    private func applyTag(_ tag: String) {
+        guard !tags.contains(tag) else { return }
+        tags.append(tag)
+        input = ""
+        selectedSuggestionIndex = nil
+        isHoveringSuggestions = false
     }
 
     private func commitInput() {
         let t = input.trimmingCharacters(in: .whitespaces)
         guard !t.isEmpty, !tags.contains(t) else { input = ""; return }
         input = ""
-        showSuggestions = false
+        selectedSuggestionIndex = nil
         if tagStore.colorIndices[t] != nil {
             tags.append(t)
         } else {

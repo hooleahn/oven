@@ -16,6 +16,7 @@ final class BuildSessionManager: ObservableObject {
     private var sleepAssertionActive = false
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    private var eventTapContext: Unmanaged<BuildSessionManager>?
 
     private init() {}
 
@@ -137,7 +138,9 @@ final class BuildSessionManager: ObservableObject {
         ]
         let mask: CGEventMask = types.reduce(0) { $0 | (1 << $1.rawValue) }
 
-        let selfPtr = Unmanaged.passRetained(self).toOpaque()
+        let retained = Unmanaged.passRetained(self)
+        eventTapContext = retained
+        let selfPtr = retained.toOpaque()
 
         // Use .cghidEventTap to intercept at the lowest level before the session
         // This ensures events are blocked even from other apps
@@ -155,7 +158,8 @@ final class BuildSessionManager: ObservableObject {
         )
 
         guard let tap = eventTap else {
-            Unmanaged<BuildSessionManager>.fromOpaque(selfPtr).release()
+            eventTapContext?.release()
+            eventTapContext = nil
             AppLogger.shared.warning("Could not create CGEventTap for input lock", source: "BuildSessionManager")
             return
         }
@@ -263,6 +267,8 @@ final class BuildSessionManager: ObservableObject {
         if let src = runLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), src, .commonModes)
         }
+        eventTapContext?.release()
+        eventTapContext = nil
         eventTap = nil
         runLoopSource = nil
         isLocked = false

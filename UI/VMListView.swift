@@ -45,6 +45,7 @@ struct VMListView: View {
             .task { updateWindowTitle() }
             .onChange(of: model.selectedIDs, initial: false) { _, newIDs in
                 appState.selectedVMID = newIDs.count == 1 ? newIDs.first : nil
+                if newIDs.isEmpty { model.selectedVM = nil }
                 updateWindowTitle()
             }
             .onChange(of: model.selectedVM, initial: false) { _, vm in
@@ -433,7 +434,15 @@ struct VMListView: View {
                     VMCard(
                         vm: vm,
                         isSelected: model.selectedVM?.id == vm.id,
-                        onSelect: { model.selectedVM = (model.selectedVM?.id == vm.id) ? nil : vm },
+                        onSelect: {
+                            if model.selectedVM?.id == vm.id {
+                                model.selectedVM = nil
+                                model.selectedIDs = []
+                            } else {
+                                model.selectedVM = vm
+                                model.selectedIDs = [vm.id]
+                            }
+                        },
                         onStart: { model.pendingLaunchVM = vm },
                         onStop:  { model.confirmStop = vm },
                         onEdit:  { model.editingVM = vm },
@@ -443,6 +452,10 @@ struct VMListView: View {
                 }
             }
             .padding(14)
+        }
+        .onTapGesture {
+            model.selectedVM = nil
+            model.selectedIDs = []
         }
     }
 

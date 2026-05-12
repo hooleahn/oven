@@ -89,7 +89,10 @@ struct VMEditSheet: View {
     private var allKnownTags: [String] {
         let fromVMs = vmStore.vms.flatMap { $0.tags }
         let fromStore = tagStore.managedTags
-        return Array(Set(fromVMs + fromStore)).sorted()
+        var freq: [String: Int] = [:]
+        for tag in fromVMs { freq[tag, default: 0] += 1 }
+        return Array(Set(fromVMs + fromStore))
+            .sorted { (freq[$0] ?? 0) > (freq[$1] ?? 0) }
     }
 
     /// Max vCPUs to offer: host core count minus 2 for the host OS, minimum 1.
