@@ -505,7 +505,6 @@ struct BootCommandDetailPane: View {
     let onDelete: () -> Void
     let onSave: (BootCommandBlock) -> Void
 
-    @State private var showingEditSheet = false
     @State private var copied = false
     @State private var diagnostics: [BootCommandLinter.Diagnostic] = []
 
@@ -514,12 +513,15 @@ struct BootCommandDetailPane: View {
     @State private var editedDescription: String = ""
     @State private var editedOSName: String = ""
     @State private var editedOSVersion: String = ""
+    @State private var editedCommandText: String = ""
     @State private var isDirty = false
+    @State private var isCommandDirty = false
     @State private var isLoading = false
     @State private var sofaVersions: [String] = []
     @State private var isFetchingVersions = false
 
     private var canEdit: Bool { !cmd.isBase }
+    private var isAnyDirty: Bool { isDirty || isCommandDirty }
 
     private var versionList: [String] {
         sofaVersions.isEmpty
@@ -537,18 +539,23 @@ struct BootCommandDetailPane: View {
         isFetchingVersions = false
     }
 
-    // Read-only text binding for the editor
-    private var commandText: String { cmd.commandLines.joined(separator: "\n") }
-
     var body: some View {
         VStack(spacing: 0) {
             toolbar
             Divider()
             cmdHeader
             Divider()
-            // Syntax-highlighted read-only display
-            BootCommandEditor(text: .constant(commandText), isEditable: false, onChange: {})
-            // Diagnostics panel (read-only view of linter results)
+            BootCommandEditor(
+                text: canEdit
+                    ? Binding(
+                        get: { editedCommandText },
+                        set: { editedCommandText = $0; if !isLoading { isCommandDirty = true } }
+                    )
+                    : .constant(cmd.commandLines.joined(separator: "\n")),
+                isEditable: canEdit,
+                onChange: { runLinter() }
+            )
+            // Diagnostics panel
             if !diagnostics.isEmpty {
                 Divider()
                 ScrollView {
@@ -573,18 +580,15 @@ struct BootCommandDetailPane: View {
         }
         .onAppear {
             syncFromCmd()
-            diagnostics = BootCommandLinter.lint(lines: cmd.commandLines)
+            runLinter()
         }
         .onChange(of: cmd.id) { _, _ in
             syncFromCmd()
-            diagnostics = BootCommandLinter.lint(lines: cmd.commandLines)
+            runLinter()
         }
         .task { await loadVersions(for: editedOSName) }
         .onChange(of: editedOSName) { _, newName in
             if canEdit { Task { await loadVersions(for: newName) } }
-        }
-        .sheet(isPresented: $showingEditSheet) {
-            BootCommandEditSheet(cmd: cmd) { updated in onSave(updated) }
         }
     }
 
@@ -603,7 +607,7 @@ struct BootCommandDetailPane: View {
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(.quaternary, in: Capsule())
                             .foregroundStyle(.secondary)
-                    } else if isDirty {
+                    } else if isAnyDirty {
                         Text("Edited")
                             .font(.caption).fontWeight(.medium)
                             .padding(.horizontal, 6).padding(.vertical, 2)
@@ -644,14 +648,11 @@ struct BootCommandDetailPane: View {
                 Button("Create Custom Copy", action: onDuplicate)
                     .buttonStyle(.bordered)
             } else {
-                Button("Revert") { syncFromCmd() }.disabled(!isDirty)
+                Button("Revert") { syncFromCmd() }.disabled(!isAnyDirty)
                 Button("Save") { commitSave() }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut("s", modifiers: .command)
-                    .disabled(!isDirty)
-                Divider().frame(height: 16)
-                Button("Edit Commands") { showingEditSheet = true }
-                    .buttonStyle(.bordered)
+                    .disabled(!isAnyDirty)
                 Divider().frame(height: 16)
                 Button(action: onDuplicate) { Image(systemName: "doc.on.doc") }
                     .buttonStyle(.borderless).help("Duplicate")
@@ -746,16 +747,31 @@ struct BootCommandDetailPane: View {
         editedDescription   = cmd.blockDescription
         editedOSName        = cmd.osName
         editedOSVersion     = cmd.osVersion
+        editedCommandText   = cmd.commandLines.joined(separator: "\n")
         isDirty             = false
+        isCommandDirty      = false
         Task { @MainActor in self.isLoading = false }
     }
 
+    private func runLinter() {
+        let source = canEdit ? editedCommandText : cmd.commandLines.joined(separator: "\n")
+        let lines = source
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        diagnostics = BootCommandLinter.lint(lines: lines)
+    }
+
     private func commitSave() {
+        let lines = editedCommandText
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
         let updated = BootCommandBlock(
             id: cmd.id,
             displayName: editedDisplayName.trimmingCharacters(in: .whitespaces),
             blockDescription: editedDescription,
-            commandLines: cmd.commandLines,
+            commandLines: lines,
             isBase: false,
             createdAt: cmd.createdAt,
             osName: editedOSName,
@@ -763,5 +779,6 @@ struct BootCommandDetailPane: View {
         )
         onSave(updated)
         isDirty = false
+        isCommandDirty = false
     }
 }

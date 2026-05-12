@@ -6,11 +6,29 @@ import AppKit
 private class LineNumberTextView: NSTextView {
     private let gutterWidth: CGFloat = 44
     private let gutterPadding: CGFloat = 6
+    private static let focusedBackground = NSColor(red: 49/255, green: 52/255, blue: 69/255, alpha: 1.0)
+    weak var owningScrollView: NSScrollView?
 
     // Called once after init to apply the left inset that makes room for numbers.
     func setupGutter() {
         textContainerInset = NSSize(width: 8, height: 10)
         textContainer?.lineFragmentPadding = gutterWidth
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        let result = super.becomeFirstResponder()
+        if result && isEditable {
+            backgroundColor = Self.focusedBackground
+            owningScrollView?.backgroundColor = Self.focusedBackground
+        }
+        return result
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let result = super.resignFirstResponder()
+        backgroundColor = .textBackgroundColor
+        owningScrollView?.backgroundColor = .textBackgroundColor
+        return result
     }
 
     override func drawBackground(in rect: NSRect) {
@@ -111,6 +129,7 @@ struct HCLEditor: NSViewRepresentable {
         tv.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
         tv.allowsUndo = true
         tv.setupGutter()
+        tv.owningScrollView = scrollView
         tv.delegate = context.coordinator
         tv.string = text
         context.coordinator.textView = tv
