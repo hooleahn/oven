@@ -231,6 +231,7 @@ final class DependencyManager: ObservableObject {
         case "packer":   return paths.packer
         case "mist-cli": return paths.mistCli
         case "jq":       return paths.jq
+        case "sshpass":  return paths.sshpass
         default:         return ""
         }
     }
@@ -533,9 +534,16 @@ final class DependencyManager: ObservableObject {
     // MARK: - Version reading
 
     private func readVersion(binaryPath: String, id: String) async throws -> String {
-        let flag = id == "packer" ? "version" : "--version"
-        let (stdout, _) = try await processRunner.run(binaryPath, arguments: [flag])
-        let first = stdout.components(separatedBy: .newlines).first ?? stdout
+        let flag: String
+        switch id {
+        case "packer":  flag = "version"
+        case "sshpass": flag = "-V"
+        default:        flag = "--version"
+        }
+        let (stdout, stderr) = try await processRunner.run(binaryPath, arguments: [flag])
+        // sshpass writes version info to stderr
+        let output = stdout.isEmpty ? stderr : stdout
+        let first = output.components(separatedBy: .newlines).first ?? output
         if let r = first.range(of: #"(\d+\.\d+[\.\d]*)"#, options: .regularExpression) {
             return String(first[r])
         }
@@ -590,6 +598,13 @@ final class DependencyManager: ObservableObject {
                 requiredForLaunch: true,
                 installURL: URL(string: "https://github.com/jqlang/jq/releases")
             )
+        case "sshpass":
+            return DepMeta(
+                purpose: "Non-interactive SSH password provider for executing remote commands on VMs",
+                icon: "key.horizontal",
+                requiredForLaunch: false,
+                installURL: URL(string: "https://formulae.brew.sh/formula/sshpass")
+            )
         default:
             return DepMeta(purpose: "", icon: "wrench", requiredForLaunch: false, installURL: nil)
         }
@@ -611,11 +626,12 @@ final class DependencyManager: ObservableObject {
                                   status: exists ? .installed : .notInstalled)
             }
             dependencies = [
-                customDep("tart",               "tart",               paths.tart,    required: true),
-                customDep("packer",             "packer",             paths.packer,  required: true),
-                customDep("mist-cli",           "mist-cli",           paths.mistCli, required: false),
-                customDep("tart-packer-plugin", "packer-plugin-tart", "",            required: true),
-                customDep("jq",                 "jq",                 paths.jq,      required: true),
+                customDep("tart",               "tart",               paths.tart,       required: true),
+                customDep("packer",             "packer",             paths.packer,     required: true),
+                customDep("mist-cli",           "mist-cli",           paths.mistCli,    required: false),
+                customDep("tart-packer-plugin", "packer-plugin-tart", "",               required: true),
+                customDep("jq",                 "jq",                 paths.jq,         required: true),
+                customDep("sshpass",            "sshpass",            paths.sshpass,    required: false),
             ]
             return
         }
@@ -641,6 +657,14 @@ final class DependencyManager: ObservableObject {
                               installURL: info.installURL, systemBinaryPath: nil,
                               status: status)
         }
+        // sshpass is not auto-downloaded; detect from known homebrew/system paths
+        let sshpassCandidates = ["/opt/homebrew/bin/sshpass", "/usr/local/bin/sshpass", "/opt/local/bin/sshpass",
+                                  depsDirectory.appendingPathComponent("sshpass").path]
+        let sshpassFoundAt = sshpassCandidates.first { FileManager.default.fileExists(atPath: $0) }
+        let sshpassBinaryURL = sshpassFoundAt.map { URL(fileURLWithPath: $0) }
+            ?? depsDirectory.appendingPathComponent("sshpass")
+        let sshpassStatus: Dependency.Status = sshpassFoundAt != nil ? .installed : .notInstalled
+
         dependencies = [
             dep("tart",               "tart",
                 currentVersion: m.tart,
@@ -662,6 +686,10 @@ final class DependencyManager: ObservableObject {
                 currentVersion: m.jq,
                 binaryPath: depsDirectory.appendingPathComponent("jq"),
                 isRequired: true, status: st("jq", m.jq)),
+            dep("sshpass",            "sshpass",
+                currentVersion: m.sshpass,
+                binaryPath: sshpassBinaryURL,
+                isRequired: false, status: sshpassStatus),
         ]
     }
 
@@ -738,6 +766,7 @@ final class DependencyManager: ObservableObject {
             case "mist-cli":           m.mistCLI = dep.currentVersion
             case "tart-packer-plugin": m.tartPackerPlugin = dep.currentVersion
             case "jq":                 m.jq = dep.currentVersion
+            case "sshpass":            m.sshpass = dep.currentVersion
             default: break
             }
         }

@@ -49,6 +49,7 @@ struct DepsManifest: Codable {
     var mistCLI: String?
     var tartPackerPlugin: String?
     var jq: String?
+    var sshpass: String?
 
     enum CodingKeys: String, CodingKey {
         case tart
@@ -56,5 +57,6 @@ struct DepsManifest: Codable {
         case mistCLI = "mist-cli"
         case tartPackerPlugin = "tart-packer-plugin"
         case jq
+        case sshpass
     }
 }

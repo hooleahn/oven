@@ -32,9 +32,10 @@ struct AppSettings: Codable {
         var packer: String = ""
         var mistCli: String = ""
         var jq: String = ""
+        var sshpass: String = ""
 
         enum CodingKeys: String, CodingKey {
-            case tart, packer, mistCli = "mist-cli", jq
+            case tart, packer, mistCli = "mist-cli", jq, sshpass
         }
 
         init() {}
@@ -45,6 +46,7 @@ struct AppSettings: Codable {
             packer  = (try? c.decodeIfPresent(String.self, forKey: .packer))  ?? ""
             mistCli = (try? c.decodeIfPresent(String.self, forKey: .mistCli)) ?? ""
             jq      = (try? c.decodeIfPresent(String.self, forKey: .jq))      ?? ""
+            sshpass = (try? c.decodeIfPresent(String.self, forKey: .sshpass)) ?? ""
         }
     }
 

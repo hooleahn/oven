@@ -447,7 +447,15 @@ struct VMListView: View {
                         onStop:  { model.confirmStop = vm },
                         onEdit:  { model.editingVM = vm },
                         onClone: { model.cloneVM = vm },
-                        onDelete: { model.confirmDelete = vm }
+                        onDelete: { model.confirmDelete = vm },
+                        onExecSSH: {
+                            model.executeCommandVM = vm
+                            model.executeCommandMethod = .ssh
+                        },
+                        onExecGuestAgent: {
+                            model.executeCommandVM = vm
+                            model.executeCommandMethod = .guestAgent
+                        }
                     )
                 }
             }
@@ -474,6 +482,14 @@ struct VMListView: View {
                     onDelete: { model.confirmDelete = vm },
                     onPin:   { vmStore.update(id: vm.id) { $0.isPinned.toggle() } },
                     onPush:  { model.pushVM = vm },
+                    onExecSSH: {
+                        model.executeCommandVM = vm
+                        model.executeCommandMethod = .ssh
+                    },
+                    onExecGuestAgent: {
+                        model.executeCommandVM = vm
+                        model.executeCommandMethod = .guestAgent
+                    },
                     onTagTap: { tag in
                         model.selectedTagFilters = [tag]
                     },
@@ -767,6 +783,14 @@ private struct VMListSheets: ViewModifier {
                     }
                 }
             }
+            .sheet(isPresented: Binding(
+                get: { model.executeCommandVM != nil },
+                set: { if !$0 { model.executeCommandVM = nil } }
+            )) {
+                if let vm = model.executeCommandVM {
+                    ExecuteCommandSheet(vm: vm, initialMethod: model.executeCommandMethod)
+                }
+            }
     }
 
     private func pushVM(_ vm: VirtualMachine, to imageRef: String, credentials: [RegistryCredential]) async {
@@ -874,6 +898,8 @@ struct VMListRow: View {
     let onDelete: () -> Void
     var onPin:  (() -> Void)? = nil
     var onPush: (() -> Void)? = nil
+    var onExecSSH: (() -> Void)? = nil
+    var onExecGuestAgent: (() -> Void)? = nil
     var onTagTap: ((String) -> Void)? = nil
     var onTagShiftTap: ((String) -> Void)? = nil
 
@@ -927,6 +953,20 @@ struct VMListRow: View {
                     Label("Push to Registry…", systemImage: "arrow.up.circle")
                 }
                 .disabled(vm.status != .stopped)
+                if vm.status == .running {
+                    Divider()
+                    Button {
+                        onExecSSH?()
+                    } label: {
+                        Label("Execute via SSH…", systemImage: "terminal")
+                    }
+                    .disabled(vm.ipAddress == nil)
+                    if vm.supportsGuestAgent {
+                        Button { onExecGuestAgent?() } label: {
+                            Label("Execute via Guest Agent…", systemImage: "bolt.horizontal.circle")
+                        }
+                    }
+                }
                 Divider()
                 Button(role: .destructive) { onDelete() } label: {
                     Label("Delete…", systemImage: "trash")

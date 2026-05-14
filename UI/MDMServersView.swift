@@ -218,10 +218,14 @@ struct MDMServerDetailPane: View {
                         DetailRow("Authentication Type", server.serverAuthType)
                         DetailRow(server.serverAuthType == "API Client" ? "Client ID" : "Username", server.serverUsername)
                         DetailRow(server.serverAuthType == "API Client" ? "API Client Secret" : "Password", server.serverPassword != nil ? "Stored in Keychain" : "Not set")
-                        DetailRow("Features", featuresLabel(for: server))
+                    }
+                    DetailSection("Features") {
+                        DetailRow("Check Enrollment Status", featuresLabel(for: server, featureName: "EnrollmentStatus"))
+                        DetailRow("Delete Computers", featuresLabel(for: server, featureName: "DeleteComputers"))
+                        DetailRow("Check Invitation Status", featuresLabel(for: server, featureName: "InvitationStatus"))
                     }
                     if let result = server.lastTestResult {
-                        DetailSection("Last Test") {
+                        DetailSection("Last Test Result") {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(result)
                                     .font(.callout)
@@ -262,6 +266,7 @@ struct MDMServerDetailPane: View {
                                 .padding(.horizontal, 14).padding(.vertical, 8)
                             }
                         }
+                        
                         DetailSection("Privileges") {
                             PrivilegesListView(privileges: server.storedPrivileges)
                         }
@@ -296,14 +301,35 @@ struct MDMServerDetailPane: View {
         }
     }
 
-    private func featuresLabel(for server: MDMServer) -> String {
-        let labels: [(Bool, String)] = [
-            (server.featureCheckEnrollment,       "Enrollment Check"),
-            (server.featureDeleteFromJamf,        "Delete from Jamf"),
-            (server.featureCheckInvitationStatus, "Invitation Status"),
-        ]
-        let enabled = labels.filter(\.0).map(\.1)
-        return enabled.isEmpty ? "None enabled" : enabled.joined(separator: ", ")
+    private func featuresLabel(for server: MDMServer, featureName: String) -> String {
+        switch featureName {
+        case "EnrollmentStatus":
+            if !server.featureCheckEnrollment {
+                print("🚨 \(server.friendlyName) is not checking enrollment status")
+                return "Not enabled"
+            } else {
+                print("🚨 \(server.friendlyName) is checking enrollment status")
+                return "Enabled"
+            }
+        case "InvitationStatus":
+            if !server.featureCheckInvitationStatus {
+                print("🚨 \(server.friendlyName) is not checking invitation status")
+                return "Not enabled"
+            } else {
+                print("🚨 \(server.friendlyName) is checking invitation status")
+                return "Enabled"
+            }
+        case "DeleteComputers":
+            if !server.featureDeleteFromJamf {
+                print("🚨 \(server.friendlyName) is not deleting from Jamf")
+                return "Not enabled"
+            } else {
+                print("🚨 \(server.friendlyName) is deleting from Jamf")
+                return "Enabled"
+            }
+        default:
+                return "Not implemented"
+        }
     }
 
     private func testConnection(server: MDMServer) async {

@@ -10,6 +10,8 @@ struct VMCard: View {
     let onEdit: () -> Void
     let onClone: () -> Void
     let onDelete: () -> Void
+    let onExecSSH: () -> Void
+    let onExecGuestAgent: () -> Void
 
     @State private var isHovered = false
 
@@ -137,10 +139,35 @@ struct VMCard: View {
                     Image(systemName: "doc.on.doc").frame(width: 26, height: 26)
                 }
                 .buttonStyle(.bordered).controlSize(.small).help("Clone")
-                Button(role: .destructive, action: onDelete) {
-                    Image(systemName: "trash").frame(width: 26, height: 26)
+                Menu {
+                    if vm.status == .running {
+                        Button { onExecSSH() } label: {
+                            Label("Execute via SSH…", systemImage: "terminal")
+                        }
+                        .disabled(vm.ipAddress == nil)
+                        if vm.supportsGuestAgent {
+                            Button { onExecGuestAgent() } label: {
+                                Label("Execute via Guest Agent…", systemImage: "bolt.horizontal.circle")
+                            }
+                        }
+                        Divider()
+                    }
+                    Button(role: .destructive, action: onDelete) {
+                        Label("Delete…", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(width: 6.5, height: 0.5)
+                        .padding()
+                        .foregroundColor(Color.accentColor)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(Color.accentColor.opacity(0.05)))
                 }
-                .buttonStyle(.bordered).controlSize(.small).help("Delete")
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
+                .buttonStyle(.plain)
+                .controlSize(.small)
+                .frame(height: 26)
+                .help("More actions")
             }
             .padding(.horizontal, Spacing.md - 2) // ≈ 10 pt
             .padding(.bottom, Spacing.md - 2)
@@ -165,7 +192,7 @@ struct VMCard: View {
         if v.contains("sonoma")   { return "wallpaper-sonoma" }
         if v.contains("ventura")  { return "wallpaper-ventura" }
         if v.contains("monterey") { return "wallpaper-monterey" }
-        return nil
+        return "wallpaper-tiger"
     }
 
     private var osIcon: String {

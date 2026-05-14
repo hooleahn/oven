@@ -18,6 +18,8 @@ struct VMDetailPane: View {
     @State private var isLoadingConfig = false
     @State private var confirmStop: VirtualMachine? = nil
     @SceneStorage("vmDetailPane.logInspectorOpen") private var logInspectorOpen = false
+    @State private var isPresentingExecSheet = false
+    @State private var execInitialMethod: ExecMethod = .ssh
 
     // Service reachability
     @State private var vncReachable: Bool? = nil
@@ -47,218 +49,7 @@ struct VMDetailPane: View {
             Divider()
 
             // ── Grouped form ────────────────────────────────────────────────
-            Form {
-                Section("Configuration") {
-                    // Refresh row
-                    HStack(spacing: 4) {
-                        Spacer()
-                        if isLoadingConfig {
-                            ProgressView().controlSize(.mini)
-                        } else {
-                            Button { Task { await loadLiveConfig() } } label: {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.caption2).foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .help("Refresh from tart")
-                        }
-                    }
-
-                    let cpu = liveConfig?.cpu.map { "\($0) vCPU" } ?? "\(vm.cpuCount) vCPU"
-                    let mem = liveConfig?.memory.map { "\($0 / 1024) GB" } ?? "\(vm.memoryGB) GB"
-                    let diskMax = liveConfig?.disk.map { "\($0) GB" } ?? "\(vm.diskGB) GB"
-                    let disk = vm.actualDiskGB.map { "\(diskMax) max · \($0) GB used" } ?? diskMax
-                    let osLabel = vm.osDisplayLabel
-
-                    LabeledContent("CPU")    { Text(cpu).foregroundStyle(.secondary) }
-                    LabeledContent("Memory") { Text(mem).foregroundStyle(.secondary) }
-                    LabeledContent("Disk")   { Text(disk).foregroundStyle(.secondary) }
-                    LabeledContent("macOS")  { Text(osLabel).foregroundStyle(.secondary) }
-                    if let display = liveConfig?.display {
-                        LabeledContent("Display") { Text(display).foregroundStyle(.secondary) }
-                    }
-                    LabeledContent("S/N") {
-                        Text(vm.serialNumber.isEmpty ? "—" : vm.serialNumber)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section("Network") {
-                    LabeledContent("IP Address") {
-                        if let ip = vm.ipAddress, !ip.isEmpty {
-                            HStack(spacing: 6) {
-                                SelectableMonoText(ip)
-                                CopyButton(value: ip)
-                            }
-                        } else {
-                            Text("—").foregroundStyle(.secondary)
-                        }
-                    }
-                    if let ip = vm.ipAddress, !ip.isEmpty {
-                        let sshUser = vm.sshUsername.isEmpty ? "baker" : vm.sshUsername
-                        let vncURL = vm.sshUsername.isEmpty ? "vnc://\(ip)" : "vnc://\(vm.sshUsername)@\(ip)"
-                        LabeledContent("VNC") {
-                            HStack(spacing: 6) {
-                                SelectableMonoText(vncURL)
-                                PortStatusDot(reachable: vncReachable, isChecking: isCheckingPorts)
-                                CopyButton(value: vncURL)
-                                Button("Open…") { if let url = URL(string: vncURL) { NSWorkspace.shared.open(url) } }
-                                    .buttonStyle(.bordered).controlSize(.mini)
-                            }
-                        }
-
-                        let sshCmd = "ssh \(sshUser)@\(ip)"
-                        LabeledContent("SSH") {
-                            HStack(spacing: 6) {
-                                SelectableMonoText(sshCmd)
-                                PortStatusDot(reachable: sshReachable, isChecking: isCheckingPorts)
-                                CopyButton(value: sshCmd)
-                                Button("Open…") { openSSH(vm: vm) }
-                                    .buttonStyle(.bordered).controlSize(.mini)
-                            }
-                        }
-                    } else {
-                        LabeledContent("SSH") { Text("Port 22").foregroundStyle(.secondary) }
-                    }
-                    if !vm.sshUsername.isEmpty {
-                        LabeledContent("Username") {
-                            HStack(spacing: 6) {
-                                SelectableMonoText(vm.sshUsername)
-                                CopyButton(value: vm.sshUsername)
-                            }
-                        }
-                    }
-                    if vm.sshPassword != nil {
-                        LabeledContent("Password") {
-                            HStack(spacing: 6) {
-                                if let pwd = revealedPassword {
-                                    SelectableMonoText(pwd)
-                                    CopyButton(value: pwd)
-                                    Button {
-                                        revealedPassword = nil
-                                    } label: {
-                                        Image(systemName: "eye.slash")
-                                    }
-                                    .buttonStyle(.bordered).controlSize(.mini)
-                                    .help("Hide password")
-                                } else {
-                                    Text("Stored in Keychain").foregroundStyle(.secondary)
-                                    if isAuthenticating {
-                                        ProgressView().controlSize(.mini)
-                                    } else {
-                                        Button {
-                                            Task { await revealPassword() }
-                                        } label: {
-                                            Image(systemName: "eye")
-                                        }
-                                        .buttonStyle(.bordered).controlSize(.mini)
-                                        .help("Reveal password")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Section("Identity & Dates") {
-                    if !vm.description.isEmpty {
-                        LabeledContent("Description") {
-                            Text(vm.description)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .textSelection(.enabled)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    if !vm.displayName.isEmpty && vm.displayName != vm.name {
-                        LabeledContent("Display name") {
-                            Text(vm.displayName).foregroundStyle(.secondary)
-                        }
-                    }
-                    LabeledContent("Tart name") {
-                        SelectableMonoText(vm.name)
-                    }
-                    LabeledContent("Created") {
-                        Text(vm.createdAt.formatted(date: .numeric, time: .omitted))
-                            .foregroundStyle(.secondary)
-                    }
-                    LabeledContent("Last started") {
-                        Text(vm.lastStartedAt.map {
-                            $0.formatted(date: .numeric, time: .shortened)
-                        } ?? "Never")
-                        .foregroundStyle(.secondary)
-                    }
-                    if !vm.tags.isEmpty {
-                        LabeledContent("Tags") {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 4) {
-                                    ForEach(Array(vm.tags.enumerated()), id: \.offset) { _, tag in
-                                        TagChip(tag: tag)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Origin: base VM it was cloned from
-                if let baseID = vm.baseVMID,
-                   let baseVM = baseVMStore.baseVMs.first(where: { $0.id == baseID }) {
-                    Section("Origin") {
-                        LabeledContent("Base VM") { Text(baseVM.name).foregroundStyle(.secondary) }
-                        LabeledContent("macOS") {
-                            Text("\(baseVM.osName.rawValue) \(baseVM.osVersion)")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                // MDM enrollment
-                if theme.mdmEnabled && (vm.mdmProfileID != nil || vm.mdmServerID != nil || canLookUpEnrollment) {
-                    Section("MDM") {
-                        if let serverID = vm.mdmServerID,
-                           let server = serverStore.servers.first(where: { $0.id == serverID }) {
-                            LabeledContent("Server") {
-                                Text(server.friendlyName).foregroundStyle(.secondary)
-                            }
-                        }
-                        if let profileID = vm.mdmProfileID,
-                           let name = loadProfileName(id: profileID) {
-                            LabeledContent("Profile") {
-                                Text(name).foregroundStyle(.secondary)
-                            }
-                        }
-                        if canLookUpEnrollment {
-                            MDMEnrollmentStatusRow(
-                                vm: vm,
-                                server: serverStore.servers.first(where: { $0.id == vm.mdmServerID }),
-                                status: enrollmentStatus,
-                                error: enrollmentError,
-                                isLoading: isLookingUpEnrollment
-                            ) {
-                                Task { await lookUpEnrollment() }
-                            }
-                        }
-                    }
-                }
-
-                if let ref = vm.registryImageRef {
-                    Section("Registry") {
-                        LabeledContent("Image") { Text(ref).foregroundStyle(.secondary) }
-                    }
-                }
-
-                // Push progress (shown when a push is in-flight)
-                if let prog = pushProgress {
-                    Section {
-                        VStack(spacing: 4) {
-                            ProgressView(value: prog).progressViewStyle(.linear)
-                            Text("Pushing… \(Int(prog * 100))%")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-            .formStyle(.grouped)
+            detailForm
         }
         .background(.windowBackground)
         .background(.bar, in: Rectangle())
@@ -305,6 +96,23 @@ struct VMDetailPane: View {
                             Label("Open SSH in Terminal", systemImage: "terminal")
                         }
                         .disabled(vm.ipAddress == nil)
+
+                        Button {
+                            execInitialMethod = .ssh
+                            isPresentingExecSheet = true
+                        } label: {
+                            Label("Execute command via SSH…", systemImage: "terminal")
+                        }
+                        .disabled(vm.ipAddress == nil)
+
+                        if vm.supportsGuestAgent {
+                            Button {
+                                execInitialMethod = .guestAgent
+                                isPresentingExecSheet = true
+                            } label: {
+                                Label("Execute command via Tart Guest Agent…", systemImage: "bolt.horizontal.circle")
+                            }
+                        }
 
                         Button {
                             Task { await vmStore.refreshIP(for: vm) }
@@ -379,6 +187,9 @@ struct VMDetailPane: View {
                 Task { await pushVM(to: imageRef, credentials: credentials) }
             }
         }
+        .sheet(isPresented: $isPresentingExecSheet) {
+            ExecuteCommandSheet(vm: vm, initialMethod: execInitialMethod)
+        }
         .alert("Push failed", isPresented: Binding(
             get: { pushError != nil }, set: { if !$0 { pushError = nil } }
         )) {
@@ -413,9 +224,9 @@ struct VMDetailPane: View {
             }
         }
         .onChange(of: vm.status) { _, newStatus in
-            if newStatus == .running && vm.ipAddress == nil {
-                Task { await vmStore.refreshIP(for: vm) }
-            }
+            guard newStatus == .running else { return }
+            guard vm.ipAddress == nil else { return }
+            Task { await vmStore.refreshIP(for: vm) }
         }
         .task(id: vm.ipAddress) {
             await checkServiceReachability()
@@ -423,13 +234,245 @@ struct VMDetailPane: View {
     }
 
 
+    // MARK: - Detail form
+
+    private var detailForm: some View {
+        Form {
+            Section("Configuration") {
+                // Refresh row
+                HStack(spacing: 4) {
+                    Spacer()
+                    if isLoadingConfig {
+                        ProgressView().controlSize(.mini)
+                    } else {
+                        Button { Task { await loadLiveConfig() } } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Refresh from tart")
+                    }
+                }
+
+                let cpu = liveConfig?.cpu.map { "\($0) vCPU" } ?? "\(vm.cpuCount) vCPU"
+                let rawMem = liveConfig?.memory
+                let mem = rawMem.map { "\($0 / 1024) GB" } ?? "\(vm.memoryGB) GB"
+                let diskMax = liveConfig?.disk.map { "\($0) GB" } ?? "\(vm.diskGB) GB"
+                let disk = vm.actualDiskGB.map { "\(diskMax) max · \($0) GB used" } ?? diskMax
+                let osLabel = vm.osDisplayLabel
+
+                LabeledContent("CPU")    { Text(cpu).foregroundStyle(.secondary) }
+                LabeledContent("Memory") { Text(mem).foregroundStyle(.secondary) }
+                LabeledContent("Disk")   { Text(disk).foregroundStyle(.secondary) }
+                LabeledContent("macOS")  { Text(osLabel).foregroundStyle(.secondary) }
+                if let display = liveConfig?.display {
+                    LabeledContent("Display") { Text(display).foregroundStyle(.secondary) }
+                }
+                LabeledContent("S/N") {
+                    Text(vm.serialNumber.isEmpty ? "—" : vm.serialNumber)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Connectivity") {
+                LabeledContent("IP Address") {
+                    if vm.status == .running, let ip = vm.ipAddress, !ip.isEmpty {
+                        HStack(spacing: 6) {
+                            SelectableMonoText(ip)
+                            CopyButton(value: ip)
+                        }
+                    } else {
+                        Text("—").foregroundStyle(.secondary)
+                    }
+                }
+                if vm.status == .running, let ip = vm.ipAddress, !ip.isEmpty {
+                    let sshUser = vm.sshUsername.isEmpty ? "baker" : vm.sshUsername
+                    let vncURL = vm.sshUsername.isEmpty ? "vnc://\(ip)" : "vnc://\(vm.sshUsername)@\(ip)"
+                    LabeledContent("VNC") {
+                        HStack(spacing: 6) {
+                            SelectableMonoText(vncURL)
+                            PortStatusDot(reachable: vncReachable, isChecking: isCheckingPorts)
+                            CopyButton(value: vncURL)
+                            Button {
+                                if let url = URL(string: vncURL) { NSWorkspace.shared.open(url) }
+                            } label: {
+                                Image(systemName: "inset.filled.rectangle.and.person.filled")
+                            }
+                            .buttonStyle(.bordered).controlSize(.mini)
+                            .help("Open Screensharing")
+                        }
+                    }
+
+                    let sshCmd = "ssh \(sshUser)@\(ip)"
+                    LabeledContent("SSH") {
+                        HStack(spacing: 6) {
+                            SelectableMonoText(sshCmd)
+                            PortStatusDot(reachable: sshReachable, isChecking: isCheckingPorts)
+                            CopyButton(value: sshCmd)
+                            Button {
+                                openSSH(vm: vm)
+                            } label: {
+                                Image(systemName: "apple.terminal")
+                            }
+                            .buttonStyle(.bordered).controlSize(.mini)
+                            .help("Start SSH Session in Terminal")
+                        }
+                    }
+                } else {
+                    LabeledContent("SSH") { Text("—").foregroundStyle(.secondary) }
+                }
+            }
+
+            Section("Credentials") {
+                if !vm.sshUsername.isEmpty {
+                    LabeledContent("Username") {
+                        HStack(spacing: 6) {
+                            SelectableMonoText(vm.sshUsername)
+                            CopyButton(value: vm.sshUsername)
+                        }
+                    }
+                }
+                if vm.sshPassword != nil {
+                    LabeledContent("Password") {
+                        HStack(spacing: 6) {
+                            if let pwd = revealedPassword {
+                                SelectableMonoText(pwd)
+                                CopyButton(value: pwd)
+                                Button {
+                                    revealedPassword = nil
+                                } label: {
+                                    Image(systemName: "eye.slash")
+                                }
+                                .buttonStyle(.bordered).controlSize(.mini)
+                                .help("Hide password")
+                            } else {
+                                Text("Stored in Keychain").foregroundStyle(.secondary)
+                                if isAuthenticating {
+                                    ProgressView().controlSize(.mini)
+                                } else {
+                                    Button {
+                                        Task { await revealPassword() }
+                                    } label: {
+                                        Image(systemName: "eye")
+                                    }
+                                    .buttonStyle(.bordered).controlSize(.mini)
+                                    .help("Reveal password")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section("Properties") {
+                if !vm.description.isEmpty {
+                    LabeledContent("Description") {
+                        Text(vm.description)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if !vm.displayName.isEmpty && vm.displayName != vm.name {
+                    LabeledContent("Display name") {
+                        Text(vm.displayName).foregroundStyle(.secondary)
+                    }
+                }
+                LabeledContent("Tart name") {
+                    SelectableMonoText(vm.name)
+                    CopyButton(value: vm.name)
+                }
+                LabeledContent("Created") {
+                    Text(vm.createdAt.formatted(date: .numeric, time: .omitted))
+                        .foregroundStyle(.secondary)
+                }
+                LabeledContent("Last started") {
+                    Text(vm.lastStartedAt.map {
+                        $0.formatted(date: .numeric, time: .shortened)
+                    } ?? "Never")
+                    .foregroundStyle(.secondary)
+                }
+                if !vm.tags.isEmpty {
+                    LabeledContent("Tags") {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 4) {
+                                ForEach(Array(vm.tags.enumerated()), id: \.offset) { _, tag in
+                                    TagChip(tag: tag)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Origin: base VM it was cloned from
+            if let baseID = vm.baseVMID,
+               let baseVM = baseVMStore.baseVMs.first(where: { $0.id == baseID }) {
+                Section("Origin") {
+                    LabeledContent("Base VM") { Text(baseVM.name).foregroundStyle(.secondary) }
+                    LabeledContent("macOS") {
+                        Text("\(baseVM.osName.rawValue) \(baseVM.osVersion)")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            // MDM enrollment
+            if theme.mdmEnabled && (vm.mdmProfileID != nil || vm.mdmServerID != nil || canLookUpEnrollment) {
+                Section("MDM") {
+                    if let serverID = vm.mdmServerID,
+                       let server = serverStore.servers.first(where: { $0.id == serverID }) {
+                        LabeledContent("Server") {
+                            Text(server.friendlyName).foregroundStyle(.secondary)
+                        }
+                    }
+                    if let profileID = vm.mdmProfileID,
+                       let name = loadProfileName(id: profileID) {
+                        LabeledContent("Profile") {
+                            Text(name).foregroundStyle(.secondary)
+                        }
+                    }
+                    if canLookUpEnrollment {
+                        MDMEnrollmentStatusRow(
+                            vm: vm,
+                            server: serverStore.servers.first(where: { $0.id == vm.mdmServerID }),
+                            status: enrollmentStatus,
+                            error: enrollmentError,
+                            isLoading: isLookingUpEnrollment
+                        ) {
+                            Task { await lookUpEnrollment() }
+                        }
+                    }
+                }
+            }
+
+            if let ref = vm.registryImageRef {
+                Section("Registry") {
+                    LabeledContent("Image") { Text(ref).foregroundStyle(.secondary) }
+                }
+            }
+
+            // Push progress (shown when a push is in-flight)
+            if let prog = pushProgress {
+                Section {
+                    VStack(spacing: 4) {
+                        ProgressView(value: prog).progressViewStyle(.linear)
+                        Text("Pushing… \(Int(prog * 100))%")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
     // MARK: - Header
 
     @ViewBuilder private var headerSection: some View {
         VStack(spacing: 4) {
-            Image(systemName: "desktopcomputer")
-                .font(.system(.title, weight: .light))
-                .foregroundStyle(.secondary)
+//            Image(systemName: "desktopcomputer")
+//                .font(.system(.title, weight: .light))
+//                .foregroundStyle(.secondary)
             Text(vm.displayName.isEmpty ? vm.name : vm.displayName)
                 .font(.headline).lineLimit(2).multilineTextAlignment(.center)
             if !vm.displayName.isEmpty && vm.displayName != vm.name {

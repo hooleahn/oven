@@ -87,6 +87,7 @@
 		B91426DB2F9F2B5900F13968 /* EmptyStateBaseVMs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426DA2F9F2B5900F13968 /* EmptyStateBaseVMs.swift */; };
 		B91426DD2F9F2B6600F13968 /* EmptyStateRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426DC2F9F2B6600F13968 /* EmptyStateRegistry.swift */; };
 		B91426DF2F9F2B7600F13968 /* EmptyStateRecipes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426DE2F9F2B7600F13968 /* EmptyStateRecipes.swift */; };
+		B94EA6382FB4217100EDCB68 /* ExecuteCommandSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94EA6372FB4217100EDCB68 /* ExecuteCommandSheet.swift */; };
 		B97A40AA2F970E3F00FB577C /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40A92F970E3F00FB577C /* OnboardingView.swift */; };
 		B97A40AC2F970FB300FB577C /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40AB2F970FB300FB577C /* DesignSystem.swift */; };
 		B97A40B02F971CF000FB577C /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = B97A40AF2F971CF000FB577C /* AppIcon.icon */; };
@@ -102,6 +103,7 @@
 		B9F42A532FA96EC300294F3C /* AddCustomOSSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A522FA96EC300294F3C /* AddCustomOSSheet.swift */; };
 		B9F42A552FA96EC300294F3C /* AddCustomInstallerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A542FA96EC300294F3C /* AddCustomInstallerSheet.swift */; };
 		B9F42A572FA9AD4800294F3C /* BrowseGHCRSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A562FA9AD4800294F3C /* BrowseGHCRSheet.swift */; };
+		B9F42A5B2FB3E6B600294F3C /* wallpaper-tiger.jpg in Resources */ = {isa = PBXBuildFile; fileRef = B9F42A5A2FB3E6B600294F3C /* wallpaper-tiger.jpg */; };
 		BD83F46D40364D3683D9FF41 /* InstallerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78338E0B4F0D412AA2F4C5AE /* InstallerView.swift */; };
 		BFB8A48BC686468691CA5658 /* RegistryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F760E74E7D9435396495133 /* RegistryView.swift */; };
 		BFC50767AAAC47B981D5F1DA /* VirtualMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB765F10A5F2414F9124B081 /* VirtualMachine.swift */; };
@@ -214,6 +216,7 @@
 		B91426DA2F9F2B5900F13968 /* EmptyStateBaseVMs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateBaseVMs.swift; sourceTree = "<group>"; };
 		B91426DC2F9F2B6600F13968 /* EmptyStateRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateRegistry.swift; sourceTree = "<group>"; };
 		B91426DE2F9F2B7600F13968 /* EmptyStateRecipes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateRecipes.swift; sourceTree = "<group>"; };
+		B94EA6372FB4217100EDCB68 /* ExecuteCommandSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecuteCommandSheet.swift; sourceTree = "<group>"; };
 		B97A40A92F970E3F00FB577C /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		B97A40AB2F970FB300FB577C /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		B97A40AF2F971CF000FB577C /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
@@ -228,6 +231,7 @@
 		B9F42A522FA96EC300294F3C /* AddCustomOSSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddCustomOSSheet.swift; sourceTree = "<group>"; };
 		B9F42A542FA96EC300294F3C /* AddCustomInstallerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddCustomInstallerSheet.swift; sourceTree = "<group>"; };
 		B9F42A562FA9AD4800294F3C /* BrowseGHCRSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseGHCRSheet.swift; sourceTree = "<group>"; };
+		B9F42A5A2FB3E6B600294F3C /* wallpaper-tiger.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "wallpaper-tiger.jpg"; sourceTree = "<group>"; };
 		BE1EC22205AB415CA710630A /* NewVMSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewVMSheet.swift; sourceTree = "<group>"; };
 		BFA2A44AC35F44C3B148332B /* GeneralPrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralPrefsTab.swift; sourceTree = "<group>"; };
 		C3540F44515C4D7194D7AF9A /* BaseVMStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseVMStore.swift; sourceTree = "<group>"; };
@@ -266,6 +270,7 @@
 		1FFEAC249D3B4496A7FAA1E8 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				B9F42A5A2FB3E6B600294F3C /* wallpaper-tiger.jpg */,
 				4480C4474BAC4BC781DE1831 /* wallpaper-ventura.jpg */,
 				67C9D25062A74F2FAB110AC8 /* wallpaper-tahoe.jpeg */,
 				D3313F3FCC4442BA9BA11F2F /* wallpaper-sonoma.jpg */,
@@ -375,6 +380,7 @@
 				B9F42A522FA96EC300294F3C /* AddCustomOSSheet.swift */,
 				B9F42A542FA96EC300294F3C /* AddCustomInstallerSheet.swift */,
 				B9F42A562FA9AD4800294F3C /* BrowseGHCRSheet.swift */,
+				B94EA6372FB4217100EDCB68 /* ExecuteCommandSheet.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -507,6 +513,7 @@
 			files = (
 				07D7BE71A1A84285A28FCA30 /* wallpaper-ventura.jpg in Resources */,
 				B7F2353406F74DA29BC32C98 /* wallpaper-tahoe.jpeg in Resources */,
+				B9F42A5B2FB3E6B600294F3C /* wallpaper-tiger.jpg in Resources */,
 				913E77B9C7234987A66EEB69 /* wallpaper-sonoma.jpg in Resources */,
 				35019327E94D46B48C0B3721 /* wallpaper-sequoia.jpg in Resources */,
 				B97A40B02F971CF000FB577C /* AppIcon.icon in Resources */,
@@ -617,6 +624,7 @@
 				91FDA52DE23F4C6E98429156 /* VMDetailPane.swift in Sources */,
 				1BE5BAB3501343A79B6E6C33 /* VMEditSheet.swift in Sources */,
 				B6539E2F3DF443149F26FB2D /* VMListView.swift in Sources */,
+				B94EA6382FB4217100EDCB68 /* ExecuteCommandSheet.swift in Sources */,
 				A15EBB8EDDCD4E8F9C9918F3 /* VMStore.swift in Sources */,
 				934B04FDA9784EBDADB0378F /* VMViewHelpers.swift in Sources */,
 				BFC50767AAAC47B981D5F1DA /* VirtualMachine.swift in Sources */,

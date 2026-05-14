@@ -117,6 +117,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
     var isResolvingIP: Bool = false    // true while polling for IP
     var isStopping: Bool = false       // true while tart stop is in flight
     var actualDiskGB: Int? = nil       // from tart list Size field, nil if unknown
+    var supportsGuestAgent: Bool = false  // user-confirmed tart-guest-agent is installed in VM
 
     // MARK: - SharedFolder
     struct SharedFolder: Identifiable, Codable, Hashable, Sendable {
@@ -250,9 +251,10 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         sharedFolders    = try c.decodeIfPresent([SharedFolder].self,  forKey: .sharedFolders)   ?? []
         sshUsername      = try c.decodeIfPresent(String.self,         forKey: .sshUsername)      ?? "baker"
         manualBuildConfig = try c.decodeIfPresent(ManualBuildConfig.self, forKey: .manualBuildConfig)
-        isPinned         = try c.decodeIfPresent(Bool.self,             forKey: .isPinned)         ?? false
-        isResolvingIP    = false  // always reset on load — never persisted
-        isStopping       = false
+        isPinned             = try c.decodeIfPresent(Bool.self, forKey: .isPinned)             ?? false
+        supportsGuestAgent   = try c.decodeIfPresent(Bool.self, forKey: .supportsGuestAgent)   ?? false
+        isResolvingIP        = false  // always reset on load — never persisted
+        isStopping           = false
     }
 
     // MARK: - Full init

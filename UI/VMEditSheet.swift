@@ -1,4 +1,5 @@
 import SwiftUI
+import LocalAuthentication
 
 // MARK: - VMEditSheet
 
@@ -27,6 +28,9 @@ struct VMEditSheet: View {
     @State private var hardwareError: String?
     @State private var sshUsername: String = ""
     @State private var sshPassword: String = ""
+    @State private var isPasswordRevealed = false
+    @State private var isAuthenticatingPassword = false
+    @State private var supportsGuestAgent: Bool = false
     @State private var isBaseVM: Bool = false
     @State private var osName: MacOSRelease.Name
     @State private var versionPickerSel: String       // picker binding; "__custom__" means custom
@@ -67,6 +71,7 @@ struct VMEditSheet: View {
         _description          = State(initialValue: vm.description)
         _tags                 = State(initialValue: vm.tags)
         _sshUsername          = State(initialValue: vm.sshUsername)
+        _supportsGuestAgent   = State(initialValue: vm.supportsGuestAgent)
         _isBaseVM             = State(initialValue: vm.isBaseVM)
         _osName               = State(initialValue: vm.osName)
         _isBetaOS             = State(initialValue: vm.isBetaOS)
@@ -272,18 +277,49 @@ struct VMEditSheet: View {
                       footer: { Text("Link this VM to an MDM server to look up its enrollment status.") }
                 }
 
-                Section("Default and SSH credentials") {
+                Section("Default VM and SSH credentials") {
                     LabeledContent("Username") {
                         TextField("", text: $sshUsername,
                                   prompt: Text("e.g. baker").foregroundColor(.secondary))
                             .multilineTextAlignment(.trailing)
                     }
                     LabeledContent("Password") {
-                        SecureField("", text: $sshPassword,
-                                    prompt: Text("stored in Keychain").foregroundColor(.secondary))
+                        HStack(spacing: 6) {
+                            let prompt = Text(vm.sshPassword != nil ? "Stored in Keychain" : "No password set")
+                                .foregroundColor(.secondary)
+                            Group {
+                                if isPasswordRevealed {
+                                    TextField("", text: $sshPassword, prompt: prompt)
+                                } else {
+                                    SecureField("", text: $sshPassword, prompt: prompt)
+                                }
+                            }
                             .multilineTextAlignment(.trailing)
+                            .onChange(of: sshPassword) { _, _ in isPasswordRevealed = false }
+
+                            if isAuthenticatingPassword {
+                                ProgressView().controlSize(.mini)
+                            } else if !sshPassword.isEmpty {
+                                Button {
+                                    if isPasswordRevealed {
+                                        isPasswordRevealed = false
+                                    } else {
+                                        Task { await revealEditSheetPassword() }
+                                    }
+                                } label: {
+                                    Image(systemName: isPasswordRevealed ? "eye.slash" : "eye")
+                                }
+                                .buttonStyle(.bordered).controlSize(.mini)
+                                .help(isPasswordRevealed ? "Hide password" : "Reveal password")
+                            }
+                        }
                     }
                 }
+
+                Section {
+                    Toggle("Supports Tart Guest Agent", isOn: $supportsGuestAgent)
+                } header: { Text("Remote Execution") }
+                  footer: { Text("Enables 'Execute Command via Guest Agent' using tart exec. Requires tart-guest-agent to be installed inside the VM.") }
 
                 Section {
                     Stepper("\(cpuCount) vCPU\(cpuCount == 1 ? "" : "s")", value: $cpuCount, in: 1...maxCPU)
@@ -377,14 +413,29 @@ struct VMEditSheet: View {
         isFetchingVersions = false
     }
 
+    @MainActor private func revealEditSheetPassword() async {
+        isAuthenticatingPassword = true
+        let context = LAContext()
+        let name = vm.displayName.isEmpty ? vm.name : vm.displayName
+        let granted = await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in
+            context.evaluatePolicy(.deviceOwnerAuthentication,
+                                   localizedReason: "Reveal SSH password for \(name)") { ok, _ in
+                c.resume(returning: ok)
+            }
+        }
+        if granted { isPasswordRevealed = true }
+        isAuthenticatingPassword = false
+    }
+
     private func save() {
-        vmStore.update(id: vm.id) { v in
+        vmStore.updateMetadata(id: vm.id) { v in
             let trimmed = displayName.trimmingCharacters(in: .whitespaces)
             v.displayName   = trimmed.isEmpty ? (tartName.isEmpty ? vm.name : tartName) : trimmed
             v.description   = description
             v.tags          = tags
-            v.sshUsername   = sshUsername
-            v.sharedFolders = sharedFolders
+            v.sshUsername        = sshUsername
+            v.supportsGuestAgent = supportsGuestAgent
+            v.sharedFolders      = sharedFolders
             v.cpuCount      = cpuCount
             v.memoryGB      = memoryGB
             v.osName               = osName
