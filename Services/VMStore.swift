@@ -217,7 +217,12 @@ final class VMStore: ObservableObject {
 
     /// Delete a VM from tart and remove its metadata record.
     func delete(vm: VirtualMachine) async throws {
-        try await tartService.delete(name: vm.name)
+        do {
+            try await tartService.delete(name: vm.name)
+        } catch {
+            // VM may have already been removed externally (e.g. `tart remove`); still clean up metadata.
+            AppLogger.shared.warning("tart delete failed for \(vm.name): \(error.localizedDescription)", source: "VMStore")
+        }
         vms.removeAll { $0.id == vm.id }
         saveToDisk()
         AppLogger.shared.success("Deleted VM: \(vm.name)", source: "VMStore")
