@@ -89,6 +89,8 @@
 		B91426DF2F9F2B7600F13968 /* EmptyStateRecipes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426DE2F9F2B7600F13968 /* EmptyStateRecipes.swift */; };
 		B94EA6382FB4217100EDCB68 /* ExecuteCommandSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94EA6372FB4217100EDCB68 /* ExecuteCommandSheet.swift */; };
 		B94EA63A2FBD4A1A00EDCB68 /* VMScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94EA6392FBD4A1A00EDCB68 /* VMScheduler.swift */; };
+		B94EA63C2FBDE95B00EDCB68 /* WebhookNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94EA63B2FBDE95B00EDCB68 /* WebhookNotification.swift */; };
+		B94EA63E2FBDE98400EDCB68 /* WebhookEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94EA63D2FBDE98400EDCB68 /* WebhookEditSheet.swift */; };
 		B97A40AA2F970E3F00FB577C /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40A92F970E3F00FB577C /* OnboardingView.swift */; };
 		B97A40AC2F970FB300FB577C /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40AB2F970FB300FB577C /* DesignSystem.swift */; };
 		B97A40B02F971CF000FB577C /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = B97A40AF2F971CF000FB577C /* AppIcon.icon */; };
@@ -219,6 +221,8 @@
 		B91426DE2F9F2B7600F13968 /* EmptyStateRecipes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateRecipes.swift; sourceTree = "<group>"; };
 		B94EA6372FB4217100EDCB68 /* ExecuteCommandSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecuteCommandSheet.swift; sourceTree = "<group>"; };
 		B94EA6392FBD4A1A00EDCB68 /* VMScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMScheduler.swift; sourceTree = "<group>"; };
+		B94EA63B2FBDE95B00EDCB68 /* WebhookNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebhookNotification.swift; sourceTree = "<group>"; };
+		B94EA63D2FBDE98400EDCB68 /* WebhookEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebhookEditSheet.swift; sourceTree = "<group>"; };
 		B97A40A92F970E3F00FB577C /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		B97A40AB2F970FB300FB577C /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		B97A40AF2F971CF000FB577C /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
@@ -383,6 +387,7 @@
 				B9F42A542FA96EC300294F3C /* AddCustomInstallerSheet.swift */,
 				B9F42A562FA9AD4800294F3C /* BrowseGHCRSheet.swift */,
 				B94EA6372FB4217100EDCB68 /* ExecuteCommandSheet.swift */,
+				B94EA63D2FBDE98400EDCB68 /* WebhookEditSheet.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -399,6 +404,7 @@
 				B9E73BF52FA2D199006B5437 /* OvenProfile.swift */,
 				B9F42A4A2FA96E6D00294F3C /* CustomOSEntry.swift */,
 				B9F42A4C2FA96E6E00294F3C /* CustomInstaller.swift */,
+				B94EA63B2FBDE95B00EDCB68 /* WebhookNotification.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -576,6 +582,8 @@
 				B9F42A572FA9AD4800294F3C /* BrowseGHCRSheet.swift in Sources */,
 				93636E15E6E847419710A257 /* MDMProfileView.swift in Sources */,
 				3245D697DD9E40D7B815104C /* MDMServer.swift in Sources */,
+				B94EA63C2FBDE95B00EDCB68 /* WebhookNotification.swift in Sources */,
+				B94EA63E2FBDE98400EDCB68 /* WebhookEditSheet.swift in Sources */,
 				4099E881D0A14D4E800362A1 /* MDMServersView.swift in Sources */,
 				FDBA5DD58B5F4903A09CC048 /* MistService.swift in Sources */,
 				7A8E5E70450B4D78B28BC128 /* NewBaseVMSheet.swift in Sources */,

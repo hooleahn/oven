@@ -42,6 +42,7 @@ final class AppDatabase {
         case buildHistory      = "build-history.json"
         case customOS          = "custom-os.json"
         case customInstallers  = "custom-installers.json"
+        case webhookNotifications = "webhook-notifications.json"
 
         /// Schema version — bump when the model gains non-optional fields
         /// that can't be decoded from older files via decodeIfPresent.
@@ -60,6 +61,7 @@ final class AppDatabase {
             case .buildHistory:      return 1
             case .customOS:          return 1
             case .customInstallers:  return 1
+            case .webhookNotifications: return 1
             }
         }
     }

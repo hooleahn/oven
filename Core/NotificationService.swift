@@ -96,6 +96,8 @@ final class NotificationService {
         let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
         let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
         let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
+        let webhookEvent = success ? "baseVMBuildSucceeded" : "baseVMBuildFailed"
+        await sendWebhooks(eventType: webhookEvent, vmName: vmName)
         guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
 
         let title   = success ? "✅ Oven: Build Complete" : "❌ Oven: Build Failed"
@@ -128,6 +130,7 @@ final class NotificationService {
         let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
         let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
         let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
+        await sendWebhooks(eventType: "vmStopped", vmName: vmName)
         guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
 
         let title   = "🛑 Oven: VM Stopped"
@@ -157,6 +160,7 @@ final class NotificationService {
         let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
         let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
         let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
+        await sendWebhooks(eventType: "vmStarted", vmName: vmName)
         guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
 
         let title   = "▶️ Oven: VM Started"
@@ -186,6 +190,7 @@ final class NotificationService {
         let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
         let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
         let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
+        await sendWebhooks(eventType: "vmStartFailed", vmName: vmName)
         guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
 
         let title   = "⚠️ Oven: VM Start Failed"
@@ -213,6 +218,7 @@ final class NotificationService {
         let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
         let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
         let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
+        await sendWebhooks(eventType: "baseVMBuildStarted", vmName: vmName)
         guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
 
         let title   = "🔨 Oven: Build Started"
@@ -364,6 +370,143 @@ final class NotificationService {
         @unknown default:
             AppLogger.shared.log("System notifications are not determined", source: "NotificationService")
         }
+    }
+
+    // MARK: - Webhook Keychain helpers
+
+    func webhookPassword(for id: UUID) -> String? {
+        KeychainService.retrieve(key: "webhook.\(id.uuidString).basicPassword")
+    }
+
+    func setWebhookPassword(_ value: String?, for id: UUID) {
+        let key = "webhook.\(id.uuidString).basicPassword"
+        if let v = value, !v.isEmpty { KeychainService.store(key: key, value: v) }
+        else { KeychainService.delete(key: key) }
+    }
+
+    func webhookCustomHeaderValue(for id: UUID) -> String? {
+        KeychainService.retrieve(key: "webhook.\(id.uuidString).customHeaderValue")
+    }
+
+    func setWebhookCustomHeaderValue(_ value: String?, for id: UUID) {
+        let key = "webhook.\(id.uuidString).customHeaderValue"
+        if let v = value, !v.isEmpty { KeychainService.store(key: key, value: v) }
+        else { KeychainService.delete(key: key) }
+    }
+
+    func deleteWebhookSecrets(for id: UUID) {
+        KeychainService.delete(key: "webhook.\(id.uuidString).basicPassword")
+        KeychainService.delete(key: "webhook.\(id.uuidString).customHeaderValue")
+    }
+
+    // MARK: - Webhooks
+
+    private func sendWebhooks(eventType: String, vmName: String) async {
+        let all: [WebhookNotification] = AppDatabase.shared.readOrDefault(.webhookNotifications, default: [])
+        let matching = all.filter { $0.isEnabled && $0.enabledEvents.contains(eventType) }
+        guard !matching.isEmpty else { return }
+        await withTaskGroup(of: Void.self) { group in
+            for wh in matching {
+                group.addTask { await self.sendWebhook(wh, eventType: eventType, vmName: vmName) }
+            }
+        }
+    }
+
+    @discardableResult
+    private func sendWebhook(_ webhook: WebhookNotification, eventType: String, vmName: String) async -> Result<Void, NotificationError> {
+        guard !webhook.url.isEmpty, let url = URL(string: webhook.url) else {
+            AppLogger.shared.warning("Webhook '\(webhook.displayName)' has invalid URL", source: "NotificationService")
+            return .failure(.notConfigured("Invalid URL"))
+        }
+
+        let now = Date()
+        let body = applyWebhookTemplate(webhook.jsonPayload, vmName: vmName, eventType: eventType, timestamp: now, datetimeFormat: webhook.datetimeFormat)
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body.data(using: .utf8)
+
+        switch webhook.authType {
+        case .none:
+            break
+        case .basic:
+            let password = webhookPassword(for: webhook.id) ?? ""
+            let encoded = Data("\(webhook.basicAuthUsername):\(password)".utf8).base64EncodedString()
+            request.setValue("Basic \(encoded)", forHTTPHeaderField: "Authorization")
+        case .custom:
+            if !webhook.customAuthHeaderName.isEmpty,
+               let value = webhookCustomHeaderValue(for: webhook.id), !value.isEmpty {
+                request.setValue(value, forHTTPHeaderField: webhook.customAuthHeaderName)
+            }
+        }
+
+        for line in webhook.additionalHeaders.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty, let range = trimmed.range(of: ": ") else { continue }
+            let name  = String(trimmed[trimmed.startIndex..<range.lowerBound])
+            let value = String(trimmed[range.upperBound...])
+            request.setValue(value, forHTTPHeaderField: name)
+        }
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if (200..<300).contains(status) {
+                AppLogger.shared.success("Webhook '\(webhook.displayName)' delivered (HTTP \(status))", source: "NotificationService")
+                return .success(())
+            } else {
+                AppLogger.shared.warning("Webhook '\(webhook.displayName)' returned HTTP \(status)", source: "NotificationService")
+                return .failure(.httpError(status))
+            }
+        } catch {
+            AppLogger.shared.error("Webhook '\(webhook.displayName)' failed: \(error.localizedDescription)", source: "NotificationService")
+            return .failure(.network(error.localizedDescription))
+        }
+    }
+
+    func testWebhook(_ webhook: WebhookNotification) async -> Result<Void, NotificationError> {
+        await sendWebhook(webhook, eventType: "test", vmName: "TestVM")
+    }
+
+    // MARK: - Template helpers
+
+    private func applyWebhookTemplate(_ template: String, vmName: String, eventType: String, timestamp: Date, datetimeFormat: String) -> String {
+        let unix = String(Int(timestamp.timeIntervalSince1970))
+        let eventLabel = NotificationEvent(rawValue: eventType)?.label ?? eventType
+        let datetime = formatWebhookDatetime(timestamp, format: datetimeFormat)
+        return template
+            .replacingOccurrences(of: "%%VMNAME%%", with: vmName)
+            .replacingOccurrences(of: "%%EVENTTYPE%%", with: eventLabel)
+            .replacingOccurrences(of: "%%TIMESTAMP%%", with: unix)
+            .replacingOccurrences(of: "%%DATETIME%%", with: datetime)
+    }
+
+    private func formatWebhookDatetime(_ date: Date, format: String) -> String {
+        guard !format.isEmpty else {
+            return ISO8601DateFormatter().string(from: date)
+        }
+        let df = DateFormatter()
+        df.dateFormat = strftimeToDFFormat(format)
+        return df.string(from: date)
+    }
+
+    private func strftimeToDFFormat(_ fmt: String) -> String {
+        var result = fmt
+        let replacements: [(String, String)] = [
+            ("%Y", "yyyy"), ("%y", "yy"),
+            ("%m", "MM"),   ("%d", "dd"),
+            ("%H", "HH"),   ("%I", "hh"),
+            ("%M", "mm"),   ("%S", "ss"),
+            ("%A", "EEEE"), ("%a", "EEE"),
+            ("%B", "MMMM"), ("%b", "MMM"),
+            ("%Z", "zzz"),  ("%z", "Z"),
+            ("%p", "a"),    ("%e", "d"),
+        ]
+        for (from, to) in replacements {
+            result = result.replacingOccurrences(of: from, with: to)
+        }
+        return result
     }
 
     // MARK: - Test

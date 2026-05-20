@@ -24,8 +24,9 @@ struct VMListView: View {
                           sidebarStatusFilter: appState.sidebarStatusFilter)
     }
     private var workingVMs: [VirtualMachine] { vmStore.vms.filter { !$0.effectivelyBase } }
-    var allTags: [String]     { model.allTags(from: workingVMs) }
-    var allOSMajors: [String] { model.allOSMajors(from: workingVMs) }
+    var allTags: [String]       { model.allTags(from: workingVMs) }
+    var allOSMajors: [String]   { model.allOSMajors(from: workingVMs) }
+    var allMDMServers: [MDMServer] { model.allMDMServers(from: workingVMs, servers: serverStore.servers) }
     func osVersions(under major: String) -> [String] { model.osVersions(under: major, from: workingVMs) }
 
     /// VMs corresponding to the current multi-selection
@@ -138,13 +139,15 @@ struct VMListView: View {
     private var isAnyFilterActive: Bool {
         model.selectedTab != .all ||
         !model.selectedTagFilters.isEmpty ||
-        !model.selectedOSFilters.isEmpty
+        !model.selectedOSFilters.isEmpty ||
+        !model.selectedMDMServerFilters.isEmpty
     }
 
     private var activeFilterCount: Int {
         (model.selectedTab != .all ? 1 : 0) +
         model.selectedTagFilters.count +
-        model.selectedOSFilters.count
+        model.selectedOSFilters.count +
+        model.selectedMDMServerFilters.count
     }
 
     @ViewBuilder private var filterSortMenu: some View {
@@ -224,6 +227,31 @@ struct VMListView: View {
                                 HStack {
                                     Text(major)
                                     if model.selectedOSFilters.contains(ver) { Image(systemName: "checkmark") }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── MDM Server ────────────────────────────────────────────────
+            if !allMDMServers.isEmpty {
+                Section("MDM Server") {
+                    if !model.selectedMDMServerFilters.isEmpty {
+                        Button("Clear MDM Filters") { model.selectedMDMServerFilters.removeAll() }
+                    }
+                    ForEach(allMDMServers) { server in
+                        Button {
+                            if model.selectedMDMServerFilters.contains(server.id) {
+                                model.selectedMDMServerFilters.remove(server.id)
+                            } else {
+                                model.selectedMDMServerFilters.insert(server.id)
+                            }
+                        } label: {
+                            HStack {
+                                Text(server.friendlyName)
+                                if model.selectedMDMServerFilters.contains(server.id) {
+                                    Image(systemName: "checkmark")
                                 }
                             }
                         }

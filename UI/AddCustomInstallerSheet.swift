@@ -38,13 +38,13 @@ struct AddCustomInstallerSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Register Custom Installer").font(.headline)
+                Text("Add Custom Installer").font(.headline)
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.escape)
                 if customInstallerStore.isCopying {
                     ProgressView().controlSize(.small)
                 } else {
-                    Button("Register") { Task { await register() } }
+                    Button("Add") { Task { await register() } }
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
                         .disabled(!canRegister)

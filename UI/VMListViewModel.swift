@@ -50,6 +50,7 @@ final class VMListViewModel {
     var selectedTab: VMTab = .all
     var selectedTagFilters: Set<String> = []
     var selectedOSFilters:  Set<String> = []
+    var selectedMDMServerFilters: Set<UUID> = []
     var sortOrder: VMSortOrder = .name
     var isListView = false
     var density: ListDensity = .cozy
@@ -101,6 +102,11 @@ final class VMListViewModel {
                 selectedOSFilters.contains(vm.osVersion)
             }
         }
+        if !selectedMDMServerFilters.isEmpty {
+            base = base.filter { vm in
+                vm.mdmServerID.map { selectedMDMServerFilters.contains($0) } ?? false
+            }
+        }
         if !searchQuery.isEmpty {
             let q = searchQuery.lowercased()
             base = base.filter {
@@ -121,6 +127,12 @@ final class VMListViewModel {
 
     func allTags(from vms: [VirtualMachine]) -> [String] {
         Array(Set(vms.flatMap { $0.tags })).sorted()
+    }
+
+    func allMDMServers(from vms: [VirtualMachine], servers: [MDMServer]) -> [MDMServer] {
+        let usedIDs = Set(vms.compactMap { $0.mdmServerID })
+        return servers.filter { usedIDs.contains($0.id) }
+            .sorted { $0.friendlyName < $1.friendlyName }
     }
 
     func allOSMajors(from vms: [VirtualMachine]) -> [String] {

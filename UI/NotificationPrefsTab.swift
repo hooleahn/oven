@@ -7,6 +7,7 @@ import UserNotifications
 enum NotificationEvent: String, CaseIterable, Identifiable {
     case baseVMBuildSucceeded = "baseVMBuildSucceeded"
     case baseVMBuildFailed    = "baseVMBuildFailed"
+    case baseVMBuildStarted   = "baseVMBuildStarted"
     case ipswDownloaded       = "ipswDownloaded"
     case imagePullCompleted   = "imagePullCompleted"
     case imagePushCompleted   = "imagePushCompleted"
@@ -20,6 +21,7 @@ enum NotificationEvent: String, CaseIterable, Identifiable {
         switch self {
         case .baseVMBuildSucceeded: return "Base VM build succeeded"
         case .baseVMBuildFailed:    return "Base VM build failed"
+        case .baseVMBuildStarted:   return "Base VM build started"
         case .ipswDownloaded:       return "IPSW downloaded"
         case .imagePullCompleted:   return "Registry pull completed"
         case .imagePushCompleted:   return "Registry push completed"
@@ -33,6 +35,7 @@ enum NotificationEvent: String, CaseIterable, Identifiable {
         switch self {
         case .baseVMBuildSucceeded: return "checkmark.circle"
         case .baseVMBuildFailed:    return "xmark.circle"
+        case .baseVMBuildStarted:   return "hammer"
         case .ipswDownloaded:       return "arrow.down.circle"
         case .imagePullCompleted:   return "arrow.down.to.line"
         case .imagePushCompleted:   return "arrow.up.to.line"
@@ -70,6 +73,12 @@ struct NotificationPrefsTab: View {
     @State private var isTestingSlack    = false
     @State private var isTestingTeams    = false
 
+    // Webhook state
+    @State private var webhooks: [WebhookNotification] = []
+    @State private var webhookSheetMode: WebhookSheetMode? = nil
+    @State private var webhookTestResults: [UUID: TestResult] = [:]
+    @State private var testingWebhookIDs: Set<UUID> = []
+
     // Live OS authorization state
     @State private var osAuthStatus: UNAuthorizationStatus = .notDetermined
     @State private var osAlertSetting: UNNotificationSetting = .notSupported
@@ -93,10 +102,22 @@ struct NotificationPrefsTab: View {
             pushoverSection
             slackSection
             teamsSection
+            webhooksSection
         }
         .formStyle(.grouped)
         .navigationTitle("Notifications")
-        .task { await refreshOSStatus() }
+        .task {
+            await refreshOSStatus()
+            webhooks = AppDatabase.shared.readOrDefault(.webhookNotifications, default: [])
+        }
+        .sheet(item: $webhookSheetMode) { mode in
+            switch mode {
+            case .add:
+                WebhookEditSheet(existing: nil) { saved in addOrUpdateWebhook(saved) }
+            case .edit(let wh):
+                WebhookEditSheet(existing: wh) { updated in addOrUpdateWebhook(updated) }
+            }
+        }
     }
 
     // MARK: - System section
@@ -252,6 +273,103 @@ struct NotificationPrefsTab: View {
             }
         } header: { Text("Microsoft Teams") }
           footer: { Text("Credentials are stored securely in Keychain.") }
+    }
+
+    // MARK: - Custom Webhooks section
+
+    private var webhooksSection: some View {
+        Section {
+            if webhooks.isEmpty {
+                Text("No webhooks configured")
+                    .foregroundStyle(.secondary)
+                    .font(.callout)
+            } else {
+                ForEach(webhooks) { wh in
+                    webhookRow(wh)
+                }
+            }
+            Button {
+                webhookSheetMode = .add
+            } label: {
+                Label("Add Webhook", systemImage: "plus")
+            }
+        } header: {
+            Text("Custom Webhooks")
+        } footer: {
+            Text("POST requests to custom endpoints on VM events. Auth credentials are stored in Keychain.")
+        }
+    }
+
+    @ViewBuilder
+    private func webhookRow(_ wh: WebhookNotification) -> some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(wh.displayName.isEmpty ? "Unnamed" : wh.displayName)
+                    .fontWeight(.medium)
+                Text(wh.url.isEmpty ? "No URL configured" : wh.url)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer()
+            if let result = webhookTestResults[wh.id] {
+                testResultLabel(result)
+            }
+            if testingWebhookIDs.contains(wh.id) {
+                ProgressView().controlSize(.small)
+            } else {
+                Button("Test") {
+                    Task { await testWebhookFromUI(wh) }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(wh.url.isEmpty)
+            }
+            Toggle("", isOn: Binding(
+                get: { wh.isEnabled },
+                set: { enabled in toggleWebhook(wh.id, enabled: enabled) }
+            ))
+            .labelsHidden()
+        }
+        .contextMenu {
+            Button("Edit…") { webhookSheetMode = .edit(wh) }
+            Divider()
+            Button("Delete", role: .destructive) { deleteWebhook(wh) }
+        }
+    }
+
+    private func addOrUpdateWebhook(_ webhook: WebhookNotification) {
+        if let idx = webhooks.firstIndex(where: { $0.id == webhook.id }) {
+            webhooks[idx] = webhook
+        } else {
+            webhooks.append(webhook)
+        }
+        AppDatabase.shared.writeSilently(webhooks, to: .webhookNotifications)
+    }
+
+    private func deleteWebhook(_ webhook: WebhookNotification) {
+        webhooks.removeAll { $0.id == webhook.id }
+        AppDatabase.shared.writeSilently(webhooks, to: .webhookNotifications)
+        NotificationService.shared.deleteWebhookSecrets(for: webhook.id)
+        webhookTestResults.removeValue(forKey: webhook.id)
+    }
+
+    private func toggleWebhook(_ id: UUID, enabled: Bool) {
+        guard let idx = webhooks.firstIndex(where: { $0.id == id }) else { return }
+        webhooks[idx].isEnabled = enabled
+        AppDatabase.shared.writeSilently(webhooks, to: .webhookNotifications)
+    }
+
+    private func testWebhookFromUI(_ webhook: WebhookNotification) async {
+        testingWebhookIDs.insert(webhook.id)
+        webhookTestResults.removeValue(forKey: webhook.id)
+        let result = await NotificationService.shared.testWebhook(webhook)
+        switch result {
+        case .success:        webhookTestResults[webhook.id] = .success("Webhook sent")
+        case .failure(let e): webhookTestResults[webhook.id] = .failure(e.localizedDescription)
+        }
+        testingWebhookIDs.remove(webhook.id)
     }
 
     // MARK: - Shared sub-views
@@ -447,6 +565,20 @@ struct NotificationPrefsTab: View {
         case .failure(let e): teamsTestResult = .failure(e.localizedDescription)
         }
         isTestingTeams = false
+    }
+}
+
+// MARK: - WebhookSheetMode
+
+private enum WebhookSheetMode: Identifiable {
+    case add
+    case edit(WebhookNotification)
+
+    var id: String {
+        switch self {
+        case .add:           return "add"
+        case .edit(let wh):  return wh.id.uuidString
+        }
     }
 }
 
