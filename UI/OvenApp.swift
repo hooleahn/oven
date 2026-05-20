@@ -188,7 +188,7 @@ struct OvenApp: App {
             Group {
                 if depManager.allReady {
                     AppRootView()
-                        .tint(.orange)
+                        .tint(Color("AccentColor"))
                         .environmentObject(depManager)
                         .environmentObject(appState)
                         .environmentObject(theme)
@@ -320,6 +320,9 @@ struct AppRootView: View {
                 SharedStores.appState = appState
                 SharedStores.recipesViewModel = recipesViewModel
                 await vmStore.sync()
+                // Start the VM scheduler and handle "start on app launch" VMs
+                VMScheduler.shared.start(vmStore: vmStore)
+                VMScheduler.shared.checkAppLaunch()
                 // Register any VM tags that don't yet have an explicit palette index
                 for tag in Set(vmStore.vms.flatMap { $0.tags }) {
                     if tagStore.colorIndices[tag] == nil {

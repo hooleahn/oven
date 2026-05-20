@@ -88,6 +88,7 @@
 		B91426DD2F9F2B6600F13968 /* EmptyStateRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426DC2F9F2B6600F13968 /* EmptyStateRegistry.swift */; };
 		B91426DF2F9F2B7600F13968 /* EmptyStateRecipes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426DE2F9F2B7600F13968 /* EmptyStateRecipes.swift */; };
 		B94EA6382FB4217100EDCB68 /* ExecuteCommandSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94EA6372FB4217100EDCB68 /* ExecuteCommandSheet.swift */; };
+		B94EA63A2FBD4A1A00EDCB68 /* VMScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94EA6392FBD4A1A00EDCB68 /* VMScheduler.swift */; };
 		B97A40AA2F970E3F00FB577C /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40A92F970E3F00FB577C /* OnboardingView.swift */; };
 		B97A40AC2F970FB300FB577C /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B97A40AB2F970FB300FB577C /* DesignSystem.swift */; };
 		B97A40B02F971CF000FB577C /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = B97A40AF2F971CF000FB577C /* AppIcon.icon */; };
@@ -217,6 +218,7 @@
 		B91426DC2F9F2B6600F13968 /* EmptyStateRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateRegistry.swift; sourceTree = "<group>"; };
 		B91426DE2F9F2B7600F13968 /* EmptyStateRecipes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateRecipes.swift; sourceTree = "<group>"; };
 		B94EA6372FB4217100EDCB68 /* ExecuteCommandSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecuteCommandSheet.swift; sourceTree = "<group>"; };
+		B94EA6392FBD4A1A00EDCB68 /* VMScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMScheduler.swift; sourceTree = "<group>"; };
 		B97A40A92F970E3F00FB577C /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		B97A40AB2F970FB300FB577C /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		B97A40AF2F971CF000FB577C /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
@@ -432,6 +434,7 @@
 				B91426D62F9F256F00F13968 /* PushManager.swift */,
 				B9F42A4E2FA96E8A00294F3C /* CustomOSStore.swift */,
 				B9F42A502FA96E8A00294F3C /* CustomInstallerStore.swift */,
+				B94EA6392FBD4A1A00EDCB68 /* VMScheduler.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -626,6 +629,7 @@
 				B6539E2F3DF443149F26FB2D /* VMListView.swift in Sources */,
 				B94EA6382FB4217100EDCB68 /* ExecuteCommandSheet.swift in Sources */,
 				A15EBB8EDDCD4E8F9C9918F3 /* VMStore.swift in Sources */,
+				B94EA63A2FBD4A1A00EDCB68 /* VMScheduler.swift in Sources */,
 				934B04FDA9784EBDADB0378F /* VMViewHelpers.swift in Sources */,
 				BFC50767AAAC47B981D5F1DA /* VirtualMachine.swift in Sources */,
 				16B7EA75358743BCB2E35770 /* VMListViewModel.swift in Sources */,
@@ -659,7 +663,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 802;
+				CURRENT_PROJECT_VERSION = 901;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = V4RT59UVJJ;
 				ENABLE_APP_SANDBOX = NO;
@@ -784,7 +788,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 802;
+				CURRENT_PROJECT_VERSION = 901;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;

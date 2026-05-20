@@ -48,6 +48,18 @@ struct VMEditSheet: View {
     @State private var isFetchingVersions = false
     @State private var mdmServerID: UUID?
 
+    // Schedule
+    @State private var scheduleEnabled: Bool
+    @State private var scheduleStartTimeEnabled: Bool
+    @State private var scheduleStartTime: Date
+    @State private var scheduleStartDays: Set<Int>
+    @State private var scheduleStopTimeEnabled: Bool
+    @State private var scheduleStopTime: Date
+    @State private var scheduleStopDays: Set<Int>
+    @State private var scheduleStartOnAppLaunch: Bool
+    @State private var scheduleLaunchMode: VMScheduleLaunchMode
+    @State private var scheduleForceVMLaunch: Bool
+
     private static let customVersionSentinel = "__custom__"
 
     private var versionList: [String] {
@@ -89,6 +101,23 @@ struct VMEditSheet: View {
         let isCustom = !vm.osVersion.isEmpty && !fallback.contains(vm.osVersion)
         _versionPickerSel  = State(initialValue: isCustom ? "__custom__" : vm.osVersion)
         _customVersionText = State(initialValue: isCustom ? vm.osVersion : "")
+
+        // Schedule
+        _scheduleEnabled          = State(initialValue: vm.scheduleEnabled)
+        _scheduleStartTimeEnabled = State(initialValue: vm.scheduleStartTime != nil)
+        _scheduleStartTime        = State(initialValue: vm.scheduleStartTime ?? VMEditSheet.defaultTime(hour: 9))
+        _scheduleStartDays        = State(initialValue: vm.scheduleStartDays)
+        _scheduleStopTimeEnabled  = State(initialValue: vm.scheduleStopTime != nil)
+        _scheduleStopTime         = State(initialValue: vm.scheduleStopTime ?? VMEditSheet.defaultTime(hour: 18))
+        _scheduleStopDays         = State(initialValue: vm.scheduleStopDays)
+        _scheduleStartOnAppLaunch = State(initialValue: vm.scheduleStartOnAppLaunch)
+        _scheduleLaunchMode       = State(initialValue: vm.scheduleLaunchMode)
+        _scheduleForceVMLaunch    = State(initialValue: vm.scheduleForceVMLaunch)
+    }
+
+    private static func defaultTime(hour: Int) -> Date {
+        var c = DateComponents(); c.hour = hour; c.minute = 0
+        return Calendar.current.date(from: c) ?? Date()
     }
 
     private var allKnownTags: [String] {
@@ -111,6 +140,31 @@ struct VMEditSheet: View {
         let hostGB = Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824)
         let half = (hostGB / 2) & ~1   // round down to even number
         return max(2, min(half, 192))
+    }
+
+    // MARK: - Schedule conflict detection
+
+    /// Other non-base, schedule-enabled VMs that share the same start time and at least one day.
+    private var scheduleConflicts: [VirtualMachine] {
+        guard scheduleEnabled, scheduleStartTimeEnabled, !scheduleStartDays.isEmpty else { return [] }
+        let cal = Calendar.current
+        let h = cal.component(.hour,   from: scheduleStartTime)
+        let m = cal.component(.minute, from: scheduleStartTime)
+        return vmStore.vms.filter { other in
+            guard other.id != vm.id,
+                  !other.effectivelyBase,
+                  other.scheduleEnabled,
+                  let ot = other.scheduleStartTime else { return false }
+            let oh = cal.component(.hour,   from: ot)
+            let om = cal.component(.minute, from: ot)
+            return oh == h && om == m && !scheduleStartDays.intersection(other.scheduleStartDays).isEmpty
+        }
+    }
+
+    private var conflictWarningText: String {
+        let names = scheduleConflicts.prefix(2).map { $0.displayName.isEmpty ? $0.name : $0.displayName }
+        let extra = scheduleConflicts.count > 2 ? " and \(scheduleConflicts.count - 2) more" : ""
+        return "Start time conflict with \(names.joined(separator: ", "))\(extra). Only 2 VMs can run simultaneously — consider Force VM Launch or offset the start time."
     }
 
     var body: some View {
@@ -380,6 +434,9 @@ struct VMEditSheet: View {
                     }
                 } header: { Text("Shared folders") }
                   footer: { Text("Folders are mounted read-only inside the VM by default. Pass via `tart run --dir name:path[:options]`.") }
+
+                // MARK: Schedule section
+                scheduleSection
             }
             .formStyle(.grouped)
         }
@@ -403,6 +460,83 @@ struct VMEditSheet: View {
         .sheet(isPresented: $showFolderPicker) {
             SharedFolderSheet { folder in
                 sharedFolders.append(folder)
+            }
+        }
+    }
+
+    // MARK: - Schedule section view
+
+    @ViewBuilder
+    private var scheduleSection: some View {
+        Section {
+            Toggle("Enable schedule", isOn: $scheduleEnabled)
+
+            if scheduleEnabled {
+                // Start
+                Toggle(isOn: $scheduleStartTimeEnabled) {
+                    Label("Scheduled start", systemImage: "play.circle")
+                }
+                if scheduleStartTimeEnabled {
+                    DatePicker("Start at", selection: $scheduleStartTime,
+                               displayedComponents: .hourAndMinute)
+                    LabeledContent("Start on") {
+                        WeekdayPicker(selection: $scheduleStartDays)
+                    }
+                    if scheduleStartTimeEnabled && scheduleStartDays.isEmpty {
+                        Label("Select at least one day for the start schedule to fire.",
+                              systemImage: "exclamationmark.circle")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+
+                // Stop
+                Toggle(isOn: $scheduleStopTimeEnabled) {
+                    Label("Scheduled stop", systemImage: "stop.circle")
+                }
+                if scheduleStopTimeEnabled {
+                    DatePicker("Stop at", selection: $scheduleStopTime,
+                               displayedComponents: .hourAndMinute)
+                    LabeledContent("Stop on") {
+                        WeekdayPicker(selection: $scheduleStopDays)
+                    }
+                    if scheduleStopTimeEnabled && scheduleStopDays.isEmpty {
+                        Label("Select at least one day for the stop schedule to fire.",
+                              systemImage: "exclamationmark.circle")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+
+                Divider()
+
+                Toggle("Start on app launch", isOn: $scheduleStartOnAppLaunch)
+
+                Picker("Start mode", selection: $scheduleLaunchMode) {
+                    ForEach(VMScheduleLaunchMode.allCases, id: \.self) { mode in
+                        Label(mode.label, systemImage: mode.systemImage).tag(mode)
+                    }
+                }
+
+                Toggle("Force VM launch", isOn: $scheduleForceVMLaunch)
+            }
+        } header: {
+            Text("Schedule")
+        } footer: {
+            if scheduleEnabled {
+                VStack(alignment: .leading, spacing: 6) {
+                    if !scheduleConflicts.isEmpty {
+                        Label(conflictWarningText, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                    if scheduleForceVMLaunch {
+                        Label("Force launch stops the most recently started VM when 2 are already running.",
+                              systemImage: "info.circle")
+                            .foregroundStyle(.secondary)
+                    }
+                    Label("Requires Oven to be running. VMs will not start or stop automatically when Oven is closed.",
+                          systemImage: "info.circle")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption)
             }
         }
     }
@@ -448,6 +582,15 @@ struct VMEditSheet: View {
             v.mdmServerID   = mdmServerID
             v.sshPassword   = sshPassword.isEmpty ? nil : sshPassword
             if !v.isOCIBased { v.isBaseVM = isBaseVM }
+            // Schedule
+            v.scheduleEnabled          = scheduleEnabled
+            v.scheduleStartTime        = scheduleEnabled && scheduleStartTimeEnabled ? scheduleStartTime : nil
+            v.scheduleStartDays        = scheduleStartDays
+            v.scheduleStopTime         = scheduleEnabled && scheduleStopTimeEnabled ? scheduleStopTime : nil
+            v.scheduleStopDays         = scheduleStopDays
+            v.scheduleStartOnAppLaunch = scheduleStartOnAppLaunch
+            v.scheduleLaunchMode       = scheduleLaunchMode
+            v.scheduleForceVMLaunch    = scheduleForceVMLaunch
         }
         // Rename tart VM if name changed
         if tartName != vm.name && !tartName.isEmpty && tartNameError == nil {
@@ -495,6 +638,40 @@ struct VMEditSheet: View {
             hardwareError = error.localizedDescription
         }
         isSavingHardware = false
+    }
+}
+
+// MARK: - WeekdayPicker
+
+private struct WeekdayPicker: View {
+    @Binding var selection: Set<Int>
+
+    private let labels = ["S", "M", "T", "W", "T", "F", "S"]
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<7, id: \.self) { index in
+                let selected = selection.contains(index)
+                Button {
+                    if selected { selection.remove(index) }
+                    else        { selection.insert(index) }
+                } label: {
+                    Text(labels[index])
+                        .font(.caption2.bold())
+                        .frame(width: 24, height: 24)
+                        .background(selected ? Color.accentColor : Color.secondary.opacity(0.15),
+                                    in: Circle())
+                        .foregroundStyle(selected ? Color.white : Color.primary)
+                }
+                .buttonStyle(.plain)
+                .help(fullDayName(index))
+            }
+        }
+    }
+
+    private func fullDayName(_ index: Int) -> String {
+        let names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        return names[index]
     }
 }
 

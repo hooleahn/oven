@@ -1,8 +1,10 @@
 import SwiftUI
+import ServiceManagement
 
 struct GeneralPrefsTab: View {
     @EnvironmentObject var theme: AppTheme
     @AppStorage("toast.disabled") private var toastsDisabled = false
+    @State private var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
     var body: some View {
         Form {
             Section {
@@ -41,6 +43,26 @@ struct GeneralPrefsTab: View {
 
             } header: {
                 Text("Menu Bar")
+            }
+
+            Section {
+                Toggle(isOn: $launchAtLogin) {
+                    Label("Launch at Login", systemImage: "arrow.right.circle")
+                }
+                .help("Automatically opens Oven when you log in to your Mac.")
+                .onChange(of: launchAtLogin) { _, newValue in
+                    do {
+                        if newValue {
+                            try SMAppService.mainApp.register()
+                        } else {
+                            try SMAppService.mainApp.unregister()
+                        }
+                    } catch {
+                        launchAtLogin = !newValue
+                    }
+                }
+            } header: {
+                Text("Startup")
             }
 
             Section {

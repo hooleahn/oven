@@ -271,6 +271,9 @@ struct VMDetailPane: View {
                 LabeledContent("S/N") {
                     Text(vm.serialNumber.isEmpty ? "—" : vm.serialNumber)
                         .foregroundStyle(.secondary)
+                    if !vm.serialNumber.isEmpty {
+                        CopyButton(value: vm.serialNumber)
+                    }
                 }
             }
 

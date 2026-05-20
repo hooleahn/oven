@@ -11,6 +11,8 @@ enum NotificationEvent: String, CaseIterable, Identifiable {
     case imagePullCompleted   = "imagePullCompleted"
     case imagePushCompleted   = "imagePushCompleted"
     case vmStopped            = "vmStopped"
+    case vmStarted            = "vmStarted"
+    case vmStartFailed        = "vmStartFailed"
 
     var id: String { rawValue }
 
@@ -22,6 +24,8 @@ enum NotificationEvent: String, CaseIterable, Identifiable {
         case .imagePullCompleted:   return "Registry pull completed"
         case .imagePushCompleted:   return "Registry push completed"
         case .vmStopped:            return "VM stopped"
+        case .vmStarted:            return "VM started (scheduled)"
+        case .vmStartFailed:        return "VM start failed (scheduled)"
         }
     }
 
@@ -33,6 +37,8 @@ enum NotificationEvent: String, CaseIterable, Identifiable {
         case .imagePullCompleted:   return "arrow.down.to.line"
         case .imagePushCompleted:   return "arrow.up.to.line"
         case .vmStopped:            return "stop.circle"
+        case .vmStarted:            return "play.circle"
+        case .vmStartFailed:        return "exclamationmark.circle"
         }
     }
 
@@ -327,6 +333,8 @@ struct NotificationPrefsTab: View {
             (.imagePullCompleted,   $theme.systemNotifImagePullCompleted),
             (.imagePushCompleted,   $theme.systemNotifImagePushCompleted),
             (.vmStopped,            $theme.systemNotifVMStopped),
+            (.vmStarted,            $theme.systemNotifVMStarted),
+            (.vmStartFailed,        $theme.systemNotifVMStartFailed),
         ]
     }
 
@@ -338,6 +346,8 @@ struct NotificationPrefsTab: View {
             (.imagePullCompleted,   $theme.pushoverNotifImagePullCompleted),
             (.imagePushCompleted,   $theme.pushoverNotifImagePushCompleted),
             (.vmStopped,            $theme.pushoverNotifVMStopped),
+            (.vmStarted,            $theme.pushoverNotifVMStarted),
+            (.vmStartFailed,        $theme.pushoverNotifVMStartFailed),
         ]
     }
 
@@ -349,6 +359,8 @@ struct NotificationPrefsTab: View {
             (.imagePullCompleted,   $theme.slackNotifImagePullCompleted),
             (.imagePushCompleted,   $theme.slackNotifImagePushCompleted),
             (.vmStopped,            $theme.slackNotifVMStopped),
+            (.vmStarted,            $theme.slackNotifVMStarted),
+            (.vmStartFailed,        $theme.slackNotifVMStartFailed),
         ]
     }
 
@@ -360,6 +372,8 @@ struct NotificationPrefsTab: View {
             (.imagePullCompleted,   $theme.teamsNotifImagePullCompleted),
             (.imagePushCompleted,   $theme.teamsNotifImagePushCompleted),
             (.vmStopped,            $theme.teamsNotifVMStopped),
+            (.vmStarted,            $theme.teamsNotifVMStarted),
+            (.vmStartFailed,        $theme.teamsNotifVMStartFailed),
         ]
     }
 

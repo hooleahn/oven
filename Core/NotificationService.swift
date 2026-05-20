@@ -9,7 +9,20 @@ import UserNotifications
 final class NotificationService {
 
     static let shared = NotificationService()
-    private init() {}
+
+    private init() {
+        // Register fallback defaults for scheduled VM event toggles.
+        // UserDefaults.standard.bool(forKey:) returns false for any key that has
+        // never been written — the @AppStorage default in AppTheme only applies
+        // when the property wrapper reads the value. Registering here ensures
+        // these events fire on a fresh install without needing a prefs visit.
+        UserDefaults.standard.register(defaults: [
+            "notif.system.vmStarted":      true,
+            "notif.system.vmStartFailed":  true,
+            "notif.pushover.vmStarted":    true,
+            "notif.pushover.vmStartFailed": true,
+        ])
+    }
 
     // MARK: - Keychain keys
 
@@ -109,6 +122,8 @@ final class NotificationService {
     }
 
     func notifyVMStopped(vmName: String) async {
+        AppLogger.shared.log("VM stopped: \(vmName)", source: "NotificationService")
+
         let pushEnabled   = UserDefaults.standard.bool(forKey: "pushoverEnabled")
         let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
         let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
@@ -131,6 +146,64 @@ final class NotificationService {
             }
             if systemEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "system")) {
                 group.addTask { await self.sendSystemNotification(title: title, message: message, success: nil) }
+            }
+        }
+    }
+
+    func notifyVMStarted(vmName: String) async {
+        AppLogger.shared.success("VM started on schedule: \(vmName)", source: "NotificationService")
+
+        let pushEnabled   = UserDefaults.standard.bool(forKey: "pushoverEnabled")
+        let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
+        let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
+        let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
+        guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
+
+        let title   = "▶️ Oven: VM Started"
+        let message = "VM '\(vmName)' started on schedule."
+        let eventKey = "notif.%@.vmStarted"
+
+        await withTaskGroup(of: Void.self) { group in
+            if pushEnabled   && UserDefaults.standard.bool(forKey: String(format: eventKey, "pushover")) {
+                group.addTask { await self.sendPushover(title: title, message: message) }
+            }
+            if slackEnabled  && UserDefaults.standard.bool(forKey: String(format: eventKey, "slack")) {
+                group.addTask { await self.sendSlack(title: title, message: message, success: true) }
+            }
+            if teamsEnabled  && UserDefaults.standard.bool(forKey: String(format: eventKey, "teams")) {
+                group.addTask { await self.sendTeams(title: title, message: message, success: true) }
+            }
+            if systemEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "system")) {
+                group.addTask { await self.sendSystemNotification(title: title, message: message, success: true) }
+            }
+        }
+    }
+
+    func notifyVMStartFailed(vmName: String, reason: String) async {
+        AppLogger.shared.warning("VM start failed (scheduled): \(vmName) — \(reason)", source: "NotificationService")
+
+        let pushEnabled   = UserDefaults.standard.bool(forKey: "pushoverEnabled")
+        let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
+        let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
+        let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
+        guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
+
+        let title   = "⚠️ Oven: VM Start Failed"
+        let message = "VM '\(vmName)' failed to start. \(reason)"
+        let eventKey = "notif.%@.vmStartFailed"
+
+        await withTaskGroup(of: Void.self) { group in
+            if pushEnabled   && UserDefaults.standard.bool(forKey: String(format: eventKey, "pushover")) {
+                group.addTask { await self.sendPushover(title: title, message: message) }
+            }
+            if slackEnabled  && UserDefaults.standard.bool(forKey: String(format: eventKey, "slack")) {
+                group.addTask { await self.sendSlack(title: title, message: message, success: false) }
+            }
+            if teamsEnabled  && UserDefaults.standard.bool(forKey: String(format: eventKey, "teams")) {
+                group.addTask { await self.sendTeams(title: title, message: message, success: false) }
+            }
+            if systemEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "system")) {
+                group.addTask { await self.sendSystemNotification(title: title, message: message, success: false) }
             }
         }
     }
@@ -196,12 +269,11 @@ final class NotificationService {
             return
         }
 
-        // Use Block Kit for a clean Slack message
         let color: String
         switch success {
-        case true:  color = "#36a64f"   // green
-        case false: color = "#d32f2f"   // red
-        case nil:   color = "#f0a500"   // amber (in progress)
+        case true:  color = "#36a64f"
+        case false: color = "#d32f2f"
+        case nil:   color = "#f0a500"
         }
 
         let payload: [String: Any] = [
@@ -230,19 +302,17 @@ final class NotificationService {
             AppLogger.shared.error("Slack failed: \(error.localizedDescription)", source: "NotificationService")
         }
     }
-    
+
     private func sendSystemNotification(title: String, message: String, success: Bool?) async {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body  = message
         let soundEnabled = UserDefaults.standard.bool(forKey: "notif.system.soundEnabled")
         content.sound = soundEnabled ? .default : nil
-        
+
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
 
-
-        // Verify the authorization status.
         guard (settings.authorizationStatus == .authorized) ||
                 (settings.authorizationStatus == .provisional) else {
             do {
@@ -265,24 +335,18 @@ final class NotificationService {
             AppLogger.shared.error("System Notification failed — alerts disabled in System Settings", source: "NotificationService")
         }
     }
-    
-    func requestAuthorizationForSystemNotifications() async throws -> Bool {
-        // 2. Get the shared instance of UNUserNotificationCenter
-        let notificationCenter = UNUserNotificationCenter.current()
-        // 3. Define the types of authorization you need
-        let authorizationOptions: UNAuthorizationOptions = [.alert, .sound, .badge]
 
+    func requestAuthorizationForSystemNotifications() async throws -> Bool {
+        let notificationCenter = UNUserNotificationCenter.current()
+        let authorizationOptions: UNAuthorizationOptions = [.alert, .sound, .badge]
         do {
-            // 4. Request authorization to the user
             let authorizationGranted = try await notificationCenter.requestAuthorization(options: authorizationOptions)
-            // 5. Return the result of the authorization process
             return authorizationGranted
         } catch {
             throw error
         }
     }
-    
-    
+
     func checkCurrentAuthorizationSetting() async {
         let notificationCenter = UNUserNotificationCenter.current()
         let currentSettings = await notificationCenter.notificationSettings()
@@ -303,18 +367,16 @@ final class NotificationService {
     }
 
     // MARK: - Test
-    
+
     func testSystemNotifications() async -> Result<Void, NotificationError> {
-        
+
         let content = UNMutableNotificationContent()
         content.title = "Oven: Test notification"
         content.body = "System notifications are configured correctly 🎉"
-        
+
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
 
-
-        // Verify the authorization status.
         guard (settings.authorizationStatus == .authorized) ||
               (settings.authorizationStatus == .provisional) else {
             AppLogger.shared.error("System Notifications are disabled for Oven", source:"NotificationService")
@@ -326,26 +388,19 @@ final class NotificationService {
             }
             return .failure(.notConfigured("System Notifications are disabled")) }
 
-
         if settings.alertSetting == .enabled {
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
             let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
-
-            // add our notification request
             do {
                 try await UNUserNotificationCenter.current().add(request)
             } catch {
                 print(error)
-                
             }
             AppLogger.shared.success("Test System Notification sent", source:"NotificationService")
             return .success(())
         } else {
             return .failure(.notConfigured("Notifications are disabled"))
         }
-        
-        
-        
     }
 
     func testPushover() async -> Result<Void, NotificationError> {
@@ -403,7 +458,6 @@ final class NotificationService {
         case nil:   themeColor = "f0a500"
         }
 
-        // Adaptive Card (Teams Incoming Webhook format)
         let payload: [String: Any] = [
             "type": "message",
             "attachments": [[

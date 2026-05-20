@@ -159,7 +159,7 @@ struct VMCard: View {
                     Image(systemName: "ellipsis")
                         .frame(width: 6.5, height: 0.5)
                         .padding()
-                        .foregroundColor(Color.accentColor)
+                        .foregroundColor(Color.accent.opacity(0.5))
                         .background(RoundedRectangle(cornerRadius: 5).fill(Color.accentColor.opacity(0.05)))
                 }
                 .menuStyle(.button)

@@ -62,6 +62,8 @@ final class AppTheme: ObservableObject {
     @AppStorage("notif.system.imagePullCompleted")   var systemNotifImagePullCompleted: Bool = true
     @AppStorage("notif.system.imagePushCompleted")   var systemNotifImagePushCompleted: Bool = false
     @AppStorage("notif.system.vmStopped")            var systemNotifVMStopped: Bool = false
+    @AppStorage("notif.system.vmStarted")            var systemNotifVMStarted: Bool = true
+    @AppStorage("notif.system.vmStartFailed")        var systemNotifVMStartFailed: Bool = true
 
     // Per-event toggles — Pushover
     @AppStorage("notif.pushover.baseVMBuildSucceeded") var pushoverNotifBaseVMBuildSucceeded: Bool = true
@@ -70,6 +72,8 @@ final class AppTheme: ObservableObject {
     @AppStorage("notif.pushover.imagePullCompleted")   var pushoverNotifImagePullCompleted: Bool = true
     @AppStorage("notif.pushover.imagePushCompleted")   var pushoverNotifImagePushCompleted: Bool = false
     @AppStorage("notif.pushover.vmStopped")            var pushoverNotifVMStopped: Bool = false
+    @AppStorage("notif.pushover.vmStarted")            var pushoverNotifVMStarted: Bool = true
+    @AppStorage("notif.pushover.vmStartFailed")        var pushoverNotifVMStartFailed: Bool = true
 
     // Per-event toggles — Slack
     @AppStorage("notif.slack.baseVMBuildSucceeded") var slackNotifBaseVMBuildSucceeded: Bool = true
@@ -78,6 +82,8 @@ final class AppTheme: ObservableObject {
     @AppStorage("notif.slack.imagePullCompleted")   var slackNotifImagePullCompleted: Bool = true
     @AppStorage("notif.slack.imagePushCompleted")   var slackNotifImagePushCompleted: Bool = false
     @AppStorage("notif.slack.vmStopped")            var slackNotifVMStopped: Bool = false
+    @AppStorage("notif.slack.vmStarted")            var slackNotifVMStarted: Bool = false
+    @AppStorage("notif.slack.vmStartFailed")        var slackNotifVMStartFailed: Bool = true
 
     // Per-event toggles — Teams
     @AppStorage("notif.teams.baseVMBuildSucceeded") var teamsNotifBaseVMBuildSucceeded: Bool = true
@@ -86,6 +92,8 @@ final class AppTheme: ObservableObject {
     @AppStorage("notif.teams.imagePullCompleted")   var teamsNotifImagePullCompleted: Bool = true
     @AppStorage("notif.teams.imagePushCompleted")   var teamsNotifImagePushCompleted: Bool = false
     @AppStorage("notif.teams.vmStopped")            var teamsNotifVMStopped: Bool = false
+    @AppStorage("notif.teams.vmStarted")            var teamsNotifVMStarted: Bool = false
+    @AppStorage("notif.teams.vmStartFailed")        var teamsNotifVMStartFailed: Bool = true
 
     // Menu bar
     @AppStorage("menuBarItemEnabled") var menuBarItemEnabled: Bool = true
@@ -98,4 +106,3 @@ final class AppTheme: ObservableObject {
     @AppStorage("showGraphicsDuringBuild") var showGraphicsDuringBuild: Bool = false
     @AppStorage("lockInputDuringBuild")    var lockInputDuringBuild: Bool = false
 }
-

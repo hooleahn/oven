@@ -119,6 +119,16 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
     var actualDiskGB: Int? = nil       // from tart list Size field, nil if unknown
     var supportsGuestAgent: Bool = false  // user-confirmed tart-guest-agent is installed in VM
 
+    // MARK: - Schedule
+    var scheduleEnabled: Bool = false
+    var scheduleStartTime: Date?
+    var scheduleStartDays: Set<Int> = []   // 0 = Sun … 6 = Sat
+    var scheduleStopTime: Date?
+    var scheduleStopDays: Set<Int> = []
+    var scheduleStartOnAppLaunch: Bool = false
+    var scheduleLaunchMode: VMScheduleLaunchMode = .native
+    var scheduleForceVMLaunch: Bool = false
+
     // MARK: - SharedFolder
     struct SharedFolder: Identifiable, Codable, Hashable, Sendable {
         let id: UUID
@@ -255,6 +265,14 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         supportsGuestAgent   = try c.decodeIfPresent(Bool.self, forKey: .supportsGuestAgent)   ?? false
         isResolvingIP        = false  // always reset on load — never persisted
         isStopping           = false
+        scheduleEnabled          = try c.decodeIfPresent(Bool.self,                 forKey: .scheduleEnabled)          ?? false
+        scheduleStartTime        = try c.decodeIfPresent(Date.self,                 forKey: .scheduleStartTime)
+        scheduleStartDays        = try c.decodeIfPresent(Set<Int>.self,             forKey: .scheduleStartDays)        ?? []
+        scheduleStopTime         = try c.decodeIfPresent(Date.self,                 forKey: .scheduleStopTime)
+        scheduleStopDays         = try c.decodeIfPresent(Set<Int>.self,             forKey: .scheduleStopDays)         ?? []
+        scheduleStartOnAppLaunch = try c.decodeIfPresent(Bool.self,                 forKey: .scheduleStartOnAppLaunch) ?? false
+        scheduleLaunchMode       = try c.decodeIfPresent(VMScheduleLaunchMode.self, forKey: .scheduleLaunchMode)       ?? .native
+        scheduleForceVMLaunch    = try c.decodeIfPresent(Bool.self,                 forKey: .scheduleForceVMLaunch)    ?? false
     }
 
     // MARK: - Full init
@@ -388,6 +406,30 @@ extension VirtualMachine {
         default:
             if osVersion.isEmpty { return osName.rawValue + beta }
             return "\(osName.rawValue) \(osVersion)\(beta)"
+        }
+    }
+}
+
+// MARK: - VMScheduleLaunchMode
+
+enum VMScheduleLaunchMode: String, Codable, Hashable, CaseIterable, Sendable {
+    case native   = "native"
+    case vnc      = "vnc"
+    case headless = "headless"
+
+    var label: String {
+        switch self {
+        case .native:   return "Native"
+        case .vnc:      return "VNC / Screen Sharing"
+        case .headless: return "Headless (SSH only)"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .native:   return "display"
+        case .vnc:      return "network"
+        case .headless: return "terminal"
         }
     }
 }

@@ -40,5 +40,7 @@
 	<string></string>
 	<key>UIUserInterfaceStyle</key>
 	<string>Dark</string>
+	<key>NSAccentColorName</key>
+	<string>AccentColor</string>
 </dict>
 </plist>

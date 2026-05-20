@@ -153,7 +153,6 @@ private struct ManagedDependencyRow: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .tint(.orange)
             } else if dep.status == .notInstalled {
                 Button("Install") {
                     Task { await depManager.install(dep) }

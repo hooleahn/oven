@@ -60,7 +60,8 @@ struct VMListView: View {
                 model: model,
                 vmStore: vmStore,
                 baseVMStore: baseVMStore,
-                appState: appState
+                appState: appState,
+                serverStore: serverStore
             ))
             .searchable(text: $appState.searchQuery, prompt: "Search VMs…")
             .safeAreaInset(edge: .bottom, spacing: 0) { floatingActionBar }
@@ -672,6 +673,7 @@ private struct VMListSheets: ViewModifier {
     let vmStore: VMStore
     let baseVMStore: BaseVMStore
     let appState: AppState
+    let serverStore: MDMServerStore
 
     private var stopTitle: String {
         model.confirmStop.map { "Stop \($0.displayName.isEmpty ? $0.name : $0.displayName)?" } ?? "Stop VM?"
@@ -682,6 +684,19 @@ private struct VMListSheets: ViewModifier {
     private var stopAllTitle: String {
         let count = vmStore.vms.filter { $0.status == .running || $0.status == .suspended }.count
         return "Stop \(count) Running VM\(count == 1 ? "" : "s")?"
+    }
+
+    /// Returns the Jamf server for a VM only when delete-from-Jamf is enabled and the VM has a serial number.
+    private func jamfServer(for vm: VirtualMachine) -> MDMServer? {
+        guard let serverID = vm.mdmServerID,
+              let server = serverStore.servers.first(where: { $0.id == serverID }),
+              server.featureDeleteFromJamf,
+              !vm.serialNumber.isEmpty else { return nil }
+        return server
+    }
+
+    private var bulkHasJamf: Bool {
+        vmStore.vms.filter { model.selectedIDs.contains($0.id) }.contains { jamfServer(for: $0) != nil }
     }
 
     func body(content: Content) -> some View {
@@ -710,6 +725,12 @@ private struct VMListSheets: ViewModifier {
                 isPresented: Binding(get: { model.confirmDelete != nil }, set: { if !$0 { model.confirmDelete = nil } }),
                 titleVisibility: .visible
             ) {
+                if let vm = model.confirmDelete, let server = jamfServer(for: vm) {
+                    Button("Delete and Remove from Jamf", role: .destructive) {
+                        model.confirmDelete = nil
+                        Task { try? await vmStore.delete(vm: vm, mdmServer: server) }
+                    }
+                }
                 Button("Delete", role: .destructive) {
                     guard let vmToDelete = model.confirmDelete else { return }
                     model.confirmDelete = nil
@@ -723,6 +744,15 @@ private struct VMListSheets: ViewModifier {
                 isPresented: $model.confirmBulkDelete,
                 titleVisibility: .visible
             ) {
+                if bulkHasJamf {
+                    Button("Delete \(model.selectedIDs.count) VMs and Remove from Jamf", role: .destructive) {
+                        let ids = model.selectedIDs
+                        model.selectedIDs.removeAll()
+                        for vm in vmStore.vms where ids.contains(vm.id) {
+                            Task { try? await vmStore.delete(vm: vm, mdmServer: jamfServer(for: vm)) }
+                        }
+                    }
+                }
                 Button("Delete \(model.selectedIDs.count) VMs", role: .destructive) {
                     let ids = model.selectedIDs
                     model.selectedIDs.removeAll()
@@ -991,7 +1021,7 @@ struct VMListRow: View {
         switch vm.status {
         case .running:   return .green
         case .error:     return .red
-        case .building:  return .accentColor
+        case .building:  return .vmBuilding
         default:         return .secondary
         }
     }

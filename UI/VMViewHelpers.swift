@@ -36,7 +36,7 @@ struct StatusPill: View {
         switch status {
         case .running:   return .green
         case .suspended: return .secondary
-        case .building:  return .accentColor
+        case .building:  return .vmBuilding
         case .error:     return .red
         default:         return .secondary.opacity(0.5)
         }

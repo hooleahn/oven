@@ -216,7 +216,21 @@ final class VMStore: ObservableObject {
     }
 
     /// Delete a VM from tart and remove its metadata record.
-    func delete(vm: VirtualMachine) async throws {
+    /// Pass `mdmServer` to also remove the computer from Jamf Pro (non-fatal if it fails).
+    func delete(vm: VirtualMachine, mdmServer: MDMServer? = nil) async throws {
+        if let server = mdmServer,
+           server.featureDeleteFromJamf,
+           !vm.serialNumber.isEmpty,
+           let jamf = server.makeJamfService() {
+            do {
+                if let device = try await jamf.findDevice(serialNumber: vm.serialNumber) {
+                    try await jamf.removeDevice(id: device.id)
+                    AppLogger.shared.success("Removed \(vm.name) from Jamf Pro", source: "VMStore")
+                }
+            } catch {
+                AppLogger.shared.warning("Jamf removal failed for \(vm.name): \(error.localizedDescription)", source: "VMStore")
+            }
+        }
         do {
             try await tartService.delete(name: vm.name)
         } catch {
