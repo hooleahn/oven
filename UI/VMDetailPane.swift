@@ -213,8 +213,9 @@ struct VMDetailPane: View {
             enrollmentStatus = nil
             enrollmentError  = nil
             revealedPassword = nil
-            // Start IP polling immediately when detail pane opens for a running VM
-            if vm.status == .running && (vm.ipAddress == nil || vm.ipAddress?.isEmpty == true) {
+            // Start IP polling when detail pane opens for a running VM (skip if already exhausted)
+            if vm.status == .running && (vm.ipAddress == nil || vm.ipAddress?.isEmpty == true)
+                && !vm.ipPollingExhausted {
                 await vmStore.refreshIP(for: vm)
             }
             await loadLiveConfig()
@@ -226,6 +227,7 @@ struct VMDetailPane: View {
         .onChange(of: vm.status) { _, newStatus in
             guard newStatus == .running else { return }
             guard vm.ipAddress == nil else { return }
+            guard !vm.ipPollingExhausted else { return }
             Task { await vmStore.refreshIP(for: vm) }
         }
         .task(id: vm.ipAddress) {
@@ -283,6 +285,27 @@ struct VMDetailPane: View {
                         HStack(spacing: 6) {
                             SelectableMonoText(ip)
                             CopyButton(value: ip)
+                        }
+                    } else if vm.status == .running && vm.isResolvingIP {
+                        HStack(spacing: 4) {
+                            ProgressView().controlSize(.mini)
+                            Text("Resolving…").foregroundStyle(.secondary).font(.caption)
+                        }
+                    } else if vm.status == .running && vm.ipPollingExhausted {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.caption).foregroundStyle(.orange)
+                            Text(vm.ipAddressError ?? "Could not resolve IP address")
+                                .foregroundStyle(.secondary).font(.caption)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Button {
+                                Task { await vmStore.refreshIP(for: vm) }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.caption2).foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Retry IP resolution")
                         }
                     } else {
                         Text("—").foregroundStyle(.secondary)

@@ -33,6 +33,9 @@ final class AppState: ObservableObject {
     var registryDownloads: [String: Double] = [:]
     var activeIPSWDownloads: [String: Double] = [:]  // buildid → progress
 
+    // TART_HOME accessibility alert (nil = no alert)
+    var tartHomeAlertMessage: String? = nil
+
     // MARK: - Operation tracking
 
     struct OperationRecord: Identifiable {

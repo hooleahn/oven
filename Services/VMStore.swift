@@ -73,8 +73,13 @@ final class VMStore: ObservableObject {
     }
 
     /// Refresh the IP address for a single running VM.
-    /// Polls for the VM's IP address, retrying every 3 s for up to 90 s.
-    /// Returns immediately if the IP is already known or the VM is not running.
+    ///
+    /// Waits 5 s before the first attempt, then polls with a countdown backoff:
+    /// waits 10 s after attempt 1, 9 s after attempt 2, … 1 s after attempt 10,
+    /// then stops and marks the VM as exhausted so the UI can show a manual button.
+    ///
+    /// If tart reports TART_HOME is invalid (e.g. storage drive disconnected),
+    /// polling stops immediately and the error is surfaced via a notification.
     func refreshIP(for vm: VirtualMachine) async {
         guard vm.status == .running else { return }
         // Already have it — nothing to do
@@ -83,26 +88,42 @@ final class VMStore: ObservableObject {
         // Bail if another caller is already polling for this VM's IP
         guard vms.first(where: { $0.id == vm.id })?.isResolvingIP != true else { return }
 
-        update(id: vm.id) { $0.isResolvingIP = true }
+        update(id: vm.id) { $0.isResolvingIP = true; $0.ipPollingExhausted = false; $0.ipAddressError = nil }
         defer { update(id: vm.id) { $0.isResolvingIP = false } }
 
-        let deadline = Date().addingTimeInterval(90)
-        while Date() < deadline {
-            // Stop if VM is no longer running
-            guard vms.first(where: { $0.id == vm.id })?.status == .running else { break }
+        // Initial 5-second delay — VM needs time to finish booting before network is up
+        try? await Task.sleep(for: .seconds(5))
+
+        // 10 attempts with countdown backoff: wait 10 s, 9 s, … 1 s after each failed attempt
+        for waitSeconds in stride(from: 10, through: 1, by: -1) {
+            guard vms.first(where: { $0.id == vm.id })?.status == .running else { return }
             do {
-                // waitSeconds: 1 — let tart fail fast; sleep below handles the 3-s cadence
                 let ip = try await tartService.ip(name: vm.name, waitSeconds: 1)
                 if !ip.isEmpty {
                     update(id: vm.id) { $0.ipAddress = ip; $0.isResolvingIP = false }
                     saveToDisk()
                     return
                 }
-            } catch {
-                // tart ip returned non-zero — VM not ready yet, keep polling
-            }
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            } catch let error as ProcessError {
+                let errorText: String
+                switch error {
+                case .nonZeroExit(_, let stderr): errorText = stderr
+                default: errorText = error.localizedDescription
+                }
+                if errorText.contains("TART_HOME is invalid") {
+                    let msg = "Storage volume unavailable: TART_HOME cannot be accessed. The drive may be disconnected."
+                    update(id: vm.id) { $0.ipAddressError = msg; $0.ipPollingExhausted = true }
+                    AppLogger.shared.error("IP polling stopped — \(msg)", source: "VMStore")
+                    NotificationCenter.default.post(name: .tartHomeInvalid, object: nil,
+                                                    userInfo: ["message": msg])
+                    return
+                }
+            } catch {}
+            try? await Task.sleep(for: .seconds(waitSeconds))
         }
+
+        // All 10 attempts exhausted with no IP
+        update(id: vm.id) { $0.ipPollingExhausted = true }
     }
 
     // MARK: - CRUD
@@ -192,7 +213,13 @@ final class VMStore: ObservableObject {
         update(id: vm.id) { $0.isStopping = true }
         defer { update(id: vm.id) { $0.isStopping = false } }
         try await tartService.stop(name: vm.name)
-        update(id: vm.id) { $0.status = .stopped; $0.ipAddress = nil; $0.isStopping = false }
+        update(id: vm.id) {
+            $0.status = .stopped
+            $0.ipAddress = nil
+            $0.isStopping = false
+            $0.ipPollingExhausted = false
+            $0.ipAddressError = nil
+        }
         saveToDisk()
     }
 

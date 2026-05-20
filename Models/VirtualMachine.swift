@@ -118,6 +118,8 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
     var isStopping: Bool = false       // true while tart stop is in flight
     var actualDiskGB: Int? = nil       // from tart list Size field, nil if unknown
     var supportsGuestAgent: Bool = false  // user-confirmed tart-guest-agent is installed in VM
+    var ipAddressError: String? = nil  // last IP polling failure reason (transient)
+    var ipPollingExhausted: Bool = false  // true when auto-polling has stopped (transient)
 
     // MARK: - Schedule
     var scheduleEnabled: Bool = false
@@ -265,6 +267,8 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         supportsGuestAgent   = try c.decodeIfPresent(Bool.self, forKey: .supportsGuestAgent)   ?? false
         isResolvingIP        = false  // always reset on load — never persisted
         isStopping           = false
+        ipAddressError       = nil
+        ipPollingExhausted   = false
         scheduleEnabled          = try c.decodeIfPresent(Bool.self,                 forKey: .scheduleEnabled)          ?? false
         scheduleStartTime        = try c.decodeIfPresent(Date.self,                 forKey: .scheduleStartTime)
         scheduleStartDays        = try c.decodeIfPresent(Set<Int>.self,             forKey: .scheduleStartDays)        ?? []

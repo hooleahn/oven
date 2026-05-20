@@ -212,6 +212,9 @@ struct OvenApp: App {
             .onChange(of: profileStore.activeProfileID) { _, _ in
                 templateStore.load()
                 Task { await vmStore.reload() }
+                if let error = AppSettings.load().checkTartHomeAccessibility() {
+                    appState.tartHomeAlertMessage = error
+                }
             }
             .task {
                 // Wire vmStore into baseVMStore (Option B architecture)
@@ -235,6 +238,10 @@ struct OvenApp: App {
                         "macOS \(ver.majorVersion).\(ver.minorVersion).\(ver.patchVersion) — OK",
                         source: "OvenApp"
                     )
+                }
+                // Check TART_HOME accessibility on startup
+                if let error = AppSettings.load().checkTartHomeAccessibility() {
+                    appState.tartHomeAlertMessage = error
                 }
             }
         }
@@ -286,6 +293,7 @@ struct OvenApp: App {
 extension Notification.Name {
     static let showOnboarding      = Notification.Name("com.oven.showOnboarding")
     static let showAcknowledgements = Notification.Name("com.oven.showAcknowledgements")
+    static let tartHomeInvalid     = Notification.Name("com.oven.tartHomeInvalid")
 }
 
 // MARK: - AppRootView
@@ -349,6 +357,25 @@ struct AppRootView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .showAcknowledgements)) { _ in
                 showAcknowledgements = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .tartHomeInvalid)) { notification in
+                if let msg = notification.userInfo?["message"] as? String {
+                    appState.tartHomeAlertMessage = msg
+                }
+            }
+            .alert("Storage Directory Inaccessible",
+                   isPresented: Binding(
+                       get: { appState.tartHomeAlertMessage != nil },
+                       set: { if !$0 { appState.tartHomeAlertMessage = nil } }
+                   )
+            ) {
+                Button("Open Preferences") {
+                    appState.tartHomeAlertMessage = nil
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                }
+                Button("OK", role: .cancel) { appState.tartHomeAlertMessage = nil }
+            } message: {
+                Text(appState.tartHomeAlertMessage ?? "")
             }
     }
 }

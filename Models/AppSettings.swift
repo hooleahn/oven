@@ -94,6 +94,27 @@ struct AppSettings: Codable {
             .appendingPathComponent(".tart", isDirectory: true)
     }
 
+    /// Checks whether the resolved TART_HOME directory exists and is readable/writable.
+    /// Returns nil on success, or a user-facing error string on failure.
+    func checkTartHomeAccessibility() -> String? {
+        let url = resolvedTartHome
+        let fm = FileManager.default
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else {
+            return "The TART_HOME directory \"\(url.path)\" does not exist. The storage volume may be disconnected. Switch to a different profile in Preferences \u{2192} Profiles."
+        }
+        guard isDir.boolValue else {
+            return "The TART_HOME path \"\(url.path)\" is not a directory. Switch to a different profile in Preferences \u{2192} Profiles."
+        }
+        guard fm.isReadableFile(atPath: url.path) else {
+            return "The TART_HOME directory \"\(url.path)\" is not readable. Check that the volume is mounted and accessible."
+        }
+        guard fm.isWritableFile(atPath: url.path) else {
+            return "The TART_HOME directory \"\(url.path)\" is not writable. Check volume permissions or switch to a different profile in Preferences \u{2192} Profiles."
+        }
+        return nil
+    }
+
     // Explicit memberwise init (required once we define a custom Decodable init)
     init(vmStorageRoot: URL, ipswStorageRoot: URL, packerTemplatesRoot: URL,
          depsRoot: URL, tartHome: String? = nil,
