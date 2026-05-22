@@ -109,10 +109,12 @@ extension PackerTemplateMetadata {
             lines.append("# macOS: \(osName)\(ver)")
         }
         lines.append("# File: \(filename)")
-        lines.append("# Created: \(ISO8601DateFormatter().string(from: createdAt))")
+        lines.append("# Created: \(Self.iso8601Formatter.string(from: createdAt))")
         lines.append("# ID: \(id.uuidString)")
         lines.append("# -------------------------")
         lines.append("")
         return lines.joined(separator: "\n")
     }
+
+    private static let iso8601Formatter = ISO8601DateFormatter()
 }

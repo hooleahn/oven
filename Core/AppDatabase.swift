@@ -184,7 +184,7 @@ final class AppDatabase {
         var history: [BuildHistoryEntry] = readOrDefault(.buildHistory, default: [])
         history.append(entry)
         // Keep only the most recent 200 builds to avoid unbounded growth
-        if history.count > 200 { history = Array(history.suffix(200)) }
+        if history.count > 200 { history.removeFirst(history.count - 200) }
         writeSilently(history, to: .buildHistory)
     }
 

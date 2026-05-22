@@ -21,6 +21,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
     var ipAddress: String?
     var createdAt: Date
     var lastStartedAt: Date?
+    var lastClonedAt: Date?         // last time this VM was used as a clone source
     var registryImageRef: String?  // origin ref if pulled from a registry
     var isBaseVM: Bool = false          // true = Base VM (can clone, cannot start)
 
@@ -234,6 +235,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         ipAddress        = try c.decodeIfPresent(String.self,        forKey: .ipAddress)
         createdAt        = try c.decodeIfPresent(Date.self,           forKey: .createdAt)        ?? Date()
         lastStartedAt    = try c.decodeIfPresent(Date.self,           forKey: .lastStartedAt)
+        lastClonedAt     = try c.decodeIfPresent(Date.self,           forKey: .lastClonedAt)
         registryImageRef = try c.decodeIfPresent(String.self,        forKey: .registryImageRef)
         isBaseVM         = try c.decodeIfPresent(Bool.self,           forKey: .isBaseVM) ?? false
         osName                = try c.decodeIfPresent(MacOSRelease.Name.self, forKey: .osName) ?? .unknown

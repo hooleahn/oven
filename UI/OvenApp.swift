@@ -8,6 +8,7 @@ enum SharedStores {
     static var appState: AppState?
     static var packerService: PackerService?
     static var recipesViewModel: RecipesViewModel?
+    static var pushManager: PushManager?
     /// Set to true before an intentional relaunch to bypass the quit guard.
     static var skipQuitGuard = false
 }
@@ -27,8 +28,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 alert.informativeText = "\(list) \(running.count == 1 ? "is" : "are") still running. Stop them before quitting to avoid data loss."
                 alert.alertStyle = .warning
                 alert.addButton(withTitle: "Quit Anyway")
+                alert.addButton(withTitle: "Stop VMs and Quit")
                 alert.addButton(withTitle: "Cancel")
-                if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
+                switch alert.runModal() {
+                case .alertFirstButtonReturn:   // Quit Anyway — fall through
+                    break
+                case .alertSecondButtonReturn:  // Stop VMs and Quit
+                    Task { @MainActor in
+                        await withTaskGroup(of: Void.self) { group in
+                            for vm in running {
+                                group.addTask { try? await vmStore.stop(vm: vm) }
+                            }
+                        }
+                        NSApp.reply(toApplicationShouldTerminate: true)
+                    }
+                    return .terminateLater
+                default:                        // Cancel
+                    return .terminateCancel
+                }
             }
         }
 
@@ -71,6 +88,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 alert.addButton(withTitle: "Cancel")
                 if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
             }
+        }
+
+        // Check active registry pushes
+        if let pushManager = SharedStores.pushManager, !pushManager.active.isEmpty {
+            let count = pushManager.active.count
+            let alert = NSAlert()
+            alert.messageText = "\(count) registry push\(count == 1 ? "" : "es") in progress"
+            alert.informativeText = "Quitting now will cancel the upload\(count == 1 ? "" : "s")."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Quit Anyway")
+            alert.addButton(withTitle: "Cancel")
+            if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
         }
 
         return .terminateNow
@@ -222,6 +251,7 @@ struct OvenApp: App {
                 SharedStores.vmStore = vmStore
                 SharedStores.baseVMStore = baseVMStore
                 SharedStores.packerService = OvenApp.makePackerService()
+                SharedStores.pushManager = pushManager
                 // Also wire into menuBarViewModel (MenuBarExtra.task may run first,
                 // but this ensures the reference is set when the main window opens too)
                 menuBarViewModel.vmStore = vmStore
@@ -269,6 +299,8 @@ struct OvenApp: App {
                 .environmentObject(baseVMStore)
                 .environmentObject(depManager)
                 .environmentObject(profileStore)
+                .environmentObject(serverStore)
+                .environmentObject(customInstallerStore)
         }
 
         MenuBarExtra(isInserted: Binding(

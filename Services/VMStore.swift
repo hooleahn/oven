@@ -34,6 +34,25 @@ final class VMStore: ObservableObject {
     var isSyncing = false
     var lastError: String?
 
+    /// VMs present in Oven's metadata but absent from `tart list`.
+    /// Populated by `sync()` when TART_HOME is accessible. Cleared when the
+    /// user responds. Empty = no prompt shown.
+    var ghostVMs: [VirtualMachine] = []
+
+    /// IDs suppressed for this session only — re-detected on next launch.
+    private var sessionSuppressedIDs: Set<UUID> = []
+
+    /// IDs suppressed permanently across launches (persisted to UserDefaults).
+    private var permanentSuppressedIDs: Set<UUID> = {
+        let strings = UserDefaults.standard.stringArray(forKey: VMStore.permanentSuppressKey) ?? []
+        return Set(strings.compactMap { UUID(uuidString: $0) })
+    }()
+
+    private static let permanentSuppressKey = "oven.suppressedGhostVMIDs"
+
+    /// Number of VM IDs permanently suppressed from ghost-VM alerts.
+    var suppressedGhostCount: Int { permanentSuppressedIDs.count }
+
     // MARK: Dependencies
 
     private let tartService: TartService
@@ -66,10 +85,46 @@ final class VMStore: ObservableObject {
 
         // Apply all mutations in one pass — set isSyncing only around the merge
         isSyncing = true
+        detectGhostVMs(against: tartVMs)
         mergeWithTart(tartVMs)
         saveToDisk()
         isSyncing = false
         AppLogger.shared.log("Synced \(tartVMs.count) VMs from tart", source: "VMStore")
+    }
+
+    /// Remove ghost VMs from Oven's metadata (metadata-only; tart already doesn't know about them).
+    func removeGhosts(_ toRemove: [VirtualMachine]) {
+        let ids = Set(toRemove.map(\.id))
+        vms.removeAll { ids.contains($0.id) }
+        ghostVMs.removeAll { ids.contains($0.id) }
+        saveToDisk()
+        AppLogger.shared.log(
+            "Removed \(toRemove.count) ghost VM(s): \(toRemove.map(\.name).joined(separator: ", "))",
+            source: "VMStore"
+        )
+    }
+
+    /// Suppress the ghost-VM alert for this session only. Re-detected on next launch.
+    func dismissGhosts() {
+        sessionSuppressedIDs.formUnion(ghostVMs.map(\.id))
+        ghostVMs = []
+    }
+
+    /// Suppress the ghost-VM alert permanently across launches for these VMs.
+    func permanentlyDismissGhosts() {
+        let ids = ghostVMs.map(\.id)
+        permanentSuppressedIDs.formUnion(ids)
+        sessionSuppressedIDs.formUnion(ids)
+        UserDefaults.standard.set(permanentSuppressedIDs.map(\.uuidString),
+                                  forKey: VMStore.permanentSuppressKey)
+        ghostVMs = []
+    }
+
+    /// Clear all permanent ghost-VM suppression so the alert can reappear on the next sync.
+    func resetGhostSuppression() {
+        permanentSuppressedIDs = []
+        sessionSuppressedIDs = []
+        UserDefaults.standard.removeObject(forKey: VMStore.permanentSuppressKey)
     }
 
     /// Refresh the IP address for a single running VM.
@@ -98,7 +153,7 @@ final class VMStore: ObservableObject {
         for waitSeconds in stride(from: 10, through: 1, by: -1) {
             guard vms.first(where: { $0.id == vm.id })?.status == .running else { return }
             do {
-                let ip = try await tartService.ip(name: vm.name, waitSeconds: 1)
+                let ip = try await tartService.ip(name: vm.name, waitSeconds: waitSeconds)
                 if !ip.isEmpty {
                     update(id: vm.id) { $0.ipAddress = ip; $0.isResolvingIP = false }
                     saveToDisk()
@@ -179,6 +234,11 @@ final class VMStore: ObservableObject {
         do {
             try await tartService.clone(source: source, destination: newName)
 
+            // Mark the source VM as recently cloned from
+            if let srcIdx = vms.firstIndex(where: { $0.name == source }) {
+                vms[srcIdx].lastClonedAt = Date()
+            }
+
             // Randomise serial number, MAC address and refit display — always,
             // to avoid duplicate identifiers across cloned VMs
             try await tartService.set(
@@ -199,6 +259,14 @@ final class VMStore: ObservableObject {
             saveToDisk()
             throw error
         }
+    }
+
+    /// Called by RegistryView after a successful clone from a registry image.
+    /// Stamps `lastClonedAt` on the OCI source VM so stale-detection works.
+    func recordRegistryClone(sourceImageRef: String) {
+        guard let idx = vms.firstIndex(where: { $0.registryImageRef == sourceImageRef }) else { return }
+        vms[idx].lastClonedAt = Date()
+        saveToDisk()
     }
 
     /// Start a VM. Returns an AsyncStream of log lines for the caller to display.
@@ -304,6 +372,34 @@ final class VMStore: ObservableObject {
         apply(&vms[idx])
     }
 
+    /// Find VMs recorded in Oven's metadata that tart no longer knows about.
+    /// Skips base VMs, VMs mid-clone, OCI-sourced VMs, and suppressed VMs.
+    /// No-ops when TART_HOME is inaccessible or tart returns an empty list.
+    private func detectGhostVMs(against tartVMs: [TartVMInfo]) {
+        guard AppSettings.load().checkTartHomeAccessibility() == nil else { return }
+        // If tart returned nothing but we have VMs, assume a transient failure —
+        // showing an alert for every VM would be alarming and destructive.
+        guard !tartVMs.isEmpty else { return }
+        let tartNames = Set(tartVMs.map(\.name))
+        let newGhosts = vms.filter { vm in
+            !tartNames.contains(vm.name)
+            && !vm.effectivelyBase               // base VMs are shown in Base VMs section
+            && vm.status != .building            // skip VMs mid-clone
+            && vm.vmSource != .registry          // OCI-sourced VMs use a different list
+            && !vm.name.contains("/")            // OCI-ref names never appear in local list
+            && !sessionSuppressedIDs.contains(vm.id)
+            && !permanentSuppressedIDs.contains(vm.id)
+            && !ghostVMs.contains(where: { $0.id == vm.id })
+        }
+        if !newGhosts.isEmpty {
+            ghostVMs = newGhosts
+            AppLogger.shared.warning(
+                "\(newGhosts.count) VM(s) not found in tart: \(newGhosts.map(\.name).joined(separator: ", "))",
+                source: "VMStore"
+            )
+        }
+    }
+
     /// Merge tart list output into our records:
     /// - Update status for existing records
     /// - Add new records for VMs we don't know about (created outside Oven)
@@ -322,8 +418,6 @@ final class VMStore: ObservableObject {
         for info in filteredVMs {
             if let idx = vms.firstIndex(where: { $0.name == info.name }) {
                 // Existing VM — update mutable tart state but PRESERVE all Oven metadata
-                // Clear stale registryImageRef for local VMs (was incorrectly set from info.source)
-                if !vms[idx].name.contains("/") { vms[idx].registryImageRef = nil }
                 // Base VMs present in tart list are by definition built — fix stale notBuilt status
                 if vms[idx].isBaseVM && vms[idx].buildStatus == .notBuilt {
                     vms[idx].buildStatus = .ready

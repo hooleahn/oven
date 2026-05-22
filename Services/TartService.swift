@@ -47,6 +47,23 @@ actor TartService {
         return env
     }
 
+    /// tartEnv with TART_NO_AUTO_PRUNE set, which disables automatic pruning for that invocation.
+    private var noPruneEnv: [String: String] {
+        var env = tartEnv
+        env["TART_NO_AUTO_PRUNE"] = ""
+        return env
+    }
+
+    private var pruneOnPull: Bool {
+        UserDefaults.standard.object(forKey: "prune.onPull") as? Bool ?? true
+    }
+    private var pruneOnClone: Bool {
+        UserDefaults.standard.object(forKey: "prune.onClone") as? Bool ?? true
+    }
+    private var pruneCloneLimitGB: Int {
+        UserDefaults.standard.object(forKey: "prune.cloneLimitGB") as? Int ?? 100
+    }
+
     // MARK: - List
 
     /// List all VMs (default — both local and OCI).
@@ -120,7 +137,15 @@ actor TartService {
     // MARK: - Clone / Delete
 
     func clone(source: String, destination: String) async throws {
-        try await runner.run(tartPath, arguments: ["clone", source, destination], environment: tartEnv)
+        var args = ["clone", source, destination]
+        let env: [String: String]
+        if pruneOnClone {
+            args += ["--prune-limit", "\(pruneCloneLimitGB)"]
+            env = tartEnv
+        } else {
+            env = noPruneEnv
+        }
+        try await runner.run(tartPath, arguments: args, environment: env)
     }
 
     func delete(name: String) async throws {
@@ -197,13 +222,22 @@ actor TartService {
     /// Pull an OCI image into tart's cache (no local name — appears as OCI source in tart list).
     /// Use this for Base VM images from a registry.
     func pullToCache(imageRef: String) async -> AsyncStream<ProcessEvent> {
-        await runner.stream(tartPath, arguments: ["pull", imageRef], environment: tartEnv)
+        let env = pruneOnPull ? tartEnv : noPruneEnv
+        return await runner.stream(tartPath, arguments: ["pull", imageRef], environment: env)
     }
 
     /// Clone a remote OCI image to a named local VM (appears as local in tart list).
     /// Use this for regular VMs cloned from a registry image.
     func clone(imageRef: String, to localName: String) async -> AsyncStream<ProcessEvent> {
-        await runner.stream(tartPath, arguments: ["clone", imageRef, localName], environment: tartEnv)
+        var args = ["clone", imageRef, localName]
+        let env: [String: String]
+        if pruneOnClone {
+            args += ["--prune-limit", "\(pruneCloneLimitGB)"]
+            env = tartEnv
+        } else {
+            env = noPruneEnv
+        }
+        return await runner.stream(tartPath, arguments: args, environment: env)
     }
 
     /// Push a local VM to a registry. Streams progress.

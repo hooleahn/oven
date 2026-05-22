@@ -795,6 +795,7 @@ struct NewBaseVMSheet: View {
             provisioning: hasBootCmd ? provisioning : ProvisioningOptions()
         )
         config.mdmProfileID = hasBootCmd ? manualMDMProfileID : nil
+        if ipswChoice == .customInstaller { config.customInstallerID = selectedCustomInstallerID }
         return config
     }
 

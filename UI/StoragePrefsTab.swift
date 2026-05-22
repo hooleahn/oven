@@ -14,7 +14,17 @@ private struct DiskUsageEntry: Identifiable {
 
 struct StoragePrefsTab: View {
     @EnvironmentObject var profileStore: ProfileStore
+    @EnvironmentObject var vmStore: VMStore
+    @EnvironmentObject var serverStore: MDMServerStore
+    @EnvironmentObject var customInstallerStore: CustomInstallerStore
     @State private var settings = AppSettings.load()
+    @AppStorage("prune.onPull")            private var pruneOnPull          = true
+    @AppStorage("prune.onClone")           private var pruneOnClone         = true
+    @AppStorage("prune.cloneLimitGB")      private var pruneCloneLimitGB    = 100
+    @AppStorage("stale.vmDays")            private var staleVMDays          = 90
+    @AppStorage("stale.installerDays")     private var staleInstallerDays   = 90
+    @State private var showStaleVMSheet        = false
+    @State private var showStaleInstallerSheet = false
     @State private var activePickerTarget: PickerTarget?
     @State private var committedPickerTarget: PickerTarget?
     @State private var pendingTartHome: String? = nil
@@ -50,6 +60,72 @@ struct StoragePrefsTab: View {
             }
 
             Section {
+                Toggle(isOn: $pruneOnPull) {
+                    Label("Prune on Image Registry Pull", systemImage: "arrow.down.to.line")
+                }
+                .help("When enabled, tart automatically frees disk space before pulling an image from a registry.")
+
+                Toggle(isOn: $pruneOnClone) {
+                    Label("Prune on VM Clone", systemImage: "plus.square.on.square")
+                }
+                .help("When enabled, tart automatically frees disk space before cloning a VM.")
+
+                if pruneOnClone {
+                    LabeledContent("Prune limit") {
+                        HStack(spacing: 6) {
+                            TextField("", value: $pruneCloneLimitGB, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 64)
+                                .multilineTextAlignment(.trailing)
+                            Text("GB")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .help("tart will prune old VMs until at least this much space is free before cloning.")
+                }
+            } header: {
+                Text("Auto Pruning")
+            } footer: {
+                Text("tart automatically removes least-recently-used VMs to free space before pull and clone operations. Disable to manage disk space manually.")
+            }
+
+            Section {
+                LabeledContent("Unused VMs threshold") {
+                    HStack(spacing: 6) {
+                        TextField("", value: $staleVMDays, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 52)
+                            .multilineTextAlignment(.trailing)
+                        Text("days")
+                            .foregroundStyle(.secondary)
+                        Button("Review…") { showStaleVMSheet = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                }
+                .help("Review VMs, Base VMs, and Registry VMs that haven't been used in this many days.")
+
+                LabeledContent("Unused installers threshold") {
+                    HStack(spacing: 6) {
+                        TextField("", value: $staleInstallerDays, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 52)
+                            .multilineTextAlignment(.trailing)
+                        Text("days")
+                            .foregroundStyle(.secondary)
+                        Button("Review…") { showStaleInstallerSheet = true }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                }
+                .help("Review custom installers that haven't been used to build a Base VM in this many days.")
+            } header: {
+                Text("Stale Storage")
+            } footer: {
+                Text("Only items with a recorded last-use date are shown. Items used within Oven before this version are not yet tracked.")
+            }
+
+            Section {
                 Text("Clears saved VM and Base VM metadata then rebuilds from tart list. Use if VMs appear in the wrong view or metadata is out of date. Display names, tags, and descriptions will be lost.")
                     .font(.caption).foregroundStyle(.secondary)
                 Button("Rebuild Metadata…") { showRebuildConfirm = true }
@@ -60,6 +136,16 @@ struct StoragePrefsTab: View {
         .formStyle(.grouped)
         .navigationTitle("Storage")
         .task { await computeDiskUsage() }
+        .sheet(isPresented: $showStaleVMSheet) {
+            StaleVMsSheet(thresholdDays: staleVMDays)
+                .environmentObject(vmStore)
+                .environmentObject(serverStore)
+        }
+        .sheet(isPresented: $showStaleInstallerSheet) {
+            StaleInstallersSheet(thresholdDays: staleInstallerDays)
+                .environmentObject(vmStore)
+                .environmentObject(customInstallerStore)
+        }
         .confirmationDialog("Rebuild Metadata?", isPresented: $showRebuildConfirm, titleVisibility: .visible) {
             Button("Rebuild & Restart", role: .destructive) {
                 // Use AppDatabase.shared.url(for:) so the paths are always correct

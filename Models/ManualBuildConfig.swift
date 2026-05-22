@@ -16,6 +16,8 @@ struct ManualBuildConfig: Codable, Hashable {
 
     // MARK: IPSW source
     var ipswSource: IPSWSource
+    /// UUID of the CustomInstaller selected, if any. Used to update lastUsedAt on build completion.
+    var customInstallerID: UUID? = nil
 
     // MARK: Hardware
     var cpuCount: Int     = 4

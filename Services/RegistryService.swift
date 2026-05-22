@@ -12,7 +12,8 @@ struct RegistryImage: Identifiable, Codable {
     var sizeBytes: Int64?
 
     var registryHost: String {
-        imageRef.components(separatedBy: "/").first ?? registry
+        let first = imageRef.components(separatedBy: "/").first ?? ""
+        return (first.contains(".") || first.contains(":") || first == "localhost") ? first : registry
     }
 
     // Explicit memberwise init (custom Codable init suppresses the synthesised one)

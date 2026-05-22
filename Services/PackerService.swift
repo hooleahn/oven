@@ -51,7 +51,7 @@ actor PackerService {
                 do {
                     try credContent.write(to: credVarsURL, atomically: true, encoding: .utf8)
                 } catch {
-                    
+                    continuation.yield(.stderr("Failed to write credentials file: \(error.localizedDescription)"))
                     continuation.yield(.exit(1)); continuation.finish(); return
                 }
                 defer { try? FileManager.default.removeItem(at: credVarsURL) }

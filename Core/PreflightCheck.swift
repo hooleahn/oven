@@ -118,7 +118,10 @@ final class PreflightCheck {
                 await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
                     let monitor = NWPathMonitor()
                     nonisolated(unsafe) var fired = false
+                    let fireLock = NSLock()
                     let fire: (Bool) -> Void = { value in
+                        fireLock.lock()
+                        defer { fireLock.unlock() }
                         guard !fired else { return }
                         fired = true
                         monitor.cancel()

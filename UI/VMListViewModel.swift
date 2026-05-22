@@ -9,11 +9,11 @@ enum VMSortOrder: String, CaseIterable {
 
 // MARK: - VM Tab
 
-    enum VMTab: String, CaseIterable {
-        case all = "All"
-        case running = "Running"
-        case stopped = "Stopped"
-    }
+enum VMTab: String, CaseIterable {
+    case all = "All"
+    case running = "Running"
+    case stopped = "Stopped"
+}
 
 // MARK: - List Density
 
@@ -153,14 +153,23 @@ final class VMListViewModel {
                  mode: TartService.RunMode = .native,
                  vmStore: VMStore,
                  appState: AppState) async {
-        let opID = appState.beginOperation(vmName: vm.displayName, kind: .start)
+        let label = vm.displayName.isEmpty ? vm.name : vm.displayName
+        let opID = appState.beginOperation(vmName: label, kind: .start)
         let stream = await vmStore.start(vm: vm, mode: mode)
-        await StreamConsumer.consume(stream, onStdout: { line in
+        let result = await StreamConsumer.consume(stream, onStdout: { line in
             appState.appendLog(operationID: opID, line: line)
         })
         appState.finishOperation(id: opID)
+
+        if result.exitCode != 0 {
+            let errLine = result.stderrLines
+                .last { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                ?? "tart exited with code \(result.exitCode)"
+            AppLogger.shared.error("Failed to start \"\(label)\": \(errLine)", source: "VMStore")
+        } else {
+            await NotificationService.shared.notifyVMStopped(vmName: label)
+        }
+
         await vmStore.sync()
-        let vmName = vm.displayName.isEmpty ? vm.name : vm.displayName
-        await NotificationService.shared.notifyVMStopped(vmName: vmName)
     }
 }

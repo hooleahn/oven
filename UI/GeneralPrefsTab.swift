@@ -3,6 +3,7 @@ import ServiceManagement
 
 struct GeneralPrefsTab: View {
     @EnvironmentObject var theme: AppTheme
+    @EnvironmentObject var vmStore: VMStore
     @AppStorage("toast.disabled") private var toastsDisabled = false
     @State private var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
     var body: some View {
@@ -75,8 +76,25 @@ struct GeneralPrefsTab: View {
                     Text("Error banners are suppressed. Check the Activity Log for errors.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+
+                let suppressedCount = vmStore.suppressedGhostCount
+                LabeledContent("Missing VM alerts") {
+                    HStack(spacing: 8) {
+                        if suppressedCount > 0 {
+                            Text("\(suppressedCount) suppressed")
+                                .foregroundStyle(.secondary)
+                        }
+                        Button("Reset") {
+                            vmStore.resetGhostSuppression()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(suppressedCount == 0)
+                    }
+                }
+                .help("Re-enables the \"VM not found in tart\" alert for any VMs you previously chose to never notify about.")
             } header: {
-                Text("Notifications")
+                Text("In-App Notifications")
             }
 
             Section {

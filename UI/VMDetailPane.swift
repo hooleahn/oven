@@ -14,6 +14,7 @@ struct VMDetailPane: View {
     @State private var isPresentingPushSheet = false
     @State private var pushProgress: Double? = nil
     @State private var pushError: String? = nil
+    @State private var pushTask: Task<Void, Never>? = nil
     @State private var liveConfig: TartService.TartVMConfig? = nil
     @State private var isLoadingConfig = false
     @State private var confirmStop: VirtualMachine? = nil
@@ -184,7 +185,7 @@ struct VMDetailPane: View {
         .sheet(isPresented: $isPresentingPushSheet) {
             PushToRegistrySheet(vmName: vm.name) { imageRef, credentials in
                 isPresentingPushSheet = false
-                Task { await pushVM(to: imageRef, credentials: credentials) }
+                pushTask = Task { await pushVM(to: imageRef, credentials: credentials) }
             }
         }
         .sheet(isPresented: $isPresentingExecSheet) {
@@ -481,10 +482,19 @@ struct VMDetailPane: View {
             // Push progress (shown when a push is in-flight)
             if let prog = pushProgress {
                 Section {
-                    VStack(spacing: 4) {
+                    VStack(spacing: 6) {
                         ProgressView(value: prog).progressViewStyle(.linear)
-                        Text("Pushing… \(Int(prog * 100))%")
-                            .font(.caption).foregroundStyle(.secondary)
+                        HStack {
+                            Text("Pushing… \(Int(prog * 100))%")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Cancel") {
+                                pushTask?.cancel()
+                                pushTask = nil
+                                pushProgress = nil
+                            }
+                            .buttonStyle(.bordered).controlSize(.mini)
+                        }
                     }
                 }
             }
@@ -568,9 +578,10 @@ struct VMDetailPane: View {
                 AppLogger.shared.log(line, source: "Push")
             case .exit(let code):
                 pushProgress = nil
+                pushTask = nil
                 if code == 0 {
                     AppLogger.shared.success("Push complete: \(imageRef)", source: "VMDetailPane")
-                } else {
+                } else if !Task.isCancelled {
                     let raw = errorLines.joined(separator: "\n")
                     AppLogger.shared.error("Push failed (exit \(code)): \(raw)", source: "VMDetailPane")
                     pushError = parseTartError(raw) ?? (raw.isEmpty ? "Push failed (exit \(code))" : raw)

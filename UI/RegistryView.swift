@@ -10,6 +10,8 @@ struct RegistryView: View {
     @State private var isRefreshing: Bool = false
     @State private var refreshRotation: Double = 0
     @State private var showBrowseGHCR = false
+    @State private var pullTasks: [String: Task<Void, Never>] = [:]
+    @State private var pullLocalNames: [String: String] = [:]
     @FocusState private var newImageRefFocused: Bool
 
     private func coarseAge(of date: Date) -> String {
@@ -129,11 +131,15 @@ struct RegistryView: View {
                             image: image,
                             downloadProgress: appState.registryDownloads[image.imageRef],
                             onPull: { rvm.pendingPull = image },
+                            onCancelPull: {
+                                pullTasks[image.imageRef]?.cancel()
+                                pullTasks.removeValue(forKey: image.imageRef)
+                                appState.registryDownloads.removeValue(forKey: image.imageRef)
+                                let localName = pullLocalNames.removeValue(forKey: image.imageRef)
+                                Task { await cleanupCancelledPull(imageRef: image.imageRef, localName: localName) }
+                            },
                             onCreateVM: { Task { await createVMFromImage(image) } },
-                            onDelete: {
-                                rvm.images.removeAll { $0.id == image.id }
-                                rvm.saveImages()
-                            }
+                            onDelete: { Task { await deleteImage(image) } }
                         )
                     }
                     .listStyle(.inset)
@@ -219,7 +225,7 @@ struct RegistryView: View {
                     let tartPath = AppSettings.defaultLocalStorageRoot
                         .appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
                     Task {
-                        await rvm.syncFromTart(tartPath: tartPath, vmStore: vmStore, baseVMStore: baseVMStore)
+                        await rvm.syncFromTart(tartPath: tartPath)
                         lastRefreshedAt = Date()
                         isRefreshing = false
                         refreshRotation = 0
@@ -234,10 +240,10 @@ struct RegistryView: View {
         .task { updateWindowTitle() }
         .onChange(of: rvm.selectedRegistry) { _, _ in updateWindowTitle() }
         .task {
-            rvm.load(vmStore: vmStore, baseVMStore: baseVMStore)
+            rvm.load()
             let tartPath = AppSettings.defaultLocalStorageRoot
                 .appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
-            await rvm.syncFromTart(tartPath: tartPath, vmStore: vmStore, baseVMStore: baseVMStore)
+            await rvm.syncFromTart(tartPath: tartPath)
             lastRefreshedAt = Date()
         }
         .sheet(isPresented: $rvm.showCirrusCatalogue) {
@@ -247,7 +253,7 @@ struct RegistryView: View {
                 token: ghcrToken
             ) { imageRef in
                 guard !rvm.images.contains(where: { $0.imageRef == imageRef }) else { return }
-                let host = imageRef.components(separatedBy: "/").first ?? "ghcr.io"
+                let host = registryHostFrom(imageRef, fallback: rvm.selectedRegistry)
                 let img = RegistryImage(id: UUID(), registry: host, imageRef: imageRef, isPulled: false)
                 rvm.images.append(img)
                 rvm.saveImages()
@@ -261,7 +267,7 @@ struct RegistryView: View {
                 activeDownloads: appState.registryDownloads
             ) { imageRef in
                 guard !rvm.images.contains(where: { $0.imageRef == imageRef }) else { return }
-                let host = imageRef.components(separatedBy: "/").first ?? "ghcr.io"
+                let host = registryHostFrom(imageRef, fallback: rvm.selectedRegistry)
                 let img = RegistryImage(id: UUID(), registry: host, imageRef: imageRef, isPulled: false)
                 rvm.images.append(img)
                 rvm.saveImages()
@@ -274,7 +280,12 @@ struct RegistryView: View {
                 rvm.pendingPullIsBase = asBase
                 rvm.pendingPullUsername = username
                 rvm.pendingPullPassword = password
-                Task { await pullImage(image, asBaseVM: asBase) }
+                let rawLocal = image.imageRef
+                    .components(separatedBy: "/").last?
+                    .replacingOccurrences(of: ":", with: "-") ?? "pulled-vm"
+                pullLocalNames[image.imageRef] = asBase ? image.imageRef : rawLocal
+                let task = Task { await pullImage(image, asBaseVM: asBase) }
+                pullTasks[image.imageRef] = task
             }
             .environmentObject(vmStore)
         }
@@ -350,7 +361,7 @@ struct RegistryView: View {
                                 activeDownloads: appState.registryDownloads
                             ) { imageRef in
                                 guard !rvm.images.contains(where: { $0.imageRef == imageRef }) else { return }
-                                let host = imageRef.components(separatedBy: "/").first ?? "ghcr.io"
+                                let host = registryHostFrom(imageRef, fallback: rvm.selectedRegistry)
                                 let regImg = RegistryImage(id: UUID(), registry: host, imageRef: imageRef, isPulled: false)
                                 rvm.images.append(regImg)
                                 rvm.saveImages()
@@ -384,7 +395,7 @@ struct RegistryView: View {
                     rvm.newImageRef = ""
                     return
                 }
-                let host = ref.components(separatedBy: "/").first ?? "ghcr.io"
+                let host = registryHostFrom(ref, fallback: rvm.selectedRegistry)
                 let img = RegistryImage(
                     id: UUID(),
                     registry: host,
@@ -412,7 +423,11 @@ struct RegistryView: View {
         let localName = asBaseVM ? image.imageRef : rawLocal
 
         appState.registryDownloads[image.imageRef] = 0.0
-        defer { appState.registryDownloads.removeValue(forKey: image.imageRef) }
+        defer {
+            appState.registryDownloads.removeValue(forKey: image.imageRef)
+            pullTasks.removeValue(forKey: image.imageRef)
+            pullLocalNames.removeValue(forKey: image.imageRef)
+        }
 
         let stream = await svc.pull(imageRef: image.imageRef, localName: localName,
                                     asBase: asBaseVM, credentials: rvm.credentials)
@@ -427,6 +442,9 @@ struct RegistryView: View {
         })
         appState.registryDownloads.removeValue(forKey: image.imageRef)
 
+        // Task was cancelled by the user — don't update state
+        guard !Task.isCancelled else { return }
+
         if pullResult.succeeded {
             if let idx = rvm.images.firstIndex(where: { $0.id == image.id }) {
                 rvm.images[idx].isPulled  = true
@@ -435,7 +453,6 @@ struct RegistryView: View {
             }
             rvm.saveImages()
             await vmStore.sync()
-            rvm.reconcileIsPulled(vmStore: vmStore, baseVMStore: baseVMStore)
             if let idx = rvm.images.firstIndex(where: { $0.id == image.id }) {
                 await routePulledImage(rvm.images[idx], asBaseVM: asBaseVM)
             }
@@ -507,12 +524,48 @@ struct RegistryView: View {
         let cloneResult = await StreamConsumer.logged(cloneStream, source: "RegistryView")
         appState.registryDownloads.removeValue(forKey: image.imageRef)
         if cloneResult.succeeded {
+            vmStore.recordRegistryClone(sourceImageRef: image.imageRef)
             await vmStore.sync()
         } else {
             let raw = cloneResult.combinedOutput
             rvm.errorMessage = parseTartError(raw) ?? "Clone failed (exit \(cloneResult.exitCode))"
             AppLogger.shared.error("Clone failed: \(raw)", source: "RegistryView")
         }
+    }
+
+    // MARK: Cancel cleanup
+
+    /// Delete any partial tart data left behind by a cancelled pull.
+    /// - For non-base pulls (tart clone): deletes the local VM by localName.
+    /// - For base pulls (tart pull to OCI cache): deletes by imageRef.
+    /// tart delete is a no-op if the VM doesn't exist, so it's safe to call unconditionally.
+    @MainActor private func cleanupCancelledPull(imageRef: String, localName: String?) async {
+        let tartBinary = AppSettings.defaultLocalStorageRoot
+            .appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
+        guard FileManager.default.fileExists(atPath: tartBinary) else { return }
+        let tartSvc = TartService(runner: ProcessRunner(), tartPath: tartBinary)
+        if let localName {
+            try? await tartSvc.delete(name: localName)
+        }
+        // Also try deleting by imageRef in case it was cached as OCI
+        if localName != imageRef {
+            try? await tartSvc.delete(name: imageRef)
+        }
+        await vmStore.sync()
+    }
+
+    // MARK: Delete
+
+    @MainActor private func deleteImage(_ image: RegistryImage) async {
+        let tartBinary = AppSettings.defaultLocalStorageRoot
+            .appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
+        if image.isPulled && FileManager.default.fileExists(atPath: tartBinary) {
+            let tartSvc = TartService(runner: ProcessRunner(), tartPath: tartBinary)
+            try? await tartSvc.delete(name: image.imageRef)
+        }
+        rvm.images.removeAll { $0.id == image.id }
+        rvm.saveImages()
+        if image.isPulled { await vmStore.sync() }
     }
 
     // MARK: Persistence
@@ -537,6 +590,16 @@ struct RegistryView: View {
 
 // MARK: - Cirrus Labs catalogue sheet
 
+
+// MARK: - Registry host helpers
+
+/// Extract the registry hostname from an OCI imageRef.
+/// Only treats the first path component as a hostname if it looks like one
+/// (contains `.` or `:`, or is "localhost"). Otherwise returns `fallback`.
+func registryHostFrom(_ imageRef: String, fallback: String) -> String {
+    let first = imageRef.components(separatedBy: "/").first ?? ""
+    return (first.contains(".") || first.contains(":") || first == "localhost") ? first : fallback
+}
 
 // MARK: - Tart error parsing (shared)
 

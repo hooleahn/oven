@@ -8,14 +8,14 @@ struct Dependency: Identifiable, Codable, Sendable {
     let displayName: String
     let purpose: String          // Human-readable description of what the tool does
     let icon: String             // SF Symbol name
-    let currentVersion: String?  // nil = not yet installed
-    let latestVersion: String?   // nil = not yet checked
-    let binaryPath: URL          // absolute path inside deps/ (managed) or user-chosen
+    var currentVersion: String?  // nil = not yet installed
+    var latestVersion: String?   // nil = not yet checked
+    var binaryPath: URL          // absolute path inside deps/ (managed) or user-chosen
     let isRequired: Bool         // false = nice-to-have; app works without it
     let requiredForLaunch: Bool  // false = can skip; app opens but feature is limited
     let installURL: URL?         // GitHub release page for manual reference
-    let systemBinaryPath: URL?   // User-supplied override path (from "Use system binary…")
-    let status: Status
+    var systemBinaryPath: URL?   // User-supplied override path (from "Use system binary…")
+    var status: Status
 
     enum Status: String, Codable, Sendable {
         case notInstalled

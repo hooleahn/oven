@@ -63,6 +63,8 @@
 		9DDA46FCB2B94A9801B36C2B /* PackerTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87381C56C3B57F827194C459 /* PackerTemplate.swift */; };
 		A15EBB8EDDCD4E8F9C9918F3 /* VMStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3407A9972E4871AB9375EB /* VMStore.swift */; };
 		A1AA6C9C58C480F05F0988F2 /* TemplateDetailPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B45FAE9421A56C9B9C35336 /* TemplateDetailPane.swift */; };
+		AA001122334455667788AABB /* StaleVMsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA001122334455667788CCDD /* StaleVMsSheet.swift */; };
+		AA001122334455667788EEFF /* StaleInstallersSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00112233445566778800FF /* StaleInstallersSheet.swift */; };
 		AAC69E7A339449BD9EAB580E /* RegistryCredential.swift in Sources */ = {isa = PBXBuildFile; fileRef = 732D124B57634F13BF633500 /* RegistryCredential.swift */; };
 		AB10C071951741DE9B85D648 /* AppDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8FF7ADBF798437882E835B2 /* AppDatabase.swift */; };
 		B39FD500255442D793F5D6E4 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD60437C2E2242CDB8636D9F /* EmptyStateView.swift */; };
@@ -195,6 +197,8 @@
 		A481348E372E4E76A0C3C1A0 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
 		A48BCA5004344B659461399F /* IntegrationsPrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationsPrefsTab.swift; sourceTree = "<group>"; };
 		A8E1BC9BB8234124A332E6FA /* CloneVMSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloneVMSheet.swift; sourceTree = "<group>"; };
+		AA00112233445566778800FF /* StaleInstallersSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaleInstallersSheet.swift; sourceTree = "<group>"; };
+		AA001122334455667788CCDD /* StaleVMsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaleVMsSheet.swift; sourceTree = "<group>"; };
 		AA3407A9972E4871AB9375EB /* VMStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMStore.swift; sourceTree = "<group>"; };
 		AD60437C2E2242CDB8636D9F /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		AE2F1FA309634143A0C27A18 /* Oven.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Oven.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -388,6 +392,8 @@
 				B9F42A562FA9AD4800294F3C /* BrowseGHCRSheet.swift */,
 				B94EA6372FB4217100EDCB68 /* ExecuteCommandSheet.swift */,
 				B94EA63D2FBDE98400EDCB68 /* WebhookEditSheet.swift */,
+				AA001122334455667788CCDD /* StaleVMsSheet.swift */,
+				AA00112233445566778800FF /* StaleInstallersSheet.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -653,6 +659,8 @@
 				17FA307EDDB4424C8719B4A5 /* IntegrationsPrefsTab.swift in Sources */,
 				7C98E251A01F4BBDBD88C4B7 /* TagsPrefsTab.swift in Sources */,
 				B9F42A512FA96E8A00294F3C /* CustomInstallerStore.swift in Sources */,
+				AA001122334455667788AABB /* StaleVMsSheet.swift in Sources */,
+				AA001122334455667788EEFF /* StaleInstallersSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -671,7 +679,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1001;
+				CURRENT_PROJECT_VERSION = 2001;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = V4RT59UVJJ;
 				ENABLE_APP_SANDBOX = NO;
@@ -796,7 +804,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1001;
+				CURRENT_PROJECT_VERSION = 2001;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;

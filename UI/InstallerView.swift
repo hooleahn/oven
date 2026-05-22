@@ -26,6 +26,7 @@ struct InstallerView: View {
     @State private var sortOrder: FirmwareSortOrder = .date
     @State private var isPresentingAddCustomInstaller = false
     @State private var selectedCustomInstallerForBaseVM: CustomInstaller? = nil
+    @State private var downloadTasks: [String: Task<Void, Never>] = [:]
 
     private var settings: AppSettings { AppSettings.load() }
 
@@ -224,7 +225,15 @@ struct InstallerView: View {
                                 }
                                 return false
                             }),
-                            onDownload: { Task { await downloadFirmware(fw) } },
+                            onDownload: {
+                                let task = Task { await downloadFirmware(fw) }
+                                downloadTasks[fw.buildid] = task
+                            },
+                            onCancel: {
+                                downloadTasks[fw.buildid]?.cancel()
+                                downloadTasks.removeValue(forKey: fw.buildid)
+                                appState.activeIPSWDownloads.removeValue(forKey: fw.buildid)
+                            },
                             onDelete: {
                                 if let url = localIPSWs.first(where: { u in
                                     let name = u.lastPathComponent
@@ -446,6 +455,7 @@ struct IPSWFirmwareRow: View {
     let downloadProgress: Double?
     let isDownloaded: Bool
     let onDownload: () -> Void
+    var onCancel: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
     var onCreateBaseVM: (() -> Void)? = nil
 
@@ -454,15 +464,24 @@ struct IPSWFirmwareRow: View {
 
     private var formattedReleaseDate: String {
         let raw = String(firmware.releasedate.prefix(10)) // "YYYY-MM-DD"
-        let df = DateFormatter()
-        df.dateFormat = "yyyy-MM-dd"
-        if let date = df.date(from: raw) {
-            df.dateStyle = .medium
-            df.timeStyle = .none
-            return df.string(from: date)
+        if let date = Self.releaseDateParser.date(from: raw) {
+            return Self.releaseDateFormatter.string(from: date)
         }
         return raw
     }
+
+    private static let releaseDateParser: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        return df
+    }()
+
+    private static let releaseDateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateStyle = .medium
+        df.timeStyle = .none
+        return df
+    }()
 
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
@@ -554,9 +573,15 @@ struct IPSWFirmwareRow: View {
                             ProgressView(value: progress)
                                 .progressViewStyle(.linear)
                                 .frame(width: 100)
-                            Text("\(Int(progress * 100))%")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                Text("\(Int(progress * 100))%")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                if let onCancel {
+                                    Button("Cancel", action: onCancel)
+                                        .buttonStyle(.bordered).controlSize(.mini)
+                                }
+                            }
                         }
                     } else if isDownloaded {
                         HStack(spacing: 6) {

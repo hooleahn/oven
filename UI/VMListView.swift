@@ -714,6 +714,23 @@ private struct VMListSheets: ViewModifier {
         return "Stop \(count) Running VM\(count == 1 ? "" : "s")?"
     }
 
+    private var ghostAlertTitle: String {
+        let count = vmStore.ghostVMs.count
+        return count == 1
+            ? "VM Not Found in tart"
+            : "\(count) VMs Not Found in tart"
+    }
+
+    private var ghostAlertMessage: String {
+        let names = vmStore.ghostVMs
+            .map { $0.displayName.isEmpty ? $0.name : "\($0.displayName) (\($0.name))" }
+            .joined(separator: "\n")
+        let intro = vmStore.ghostVMs.count == 1
+            ? "This VM exists in Oven but was not returned by tart:"
+            : "These VMs exist in Oven but were not returned by tart:"
+        return "\(intro)\n\(names)\n\nThey may have been deleted outside of Oven."
+    }
+
     /// Returns the Jamf server for a VM only when delete-from-Jamf is enabled and the VM has a serial number.
     private func jamfServer(for vm: VirtualMachine) -> MDMServer? {
         guard let serverID = vm.mdmServerID,
@@ -848,6 +865,25 @@ private struct VMListSheets: ViewModifier {
                 if let vm = model.executeCommandVM {
                     ExecuteCommandSheet(vm: vm, initialMethod: model.executeCommandMethod)
                 }
+            }
+            .alert(
+                ghostAlertTitle,
+                isPresented: Binding(
+                    get: { !vmStore.ghostVMs.isEmpty },
+                    set: { if !$0 { vmStore.dismissGhosts() } }
+                )
+            ) {
+                Button("Remove from List", role: .destructive) {
+                    vmStore.removeGhosts(vmStore.ghostVMs)
+                }
+                Button("Don't Notify Me Again") {
+                    vmStore.permanentlyDismissGhosts()
+                }
+                Button("Dismiss", role: .cancel) {
+                    vmStore.dismissGhosts()
+                }
+            } message: {
+                Text(ghostAlertMessage)
             }
     }
 

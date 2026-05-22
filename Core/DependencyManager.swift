@@ -161,31 +161,15 @@ final class DependencyManager: ObservableObject {
     func setSystemBinary(id: String, path: URL) async {
         guard let i = dependencies.firstIndex(where: { $0.id == id }) else { return }
         let version = try? await readVersion(binaryPath: path.path, id: id)
-        let d = dependencies[i]
-        dependencies[i] = Dependency(
-            id: d.id, displayName: d.displayName,
-            purpose: d.purpose, icon: d.icon,
-            currentVersion: version, latestVersion: d.latestVersion,
-            binaryPath: d.binaryPath,
-            isRequired: d.isRequired, requiredForLaunch: d.requiredForLaunch,
-            installURL: d.installURL, systemBinaryPath: path,
-            status: version != nil ? .installed : .error
-        )
+        dependencies[i].systemBinaryPath = path
+        dependencies[i].currentVersion = version
+        dependencies[i].status = version != nil ? .installed : .error
     }
 
     /// Mark a dependency as skipped — the user acknowledges it won't be installed.
     func skipDependency(id: String) {
         guard let i = dependencies.firstIndex(where: { $0.id == id }) else { return }
-        let d = dependencies[i]
-        dependencies[i] = Dependency(
-            id: d.id, displayName: d.displayName,
-            purpose: d.purpose, icon: d.icon,
-            currentVersion: d.currentVersion, latestVersion: d.latestVersion,
-            binaryPath: d.binaryPath,
-            isRequired: d.isRequired, requiredForLaunch: d.requiredForLaunch,
-            installURL: d.installURL, systemBinaryPath: d.systemBinaryPath,
-            status: .skipped
-        )
+        dependencies[i].status = .skipped
     }
 
     /// Install all dependencies that are not yet installed (or skipped).
@@ -702,45 +686,19 @@ final class DependencyManager: ObservableObject {
 
     private func updateStatus(id: String, to status: Dependency.Status) {
         guard let i = dependencies.firstIndex(where: { $0.id == id }) else { return }
-        let d = dependencies[i]
-        dependencies[i] = Dependency(
-            id: d.id, displayName: d.displayName,
-            purpose: d.purpose, icon: d.icon,
-            currentVersion: d.currentVersion, latestVersion: d.latestVersion,
-            binaryPath: d.binaryPath,
-            isRequired: d.isRequired, requiredForLaunch: d.requiredForLaunch,
-            installURL: d.installURL, systemBinaryPath: d.systemBinaryPath,
-            status: status
-        )
+        dependencies[i].status = status
     }
 
     private func updateInstalledVersion(id: String, version: String?) {
         guard let i = dependencies.firstIndex(where: { $0.id == id }) else { return }
-        let d = dependencies[i]
-        dependencies[i] = Dependency(
-            id: d.id, displayName: d.displayName,
-            purpose: d.purpose, icon: d.icon,
-            currentVersion: version, latestVersion: d.latestVersion,
-            binaryPath: d.binaryPath,
-            isRequired: d.isRequired, requiredForLaunch: d.requiredForLaunch,
-            installURL: d.installURL, systemBinaryPath: d.systemBinaryPath,
-            status: version != nil ? .installed : d.status
-        )
+        dependencies[i].currentVersion = version
+        if version != nil { dependencies[i].status = .installed }
         saveManifest()
     }
 
     private func updateLatestVersion(id: String, latestVersion: String?) {
         guard let i = dependencies.firstIndex(where: { $0.id == id }) else { return }
-        let d = dependencies[i]
-        dependencies[i] = Dependency(
-            id: d.id, displayName: d.displayName,
-            purpose: d.purpose, icon: d.icon,
-            currentVersion: d.currentVersion, latestVersion: latestVersion,
-            binaryPath: d.binaryPath,
-            isRequired: d.isRequired, requiredForLaunch: d.requiredForLaunch,
-            installURL: d.installURL, systemBinaryPath: d.systemBinaryPath,
-            status: d.status
-        )
+        dependencies[i].latestVersion = latestVersion
     }
 
     private func fileExists(_ name: String) -> Bool {
@@ -775,10 +733,4 @@ final class DependencyManager: ObservableObject {
 
     // MARK: - Platform
 
-    private var isAppleSilicon: Bool {
-        var info = utsname(); uname(&info)
-        return withUnsafeBytes(of: &info.machine) {
-            $0.bindMemory(to: CChar.self).baseAddress.map { String(cString: $0) } ?? ""
-        } == "arm64"
-    }
 }

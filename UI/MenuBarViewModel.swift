@@ -84,10 +84,16 @@ final class MenuBarViewModel {
             let label = vm.displayName.isEmpty ? vm.name : vm.displayName
             let opID = state.beginOperation(vmName: label, kind: .start)
             let stream = await store.start(vm: vm, mode: mode)
-            await StreamConsumer.consume(stream, onStdout: { line in
+            let result = await StreamConsumer.consume(stream, onStdout: { line in
                 state.appendLog(operationID: opID, line: line)
             })
             state.finishOperation(id: opID)
+            if result.exitCode != 0 {
+                let errLine = result.stderrLines
+                    .last { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                    ?? "tart exited with code \(result.exitCode)"
+                AppLogger.shared.error("Failed to start \"\(label)\": \(errLine)", source: "VMStore")
+            }
             await store.sync()
         }
     }

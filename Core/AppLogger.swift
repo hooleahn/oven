@@ -25,10 +25,14 @@ struct LogEntry: Identifiable, Sendable {
     }
 
     var formattedTimestamp: String {
+        Self.timestampFormatter.string(from: timestamp)
+    }
+
+    private static let timestampFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "HH:mm:ss"
-        return f.string(from: timestamp)
-    }
+        return f
+    }()
 }
 
 // MARK: - AppLogger
@@ -45,12 +49,9 @@ final class AppLogger: ObservableObject {
 
     func log(_ message: String, level: LogEntry.Level = .info, source: String = "Oven") {
         let entry = LogEntry(timestamp: Date(), level: level, source: source, message: message)
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            self.entries.append(entry)
-            if self.entries.count > 1000 {
-                self.entries.removeFirst(self.entries.count - 1000)
-            }
+        entries.append(entry)
+        if entries.count > 1000 {
+            entries.removeFirst(entries.count - 1000)
         }
     }
 

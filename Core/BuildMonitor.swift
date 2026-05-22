@@ -188,7 +188,7 @@ final class BuildMonitor: ObservableObject {
     private func startElapsedTimer() {
         elapsedTask = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                try? await Task.sleep(for: .seconds(1))
                 if !Task.isCancelled {
                     elapsedSeconds += 1
                     // Refresh progress estimate every second so the bar moves smoothly
@@ -205,7 +205,7 @@ final class BuildMonitor: ObservableObject {
         let limit   = (minutes > 0 ? minutes : Self.defaultTimeoutMinutes) * 60
 
         timeoutTask = Task {
-            try? await Task.sleep(nanoseconds: UInt64(limit) * 1_000_000_000)
+            try? await Task.sleep(for: .seconds(limit))
             guard !Task.isCancelled else { return }
             AppLogger.shared.error(
                 "Build timeout after \(limit / 60) minutes — killing packer",
@@ -223,7 +223,7 @@ final class BuildMonitor: ObservableObject {
 
         heartbeatTask = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 60_000_000_000) // check every minute
+                try? await Task.sleep(for: .seconds(60))
                 guard !Task.isCancelled else { return }
                 let silent = Int(-lastLogTime.timeIntervalSinceNow)
                 if silent >= limit {
@@ -245,7 +245,7 @@ final class BuildMonitor: ObservableObject {
 
         diskTask = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 120_000_000_000) // check every 2 minutes
+                try? await Task.sleep(for: .seconds(120))
                 guard !Task.isCancelled else { return }
                 let settings = AppSettings.load()
                 for url in [settings.vmStorageRoot, settings.ipswStorageRoot] {

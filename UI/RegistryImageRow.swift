@@ -5,6 +5,7 @@ struct RegistryImageRow: View {
     let image: RegistryImage
     let downloadProgress: Double?
     let onPull: () -> Void
+    var onCancelPull: (() -> Void)? = nil
     let onCreateVM: () -> Void
     let onDelete: () -> Void
 
@@ -54,7 +55,13 @@ struct RegistryImageRow: View {
             if let progress = downloadProgress {
                 VStack(alignment: .trailing, spacing: 4) {
                     ProgressView(value: progress).progressViewStyle(.linear).frame(width: 80)
-                    Text("\(Int(progress * 100))%").font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Text("\(Int(progress * 100))%").font(.caption).foregroundStyle(.secondary)
+                        if let onCancelPull {
+                            Button("Cancel", action: onCancelPull)
+                                .buttonStyle(.bordered).controlSize(.mini)
+                        }
+                    }
                 }
             } else if image.isPulled {
                 Button(action: onCreateVM) {
@@ -64,7 +71,7 @@ struct RegistryImageRow: View {
                 Menu {
                     Button("Pull again", action: onPull)
                     Divider()
-                    Button("Remove from list", role: .destructive, action: onDelete)
+                    Button("Delete", role: .destructive, action: onDelete)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -98,14 +105,18 @@ struct RegistryImageRow: View {
                 Button { onPull() } label: {
                     Label("Pull Again", systemImage: "arrow.down.circle")
                 }
+                Divider()
+                Button(role: .destructive, action: onDelete) {
+                    Label("Delete", systemImage: "trash")
+                }
             } else {
                 Button { onPull() } label: {
                     Label("Pull", systemImage: "arrow.down.circle")
                 }
-            }
-            Divider()
-            Button(role: .destructive, action: onDelete) {
-                Label("Remove from List", systemImage: "trash")
+                Divider()
+                Button(role: .destructive, action: onDelete) {
+                    Label("Remove from List", systemImage: "trash")
+                }
             }
         }
     }
