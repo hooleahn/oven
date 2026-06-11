@@ -341,7 +341,8 @@ struct InstallerView: View {
                     "mist-cli is not installed. Switch to ipsw.me in Preferences → Build, or install mist-cli."])
         }
         let svc = MistService(runner: ProcessRunner(), mistPath: path,
-                              ipswRoot: AppSettings.load().ipswStorageRoot)
+                              ipswRoot: AppSettings.load().ipswStorageRoot,
+                              includeBetas: settings.mistIncludeBetas)
         let results = try await svc.listFirmware()
         // Convert MistFirmwareInfo → IPSWFirmware for uniform display
         return results.map { mist in
@@ -406,7 +407,8 @@ struct InstallerView: View {
             errorMessage = "mist-cli not found. Switch to ipsw.me in Preferences → Build."
             return
         }
-        let svc = MistService(runner: ProcessRunner(), mistPath: path, ipswRoot: directory)
+        let svc = MistService(runner: ProcessRunner(), mistPath: path, ipswRoot: directory,
+                              includeBetas: settings.mistIncludeBetas)
         let stream = await svc.downloadFirmware(version: fw.version, build: fw.buildid)
         for await event in stream {
             switch event {

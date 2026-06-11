@@ -29,6 +29,7 @@ struct IPSWFirmware: Codable, Identifiable, Sendable, Equatable {
     var displayName: String {
         let name: String
         switch majorVersion {
+        case 27: name = "macOS Golden Gate"
         case 26: name = "macOS Tahoe"
         case 15: name = "macOS Sequoia"
         case 14: name = "macOS Sonoma"

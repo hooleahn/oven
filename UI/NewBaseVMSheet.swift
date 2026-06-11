@@ -948,6 +948,7 @@ struct NewBaseVMSheet: View {
             let nums = part.components(separatedBy: ".")
             if nums.count >= 2, let major = Int(nums[0]), major >= 12 {
                 switch major {
+                case 27: osName = .goldengate
                 case 26: osName = .tahoe
                 case 15: osName = .sequoia
                 case 14: osName = .sonoma

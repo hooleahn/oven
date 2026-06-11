@@ -7,6 +7,7 @@ struct AppSettings: Codable {
     var depsRoot: URL
     var tartHome: String?   // nil = use TART_HOME env var or ~/.tart default
     var ipswDownloadMode: IPSWDownloadMode = .ipswMe
+    var mistIncludeBetas: Bool = false
 
     /// Whether Oven manages (downloads/updates) its own tool binaries, or the
     /// user supplies their own paths.
@@ -119,6 +120,7 @@ struct AppSettings: Codable {
     init(vmStorageRoot: URL, ipswStorageRoot: URL, packerTemplatesRoot: URL,
          depsRoot: URL, tartHome: String? = nil,
          ipswDownloadMode: IPSWDownloadMode = .ipswMe,
+         mistIncludeBetas: Bool = false,
          dependencyMode: DependencyMode = .managed,
          customPaths: CustomBinaryPaths = CustomBinaryPaths()) {
         self.vmStorageRoot       = vmStorageRoot
@@ -127,6 +129,7 @@ struct AppSettings: Codable {
         self.depsRoot            = depsRoot
         self.tartHome            = tartHome
         self.ipswDownloadMode    = ipswDownloadMode
+        self.mistIncludeBetas    = mistIncludeBetas
         self.dependencyMode      = dependencyMode
         self.customPaths         = customPaths
     }
@@ -134,7 +137,7 @@ struct AppSettings: Codable {
     // CodingKeys for custom Decodable init
     enum CodingKeys: String, CodingKey {
         case vmStorageRoot, ipswStorageRoot, packerTemplatesRoot, depsRoot, tartHome, ipswDownloadMode
-        case dependencyMode, customPaths
+        case dependencyMode, customPaths, mistIncludeBetas
     }
 
     // Custom Decodable so new fields added in future builds don't wipe existing settings
@@ -147,6 +150,7 @@ struct AppSettings: Codable {
         depsRoot            = (try? c.decodeIfPresent(URL.self, forKey: .depsRoot))            ?? root.appendingPathComponent("deps")
         tartHome            = try? c.decodeIfPresent(String.self, forKey: .tartHome)
         ipswDownloadMode    = (try? c.decodeIfPresent(IPSWDownloadMode.self, forKey: .ipswDownloadMode)) ?? .ipswMe
+        mistIncludeBetas    = (try? c.decodeIfPresent(Bool.self, forKey: .mistIncludeBetas)) ?? false
         dependencyMode      = (try? c.decodeIfPresent(DependencyMode.self, forKey: .dependencyMode)) ?? .managed
         customPaths         = (try? c.decodeIfPresent(CustomBinaryPaths.self, forKey: .customPaths)) ?? CustomBinaryPaths()
     }

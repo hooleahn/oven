@@ -345,6 +345,7 @@ extension RegistryService {
 
                     let os: String
                     switch parts[0] {
+                    case "golden-gate": os = "macOS 27 Golden Gate"
                     case "tahoe":    os = "macOS 26 Tahoe"
                     case "sequoia":  os = "macOS 15 Sequoia"
                     case "sonoma":   os = "macOS 14 Sonoma"
@@ -379,7 +380,7 @@ extension RegistryService {
             result.append(img)
         }
 
-        let osOrder = ["macOS 26 Tahoe", "macOS 15 Sequoia", "macOS 14 Sonoma",
+        let osOrder = ["macOS 27 Golden Gate", "macOS 26 Tahoe", "macOS 15 Sequoia", "macOS 14 Sonoma",
                        "macOS 13 Ventura", "macOS 12 Monterey"]
         result.sort {
             let i0 = osOrder.firstIndex(of: $0.os) ?? osOrder.count

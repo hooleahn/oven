@@ -28,6 +28,7 @@ struct OSMetadata: Codable, Hashable, Sendable {
     /// Init from a fetched IPSWFirmware — infers osName from major version.
     init(from firmware: IPSWFirmware) {
         switch firmware.majorVersion {
+        case 27: osName = .goldengate
         case 26: osName = .tahoe
         case 15: osName = .sequoia
         case 14: osName = .sonoma
@@ -47,6 +48,7 @@ struct OSMetadata: Codable, Hashable, Sendable {
             guard nums.count >= 2, let major = Int(nums[0]), major >= 12 else { continue }
             var meta = OSMetadata()
             switch major {
+            case 27: meta.osName = .goldengate
             case 26: meta.osName = .tahoe
             case 15: meta.osName = .sequoia
             case 14: meta.osName = .sonoma

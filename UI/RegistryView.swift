@@ -343,7 +343,7 @@ struct RegistryView: View {
 
             if rvm.showCirrusCatalogue {
                 let grouped = Dictionary(grouping: RegistryService.cirrusLabsCatalogue, by: \.os)
-                let osOrder = ["macOS 26 Tahoe", "macOS 15 Sequoia", "macOS 14 Sonoma",
+                let osOrder = ["macOS 27 Golden Gate", "macOS 26 Tahoe", "macOS 15 Sequoia", "macOS 14 Sonoma",
                                "macOS 13 Ventura", "macOS 12 Monterey"]
                 ForEach(osOrder, id: \.self) { os in
                     if let imgs = grouped[os] {

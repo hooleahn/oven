@@ -63,6 +63,9 @@
 		9DDA46FCB2B94A9801B36C2B /* PackerTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87381C56C3B57F827194C459 /* PackerTemplate.swift */; };
 		A15EBB8EDDCD4E8F9C9918F3 /* VMStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3407A9972E4871AB9375EB /* VMStore.swift */; };
 		A1AA6C9C58C480F05F0988F2 /* TemplateDetailPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B45FAE9421A56C9B9C35336 /* TemplateDetailPane.swift */; };
+		A1B2C3D4E5F600001234AA02 /* OSMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600001234AA01 /* OSMetadata.swift */; };
+		A1B2C3D4E5F600001234AA04 /* Installer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600001234AA03 /* Installer.swift */; };
+		A1B2C3D4E5F600001234AA06 /* InstallerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600001234AA05 /* InstallerStore.swift */; };
 		AA001122334455667788AABB /* StaleVMsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA001122334455667788CCDD /* StaleVMsSheet.swift */; };
 		AA001122334455667788EEFF /* StaleInstallersSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00112233445566778800FF /* StaleInstallersSheet.swift */; };
 		AAC69E7A339449BD9EAB580E /* RegistryCredential.swift in Sources */ = {isa = PBXBuildFile; fileRef = 732D124B57634F13BF633500 /* RegistryCredential.swift */; };
@@ -89,6 +92,7 @@
 		B91426DB2F9F2B5900F13968 /* EmptyStateBaseVMs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426DA2F9F2B5900F13968 /* EmptyStateBaseVMs.swift */; };
 		B91426DD2F9F2B6600F13968 /* EmptyStateRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426DC2F9F2B6600F13968 /* EmptyStateRegistry.swift */; };
 		B91426DF2F9F2B7600F13968 /* EmptyStateRecipes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91426DE2F9F2B7600F13968 /* EmptyStateRecipes.swift */; };
+		B93212D02FDA4F5E0094D1B5 /* wallpaper-goldengate.jpg in Resources */ = {isa = PBXBuildFile; fileRef = B93212CF2FDA4F5E0094D1B5 /* wallpaper-goldengate.jpg */; };
 		B94EA6382FB4217100EDCB68 /* ExecuteCommandSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94EA6372FB4217100EDCB68 /* ExecuteCommandSheet.swift */; };
 		B94EA63A2FBD4A1A00EDCB68 /* VMScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94EA6392FBD4A1A00EDCB68 /* VMScheduler.swift */; };
 		B94EA63C2FBDE95B00EDCB68 /* WebhookNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94EA63B2FBDE95B00EDCB68 /* WebhookNotification.swift */; };
@@ -103,9 +107,6 @@
 		B9E73BFA2FA2D2CD006B5437 /* ProfilesPrefsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9E73BF92FA2D2CD006B5437 /* ProfilesPrefsTab.swift */; };
 		B9F42A4B2FA96E6D00294F3C /* CustomOSEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A4A2FA96E6D00294F3C /* CustomOSEntry.swift */; };
 		B9F42A4D2FA96E6E00294F3C /* CustomInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A4C2FA96E6E00294F3C /* CustomInstaller.swift */; };
-		A1B2C3D4E5F600001234AA02 /* OSMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600001234AA01 /* OSMetadata.swift */; };
-		A1B2C3D4E5F600001234AA04 /* Installer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600001234AA03 /* Installer.swift */; };
-		A1B2C3D4E5F600001234AA06 /* InstallerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600001234AA05 /* InstallerStore.swift */; };
 		B9F42A4F2FA96E8A00294F3C /* CustomOSStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A4E2FA96E8A00294F3C /* CustomOSStore.swift */; };
 		B9F42A532FA96EC300294F3C /* AddCustomOSSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A522FA96EC300294F3C /* AddCustomOSSheet.swift */; };
 		B9F42A552FA96EC300294F3C /* AddCustomInstallerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A542FA96EC300294F3C /* AddCustomInstallerSheet.swift */; };
@@ -195,6 +196,9 @@
 		9232A1E52E4E48588ED88223 /* PullDestinationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullDestinationSheet.swift; sourceTree = "<group>"; };
 		9254A1862FF54F48B711F92F /* StoragePrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoragePrefsTab.swift; sourceTree = "<group>"; };
 		A0400F6E76364FCEAAF77384 /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600001234AA01 /* OSMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSMetadata.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600001234AA03 /* Installer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Installer.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600001234AA05 /* InstallerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallerStore.swift; sourceTree = "<group>"; };
 		A1DA9832E91A42EF968F15CA /* RegistryImageRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistryImageRow.swift; sourceTree = "<group>"; };
 		A481348E372E4E76A0C3C1A0 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
 		A48BCA5004344B659461399F /* IntegrationsPrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationsPrefsTab.swift; sourceTree = "<group>"; };
@@ -225,6 +229,7 @@
 		B91426DA2F9F2B5900F13968 /* EmptyStateBaseVMs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateBaseVMs.swift; sourceTree = "<group>"; };
 		B91426DC2F9F2B6600F13968 /* EmptyStateRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateRegistry.swift; sourceTree = "<group>"; };
 		B91426DE2F9F2B7600F13968 /* EmptyStateRecipes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateRecipes.swift; sourceTree = "<group>"; };
+		B93212CF2FDA4F5E0094D1B5 /* wallpaper-goldengate.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "wallpaper-goldengate.jpg"; sourceTree = "<group>"; };
 		B94EA6372FB4217100EDCB68 /* ExecuteCommandSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecuteCommandSheet.swift; sourceTree = "<group>"; };
 		B94EA6392FBD4A1A00EDCB68 /* VMScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMScheduler.swift; sourceTree = "<group>"; };
 		B94EA63B2FBDE95B00EDCB68 /* WebhookNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebhookNotification.swift; sourceTree = "<group>"; };
@@ -238,9 +243,6 @@
 		B9E73BF92FA2D2CD006B5437 /* ProfilesPrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilesPrefsTab.swift; sourceTree = "<group>"; };
 		B9F42A4A2FA96E6D00294F3C /* CustomOSEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomOSEntry.swift; sourceTree = "<group>"; };
 		B9F42A4C2FA96E6E00294F3C /* CustomInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomInstaller.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F600001234AA01 /* OSMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSMetadata.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F600001234AA03 /* Installer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Installer.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F600001234AA05 /* InstallerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallerStore.swift; sourceTree = "<group>"; };
 		B9F42A4E2FA96E8A00294F3C /* CustomOSStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomOSStore.swift; sourceTree = "<group>"; };
 		B9F42A522FA96EC300294F3C /* AddCustomOSSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddCustomOSSheet.swift; sourceTree = "<group>"; };
 		B9F42A542FA96EC300294F3C /* AddCustomInstallerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddCustomInstallerSheet.swift; sourceTree = "<group>"; };
@@ -284,6 +286,7 @@
 		1FFEAC249D3B4496A7FAA1E8 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				B93212CF2FDA4F5E0094D1B5 /* wallpaper-goldengate.jpg */,
 				B9F42A5A2FB3E6B600294F3C /* wallpaper-tiger.jpg */,
 				4480C4474BAC4BC781DE1831 /* wallpaper-ventura.jpg */,
 				67C9D25062A74F2FAB110AC8 /* wallpaper-tahoe.jpeg */,
@@ -540,6 +543,7 @@
 				B97A40B02F971CF000FB577C /* AppIcon.icon in Resources */,
 				B90657DD2F96FB4500B426A0 /* Assets.xcassets in Resources */,
 				E5C7AEBBC9D04EA59DDC1D5E /* wallpaper-monterey.jpg in Resources */,
+				B93212D02FDA4F5E0094D1B5 /* wallpaper-goldengate.jpg in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -687,7 +691,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2001;
+				CURRENT_PROJECT_VERSION = 3100;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = V4RT59UVJJ;
 				ENABLE_APP_SANDBOX = NO;
@@ -812,7 +816,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2001;
+				CURRENT_PROJECT_VERSION = 3100;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;

@@ -14,13 +14,98 @@ import Foundation
 extension BootCommandBlock {
 
     static let baseBlocks: [BootCommandBlock] = [
+        goldengate,
         tahoe,
         sequoia,
         sonoma,
         ventura,
         monterey,
     ]
+    
+    // MARK: - macOS 27 Golden Gate
 
+    static let goldengate = BootCommandBlock(
+        // Stable ID — never change once shipped; used as foreign key in ManualBuildConfig
+        id: UUID(uuidString: "B1A2C3D4-E5F6-7890-ABCD-EF1234567890")!,
+        displayName: "Setup Assistant — Golden Gate",
+        blockDescription: "Automates the macOS 27 Golden Gate Setup Assistant. Selects English, skips Apple ID, sets UTC timezone, enables SSH and Screen Sharing, and disables Gatekeeper.",
+        commandLines: [
+            // Wait for VM to boot to language selection
+            #""<wait60s><spacebar>""#,
+            // Switch to Italiano then back to English to reliably select English (US)
+            #""<wait30s>italiano<esc>english<enter>""#,
+            // Select Your Country or Region
+            #""<wait30s><click 'Select Your Country or Region'><wait5s>united states<leftShiftOn><tab><leftShiftOff><spacebar>""#,
+            // Transfer Your Data to This Mac
+            #""<wait10s><tab><tab><tab><spacebar><tab><tab><spacebar>""#,
+            // Written and Spoken Languages
+            #""<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>""#,
+            // Accessibility
+            #""<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>""#,
+            // Data & Privacy
+            #""<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>""#,
+            // Create a Mac Account
+            #""<wait10s><tab><tab><tab><tab><tab><tab>${var.account_userName}<tab>${var.account_userName}<tab>${var.account_password}<tab>${var.account_password}<tab><tab><spacebar><tab><tab><spacebar>""#,
+            // Enable Voice Over
+            #""<wait120s><leftAltOn><f5><leftAltOff>""#,
+            // Sign In with Your Apple ID
+            #""<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>""#,
+            // Are you sure you want to skip signing in with an Apple ID?
+            #""<wait10s><tab><spacebar>""#,
+            // Terms and Conditions
+            #""<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>""#,
+            // I have read and agree to the macOS Software License Agreement
+            #""<wait10s><tab><spacebar>""#,
+            // Enable Location Services
+            #""<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>""#,
+            // Are you sure you don't want to use Location Services?
+            #""<wait10s><tab><spacebar>""#,
+            // Select Your Time Zone
+            #""<wait10s><tab><tab><tab>UTC<enter><leftShiftOn><tab><leftShiftOff><spacebar>""#,
+            // Analytics
+            #""<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>""#,
+            // Screen Time
+            #""<wait10s><tab><tab><spacebar>""#,
+            // Siri
+            #""<wait10s><tab><spacebar><leftShiftOn><tab><leftShiftOff><spacebar>""#,
+            // FileVault
+            #""<wait10s><leftShiftOn><tab><tab><leftShiftOff><spacebar>""#,
+            // Mac Data Will Not Be Securely Encrypted
+            #""<wait10s><tab><spacebar>""#,
+            // Choose Your Look
+            #""<wait10s><leftShiftOn><tab><leftShiftOff><spacebar>""#,
+            // Update Mac Automatically
+            #""<wait10s><tab><tab><spacebar>""#,
+            // Welcome to Mac
+            #""<wait30s><spacebar>""#,
+            // Disable Voice Over
+            #""<wait10s><leftAltOn><f5><leftAltOff>""#,
+            // Enable Keyboard navigation and open Terminal
+            #""<wait10s><leftAltOn><spacebar><leftAltOff>Terminal<wait10s><enter>""#,
+            #""<wait10s>defaults write NSGlobalDomain AppleKeyboardUIMode -int 3<enter>""#,
+            // Open System Settings > Sharing — enable Screen Sharing and Remote Login
+            #""<wait10s>open '/System/Applications/System Settings.app'<enter>""#,
+            #""<wait10s><leftCtrlOn><f2><leftCtrlOff><right><right><right><down>Sharing<enter>""#,
+            #""<wait10s><tab><tab><tab><tab><tab><spacebar>""#,
+            #""<wait10s><tab><tab><tab><tab><tab><tab><tab><tab><tab><tab><tab><tab><spacebar>""#,
+            #""<wait10s><leftAltOn>q<leftAltOff>""#,
+            // Disable Gatekeeper
+            #""<wait10s>sudo spctl --global-disable<enter>""#,
+            #""<wait10s>${var.account_password}<enter>""#,
+            // Confirm Gatekeeper off in Privacy & Security
+            #""<wait10s>open '/System/Applications/System Settings.app'<enter>""#,
+            #""<wait10s><leftCtrlOn><f2><leftCtrlOff><right><right><right><down>Privacy & Security<enter>""#,
+            #""<wait10s><leftShiftOn><tab><tab><tab><tab><tab><tab><leftShiftOff>""#,
+            #""<wait10s><down><wait1s><down><wait1s><enter>""#,
+            #""<wait10s>${var.account_password}<enter>""#,
+            #""<wait10s><leftShiftOn><tab><leftShiftOff><wait1s><spacebar>""#,
+            #""<wait10s><leftAltOn>q<leftAltOff>""#,
+        ],
+        isBase: true,
+        osName: "macOS 27 Golden Gate",
+        osVersion: ""
+    )
+    
     // MARK: - macOS 26 Tahoe
 
     static let tahoe = BootCommandBlock(

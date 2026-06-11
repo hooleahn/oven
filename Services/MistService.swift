@@ -51,6 +51,7 @@ actor MistService {
     private let runner: ProcessRunner
     private let mistPath: String
     private let ipswRoot: URL
+    private let includeBetas: Bool
 
     // MARK: - Cache (mirrors IPSWService pattern)
     private static let cacheFile = AppSettings.defaultLocalStorageRoot
@@ -71,10 +72,11 @@ actor MistService {
         try? FileManager.default.removeItem(at: MistService.cacheFile)
     }
 
-    init(runner: ProcessRunner, mistPath: String, ipswRoot: URL) {
+    init(runner: ProcessRunner, mistPath: String, ipswRoot: URL, includeBetas: Bool = false) {
         self.runner = runner
         self.mistPath = mistPath
         self.ipswRoot = ipswRoot
+        self.includeBetas = includeBetas
     }
 
     // MARK: - List firmware
@@ -99,10 +101,9 @@ actor MistService {
         defer { try? FileManager.default.removeItem(at: tmpFile) }
 
         // Run mist list firmware --export <file> --no-ansi
-        try await runner.run(
-            mistPath,
-            arguments: ["list", "firmware", "--export", tmpFile.path, "--no-ansi"]
-        )
+        var listArgs = ["list", "firmware", "--export", tmpFile.path, "--no-ansi"]
+        if includeBetas { listArgs.append("--include-betas") }
+        try await runner.run(mistPath, arguments: listArgs)
 
         guard FileManager.default.fileExists(atPath: tmpFile.path) else {
             throw MistError.exportFileMissing
@@ -164,15 +165,14 @@ actor MistService {
     /// Download firmware shown in InstallerView (build known from list result).
     func downloadFirmware(version: String, build: String) async -> AsyncStream<ProcessEvent> {
         let filename = standardFilename(osVersion: version)
-        return await runner.stream(
-            mistPath,
-            arguments: [
-                "download", "firmware", version,
-                "--firmware-name", filename,
-                "--output-directory", ipswRoot.path,
-                "--no-ansi",
-            ]
-        )
+        var args = [
+            "download", "firmware", version,
+            "--firmware-name", filename,
+            "--output-directory", ipswRoot.path,
+            "--no-ansi",
+        ]
+        if includeBetas { args.append("--include-betas") }
+        return await runner.stream(mistPath, arguments: args)
     }
 
     /// Download firmware by version string, using a predictable output filename.
@@ -180,15 +180,14 @@ actor MistService {
     func downloadFirmwareByVersion(_ version: String) async -> (stream: AsyncStream<ProcessEvent>, expectedURL: URL) {
         let filename = standardFilename(osVersion: version)
         let expectedURL = ipswRoot.appendingPathComponent(filename)
-        let stream = await runner.stream(
-            mistPath,
-            arguments: [
-                "download", "firmware", version,
-                "--firmware-name", filename,
-                "--output-directory", ipswRoot.path,
-                "--no-ansi",
-            ]
-        )
+        var args = [
+            "download", "firmware", version,
+            "--firmware-name", filename,
+            "--output-directory", ipswRoot.path,
+            "--no-ansi",
+        ]
+        if includeBetas { args.append("--include-betas") }
+        let stream = await runner.stream(mistPath, arguments: args)
         return (stream, expectedURL)
     }
 
@@ -202,6 +201,7 @@ actor MistService {
         var displayName: String {
             let name: String
             switch majorVersion {
+            case 27: name = "macOS Golden Gate"
             case 26: name = "macOS Tahoe"
             case 15: name = "macOS Sequoia"
             case 14: name = "macOS Sonoma"

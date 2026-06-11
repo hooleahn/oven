@@ -142,6 +142,7 @@ actor SOFAService {
     /// Match SOFA's "Sequoia 15" / "Tahoe 26" string to our enum
     private func matchRelease(_ sofaName: String) -> MacOSRelease.Name? {
         let lower = sofaName.lowercased()
+        if lower.contains("golden gate")    { return .goldengate }
         if lower.contains("tahoe")    { return .tahoe }
         if lower.contains("sequoia")  { return .sequoia }
         if lower.contains("sonoma")   { return .sonoma }

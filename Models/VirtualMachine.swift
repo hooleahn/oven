@@ -338,6 +338,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
 
 struct MacOSRelease {
     enum Name: String, Codable, Hashable, CaseIterable {
+        case goldengate = "Golden Gate"
         case tahoe    = "Tahoe"
         case sequoia  = "Sequoia"
         case sonoma   = "Sonoma"
@@ -350,6 +351,7 @@ struct MacOSRelease {
         // Major version prefix used to filter mist-cli results
         var majorVersion: Int {
             switch self {
+            case .goldengate:       return 27
             case .tahoe:            return 26
             case .sequoia:          return 15
             case .sonoma:           return 14
@@ -362,6 +364,7 @@ struct MacOSRelease {
         // Display label including the version number for clarity
         var displayLabel: String {
             switch self {
+            case .goldengate: return "macOS 27 Golden Gate"
             case .tahoe:    return "macOS 26 Tahoe"
             case .sequoia:  return "macOS 15 Sequoia"
             case .sonoma:   return "macOS 14 Sonoma"
@@ -376,6 +379,7 @@ struct MacOSRelease {
         // Fallback versions — never includes "latest" (ambiguous)
         var fallbackVersions: [String] {
             switch self {
+            case .goldengate: return ["27.0"]
             case .tahoe:    return ["26.4","26.3.1","26.3","26.2","26.1","26.0"]
             case .sequoia:  return ["15.5","15.4.1","15.4","15.3.2","15.3.1","15.3","15.2","15.1","15.0"]
             case .sonoma:   return ["14.7.6","14.7.5","14.7.4","14.7.3","14.7.2","14.7.1","14.7","14.6.1","14.6","14.5","14.4.1","14.4","14.3.1","14.3","14.2.1","14.2","14.1.2","14.1.1","14.1","14.0"]

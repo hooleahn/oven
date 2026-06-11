@@ -135,7 +135,7 @@ final class VMListViewModel {
     }
 
     func allOSMajors(from vms: [VirtualMachine]) -> [String] {
-        let names = ["Tahoe", "Sequoia", "Sonoma", "Ventura", "Monterey"]
+        let names = ["Golden Gate", "Tahoe", "Sequoia", "Sonoma", "Ventura", "Monterey"]
         return names.filter { major in vms.contains { $0.osName.rawValue == major } }
     }
 

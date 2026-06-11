@@ -147,6 +147,18 @@ struct BuildPrefsTab: View {
                         Text("mist-cli will be found automatically from your PATH or Oven's managed copy.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
+
+                    Toggle(isOn: $settings.mistIncludeBetas) {
+                        Label("Include Betas", systemImage: "flask")
+                    }
+                    .help("Include beta macOS releases in the firmware list when using mist-cli.")
+                    .onChange(of: settings.mistIncludeBetas) { _, _ in
+                        try? settings.save()
+                        // Clear disk cache so the next firmware load reflects the new setting
+                        let mistCache = AppSettings.defaultLocalStorageRoot
+                            .appendingPathComponent("mist-firmware-cache.json")
+                        try? FileManager.default.removeItem(at: mistCache)
+                    }
                 }
             } header: { Text("IPSW download") }
               footer: { Text("ipsw.me queries Apple directly — no extra tools needed. mist-cli offers more control for authenticated access or custom mirrors.") }
@@ -184,6 +196,7 @@ struct BuildPrefsTab: View {
                 theme.showUnlockHintOverlay   = true
                 theme.buildCompletionAction   = "nothing"
                 settings.ipswDownloadMode     = .ipswMe
+                settings.mistIncludeBetas     = false
                 try? settings.save()
             }
             Button("Cancel", role: .cancel) {}

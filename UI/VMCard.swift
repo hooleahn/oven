@@ -188,6 +188,7 @@ struct VMCard: View {
 
     private var osWallpaper: String? {
         let v = vm.osName.rawValue.lowercased()
+        if v.contains("golden gate")    { return "wallpaper-goldengate" }
         if v.contains("tahoe")    { return "wallpaper-tahoe" }
         if v.contains("sequoia")  { return "wallpaper-sequoia" }
         if v.contains("sonoma")   { return "wallpaper-sonoma" }
@@ -198,6 +199,8 @@ struct VMCard: View {
 
     private var osIcon: String {
         let v = vm.osName.rawValue.lowercased()
+        if v.contains("golden gate") { return "apple.logo" }
+        if v.contains("tahoe") { return "apple.logo" }
         if v.contains("sequoia") { return "apple.logo" }
         if v.contains("sonoma")  { return "apple.logo" }
         if v.contains("ventura") { return "apple.logo" }

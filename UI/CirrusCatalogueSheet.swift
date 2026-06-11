@@ -12,7 +12,7 @@ struct CirrusCatalogueSheet: View {
     @State private var fetchFailed = false
 
     private let osOrder = [
-        "macOS 26 Tahoe", "macOS 15 Sequoia",
+        "macOS 27 Golden Gate", "macOS 26 Tahoe", "macOS 15 Sequoia",
         "macOS 14 Sonoma", "macOS 13 Ventura", "macOS 12 Monterey"
     ]
 

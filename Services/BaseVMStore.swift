@@ -82,6 +82,7 @@ final class BaseVMStore {
 
     private func inferOSName(from name: String) -> MacOSRelease.Name {
         let lower = name.lowercased()
+        if lower.contains("golden gate")    { return .goldengate }
         if lower.contains("tahoe")    { return .tahoe }
         if lower.contains("sequoia")  { return .sequoia }
         if lower.contains("sonoma")   { return .sonoma }
@@ -744,7 +745,8 @@ extension BaseVMStore {
             return
         }
 
-        let svc = MistService(runner: ProcessRunner(), mistPath: mistPath, ipswRoot: ipswRoot)
+        let svc = MistService(runner: ProcessRunner(), mistPath: mistPath, ipswRoot: ipswRoot,
+                              includeBetas: AppSettings.load().mistIncludeBetas)
         let (dlStream, expectedURL) = await svc.downloadFirmwareByVersion(baseVM.osVersion)
         let dlResult = await StreamConsumer.buildLog(dlStream, source: "mist") { [self] line in
             update(id: baseVM.id) { $0.buildLog.append(line) }

@@ -488,7 +488,8 @@ final class VMStore {
         let bare = name.components(separatedBy: "/").last ?? name
         let lower = bare.lowercased()
         let osName: MacOSRelease.Name
-        if lower.contains("tahoe")         { osName = .tahoe }
+        if lower.contains("golden gate")         { osName = .goldengate }
+        else if lower.contains("tahoe")         { osName = .tahoe }
         else if lower.contains("sequoia")  { osName = .sequoia }
         else if lower.contains("sonoma")   { osName = .sonoma }
         else if lower.contains("ventura")  { osName = .ventura }
