@@ -768,12 +768,12 @@ private struct CustomInstallerRow: View {
     var body: some View {
         HStack(spacing: 12) {
             ZStack(alignment: .bottomTrailing) {
-                Image(systemName: installer.fileExists ? "doc.zipper" : "externaldrive.fill.trianglebadge.exclamationmark")
+                Image(systemName: installer.fileExists ? "internaldrive.fill" : "externaldrive.fill.trianglebadge.exclamationmark")
                     .font(.title3)
                     .foregroundStyle(installer.fileExists ? .blue : .orange)
                     .frame(width: 28, height: 28)
                 if installer.osMetadata.isBeta {
-                    Image(systemName: "bolt.fill")
+                    Image(systemName: "flask.fill")
                         .font(.caption2)
                         .foregroundStyle(.white, .orange)
                         .offset(x: 4, y: 4)
