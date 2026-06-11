@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 @Observable
-final class ProfileStore: ObservableObject {
+final class ProfileStore {
 
     private(set) var profiles: [OvenProfile]
     private(set) var activeProfileID: UUID

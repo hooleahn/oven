@@ -6,13 +6,14 @@ import Foundation
 /// Tracks in-flight pushes across the entire app so multiple views
 /// can observe progress without duplicating push logic.
 @MainActor
-final class PushManager: ObservableObject {
+@Observable
+final class PushManager {
 
     /// Maps baseVM.name → progress (0…1) for every active push.
-    @Published var active: [String: Double] = [:]
+    var active: [String: Double] = [:]
 
     /// Maps baseVM.name → human-readable error string for the most recent failure.
-    @Published var errors: [String: String] = [:]
+    var errors: [String: String] = [:]
 
     // MARK: - Public API
 

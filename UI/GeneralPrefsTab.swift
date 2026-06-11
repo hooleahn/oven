@@ -2,12 +2,13 @@ import SwiftUI
 import ServiceManagement
 
 struct GeneralPrefsTab: View {
-    @EnvironmentObject var theme: AppTheme
-    @EnvironmentObject var vmStore: VMStore
+    @Environment(AppTheme.self) private var theme
+    @Environment(VMStore.self) private var vmStore
     @AppStorage("toast.disabled") private var toastsDisabled = false
     @State private var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
     var body: some View {
-        Form {
+        @Bindable var theme = theme
+        return Form {
             Section {
                 Toggle(isOn: $theme.funModeEnabled) {
                     Label("Fun Mode", systemImage: "party.popper")

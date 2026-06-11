@@ -416,6 +416,32 @@ extension VirtualMachine {
     }
 }
 
+// MARK: - OSMetadata bridge
+
+extension VirtualMachine {
+    /// Read-only aggregate view of the VM's OS fields as a single value.
+    var osMetadata: OSMetadata {
+        OSMetadata(
+            osName: osName,
+            osVersion: osVersion,
+            isBeta: isBetaOS,
+            betaLabel: betaLabel,
+            customMajorVersion: customOSMajorVersion,
+            customReleaseName: customOSReleaseName
+        )
+    }
+
+    /// Apply an OSMetadata value to the VM's individual OS fields.
+    mutating func applyOSMetadata(_ m: OSMetadata) {
+        osName               = m.osName
+        osVersion            = m.osVersion
+        isBetaOS             = m.isBeta
+        betaLabel            = m.betaLabel
+        customOSMajorVersion = m.customMajorVersion
+        customOSReleaseName  = m.customReleaseName
+    }
+}
+
 // MARK: - VMScheduleLaunchMode
 
 enum VMScheduleLaunchMode: String, Codable, Hashable, CaseIterable, Sendable {

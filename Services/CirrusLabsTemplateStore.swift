@@ -21,7 +21,8 @@ struct CirrusLabsVanillaTemplate: Identifiable, Sendable {
 // MARK: - CirrusLabsTemplateStore
 
 @MainActor
-final class CirrusLabsTemplateStore: ObservableObject {
+@Observable
+final class CirrusLabsTemplateStore {
 
     // MARK: Static catalogue
 

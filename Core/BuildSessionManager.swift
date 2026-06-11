@@ -6,7 +6,7 @@ import IOKit.pwr_mgt
 
 @MainActor
 @Observable
-final class BuildSessionManager: ObservableObject {
+final class BuildSessionManager {
 
     static let shared = BuildSessionManager()
 

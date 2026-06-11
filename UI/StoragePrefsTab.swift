@@ -13,10 +13,10 @@ private struct DiskUsageEntry: Identifiable {
 // MARK: - StoragePrefsTab
 
 struct StoragePrefsTab: View {
-    @EnvironmentObject var profileStore: ProfileStore
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var serverStore: MDMServerStore
-    @EnvironmentObject var customInstallerStore: CustomInstallerStore
+    @Environment(ProfileStore.self) private var profileStore
+    @Environment(VMStore.self) private var vmStore
+    @Environment(MDMServerStore.self) private var serverStore
+    @Environment(InstallerStore.self) private var installerStore
     @State private var settings = AppSettings.load()
     @AppStorage("prune.onPull")            private var pruneOnPull          = true
     @AppStorage("prune.onClone")           private var pruneOnClone         = true
@@ -138,13 +138,13 @@ struct StoragePrefsTab: View {
         .task { await computeDiskUsage() }
         .sheet(isPresented: $showStaleVMSheet) {
             StaleVMsSheet(thresholdDays: staleVMDays)
-                .environmentObject(vmStore)
-                .environmentObject(serverStore)
+                .environment(vmStore)
+                .environment(serverStore)
         }
         .sheet(isPresented: $showStaleInstallerSheet) {
             StaleInstallersSheet(thresholdDays: staleInstallerDays)
-                .environmentObject(vmStore)
-                .environmentObject(customInstallerStore)
+                .environment(vmStore)
+                .environment(installerStore)
         }
         .confirmationDialog("Rebuild Metadata?", isPresented: $showRebuildConfirm, titleVisibility: .visible) {
             Button("Rebuild & Restart", role: .destructive) {

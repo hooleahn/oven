@@ -9,12 +9,13 @@ import SwiftUI
 
 struct NewBaseVMSheet: View {
     var preselectedIPSWURL: URL? = nil
+    var preselectedInstaller: Installer? = nil
 
-    @EnvironmentObject var baseVMStore: BaseVMStore
-    @EnvironmentObject var theme: AppTheme
-    @EnvironmentObject var templateStore: PackerTemplateStore
-    @EnvironmentObject var blockStore: BuildingBlockStore
-    @EnvironmentObject var customInstallerStore: CustomInstallerStore
+    @Environment(BaseVMStore.self) private var baseVMStore
+    @Environment(AppTheme.self) private var theme
+    @Environment(PackerTemplateStore.self) private var templateStore
+    @Environment(BuildingBlockStore.self) private var blockStore
+    @Environment(InstallerStore.self) private var installerStore
     @Environment(\.dismiss) var dismiss
 
     // MARK: - Top-level path selection
@@ -97,6 +98,26 @@ struct NewBaseVMSheet: View {
     private let memOptions  = [4, 8, 12, 16, 24, 32, 48, 64]
     private let diskOptions = [40, 60, 80, 100, 120, 150, 200, 250, 500]
 
+    init(preselectedIPSWURL: URL? = nil, preselectedInstaller: Installer? = nil) {
+        self.preselectedIPSWURL = preselectedIPSWURL
+        self.preselectedInstaller = preselectedInstaller
+        if let m = preselectedInstaller?.osMetadata {
+            _osName = State(initialValue: m.osName)
+            _isBetaOS = State(initialValue: m.isBeta)
+            _betaLabel = State(initialValue: m.betaLabel)
+            _customOSMajorVersion = State(initialValue: m.customMajorVersion)
+            _customOSReleaseName = State(initialValue: m.customReleaseName)
+            // Pre-seed the version picker so it shows immediately, before live data loads.
+            let version = m.osVersion.isEmpty ? m.customMajorVersion : m.osVersion
+            if !version.isEmpty {
+                _versionPickerSel = State(initialValue: version)
+            }
+            print("[NewBaseVM] init — osName=\(m.osName) osVersion='\(m.osVersion)' customMajorVersion='\(m.customMajorVersion)' → seeding versionPickerSel='\(version)'")
+        } else {
+            print("[NewBaseVM] init — no preselectedInstaller")
+        }
+    }
+
     // MARK: - Computed helpers
 
     private var versionList: [String] {
@@ -132,7 +153,7 @@ struct NewBaseVMSheet: View {
         case .remoteURL:        return !customIPSWURL.isEmpty && hasVersion
         case .customInstaller:
             guard let id = selectedCustomInstallerID,
-                  let inst = customInstallerStore.installers.first(where: { $0.id == id })
+                  let inst = installerStore.customInstallers.first(where: { $0.id == id })
             else { return false }
             return inst.fileExists
         }
@@ -145,16 +166,17 @@ struct NewBaseVMSheet: View {
         case .remoteURL: return .url(customIPSWURL)
         case .customInstaller:
             if let id = selectedCustomInstallerID,
-               let inst = customInstallerStore.installers.first(where: { $0.id == id }) {
-                return .filePath(inst.fileURL)
+               let inst = installerStore.customInstallers.first(where: { $0.id == id }),
+               let url = inst.fileURL {
+                return .filePath(url)
             }
             return .auto
         }
     }
 
-    private var selectedCustomInstaller: CustomInstaller? {
+    private var selectedCustomInstaller: Installer? {
         guard let id = selectedCustomInstallerID else { return nil }
-        return customInstallerStore.installers.first { $0.id == id }
+        return installerStore.customInstallers.first { $0.id == id }
     }
 
     private var selectedBootCommandBlock: BootCommandBlock? {
@@ -191,18 +213,37 @@ struct NewBaseVMSheet: View {
             manualPassword = KeychainService.retrieve(key: "defaults.packer.password") ?? "admin"
             tmplPassword   = KeychainService.retrieve(key: "defaults.packer.password") ?? "admin"
             loadMDMData()
+            print("[NewBaseVM] task — before fetchLiveVersions, preselectedInstaller=\(preselectedInstaller != nil ? "present" : "nil") versionPickerSel='\(versionPickerSel)'")
             await fetchLiveVersions()
-            let versions = versionList
-            if versionPickerSel.isEmpty || (!versions.contains(versionPickerSel) && versionPickerSel != Self.customVersionSentinel),
-               let first = versions.first {
-                versionPickerSel = first
+            print("[NewBaseVM] task — after fetchLiveVersions, preselectedInstaller=\(preselectedInstaller != nil ? "present" : "nil") versionPickerSel='\(versionPickerSel)' liveFirmwares.count=\(liveFirmwares.count)")
+            if let installer = preselectedInstaller {
+                // onChange(of: liveFirmwares) already ran while fetching; call again to
+                // ensure the version is confirmed against the now-complete live list.
+                applyVersionFromInstaller(installer)
+            } else {
+                let versions = versionList
+                if versionPickerSel.isEmpty || (!versions.contains(versionPickerSel) && versionPickerSel != Self.customVersionSentinel),
+                   let first = versions.first {
+                    versionPickerSel = first
+                }
+                if let url = preselectedIPSWURL {
+                    detectOS(from: url)
+                }
             }
-            if let url = preselectedIPSWURL { detectOS(from: url) }
         }
         .onChange(of: liveFirmwares) { _, _ in
-            let versions = versionList
-            if !versions.isEmpty && !versions.contains(versionPickerSel) && versionPickerSel != Self.customVersionSentinel {
-                versionPickerSel = versions[0]
+            if let installer = preselectedInstaller {
+                print("[NewBaseVM] onChange(liveFirmwares) — preselectedInstaller present, calling applyVersionFromInstaller. versionPickerSel before='\(versionPickerSel)'")
+                // Live list just arrived; confirm the preselected version against it.
+                applyVersionFromInstaller(installer)
+                print("[NewBaseVM] onChange(liveFirmwares) — versionPickerSel after='\(versionPickerSel)'")
+            } else {
+                print("[NewBaseVM] onChange(liveFirmwares) — NO preselectedInstaller, versionPickerSel='\(versionPickerSel)' versionList=\(versionList.prefix(3))")
+                let versions = versionList
+                if !versions.isEmpty && !versions.contains(versionPickerSel) && versionPickerSel != Self.customVersionSentinel {
+                    versionPickerSel = versions[0]
+                    print("[NewBaseVM] onChange(liveFirmwares) — set versionPickerSel='\(versionPickerSel)'")
+                }
             }
         }
     }
@@ -283,7 +324,8 @@ struct NewBaseVMSheet: View {
                     Text($0.displayLabel).tag($0)
                 }
             }
-            .onChange(of: osName) { _, _ in
+            .onChange(of: osName) { old, new in
+                print("[NewBaseVM] onChange(osName) — \(old) → \(new), resetting versionPickerSel")
                 versionPickerSel = ""; customVersionText = ""
                 customOSMajorVersion = ""; customOSReleaseName = ""
                 customIPSWPath = ""; customIPSWURL = ""
@@ -502,7 +544,7 @@ struct NewBaseVMSheet: View {
                 Text("Download automatically (via \(settings.ipswDownloadMode == .mistCli ? "mist-cli" : "ipsw.me"))").tag(IPSWSourceChoice.auto)
                 Text("Custom file path").tag(IPSWSourceChoice.filePath)
                 Text("Download from URL").tag(IPSWSourceChoice.remoteURL)
-                if !customInstallerStore.installers.isEmpty {
+                if !installerStore.customInstallers.isEmpty {
                     Text("Custom Installer library").tag(IPSWSourceChoice.customInstaller)
                 }
             }
@@ -519,7 +561,7 @@ struct NewBaseVMSheet: View {
             case .filePath:
                 HStack(spacing: 6) {
                     TextField("", text: $customIPSWPath,
-                              prompt: Text("/path/to/macOS.ipsw").foregroundColor(.secondary))
+                              prompt: Text("/path/to/macOS.ipsw").foregroundStyle(.secondary))
                     Button("Browse…") { isPresentingIPSWPicker = true }.controlSize(.small)
                 }
                 .fileImporter(isPresented: $isPresentingIPSWPicker,
@@ -531,41 +573,30 @@ struct NewBaseVMSheet: View {
                 }
             case .remoteURL:
                 TextField("", text: $customIPSWURL,
-                          prompt: Text("https://example.com/macOS.ipsw").foregroundColor(.secondary))
+                          prompt: Text("https://example.com/macOS.ipsw").foregroundStyle(.secondary))
                 Text("Oven will download the IPSW to the configured IPSW storage folder before building.")
                     .font(.caption).foregroundStyle(.secondary)
             case .customInstaller:
                 Picker("Installer", selection: $selectedCustomInstallerID) {
                     Text("Select…").tag(Optional<UUID>.none)
-                    ForEach(customInstallerStore.installers) { inst in
+                    ForEach(installerStore.customInstallers) { inst in
                         Text(inst.fileExists
-                             ? "\(inst.displayName) — \(inst.osDisplayLabel)"
+                             ? "\(inst.displayName) — \(inst.osMetadata.displayString)"
                              : "\(inst.displayName) (file not found)")
                             .tag(Optional(inst.id))
                     }
                 }
                 .onChange(of: selectedCustomInstallerID) { _, id in
-                    if let inst = customInstallerStore.installers.first(where: { $0.id == id }) {
-                        // Auto-populate OS fields from the custom installer
-                        let installerOS = inst.osName
-                        if installerOS != .unknown { osName = installerOS }
-                        if installerOS == .custom {
-                            customOSReleaseName = inst.customOSReleaseName
-                            customOSMajorVersion = inst.customOSMajorVersion
+                    if let inst = installerStore.customInstallers.first(where: { $0.id == id }) {
+                        let m = inst.osMetadata
+                        if m.osName != .unknown { osName = m.osName }
+                        if m.osName == .custom {
+                            customOSReleaseName = m.customReleaseName
+                            customOSMajorVersion = m.customMajorVersion
                         }
-                        if !inst.osVersion.isEmpty {
-                            let known = versionList
-                            if known.contains(inst.osVersion) {
-                                versionPickerSel = inst.osVersion
-                            } else {
-                                versionPickerSel = Self.customVersionSentinel
-                                customVersionText = inst.osVersion
-                            }
-                        }
-                        if inst.isBeta {
-                            isBetaOS = true
-                            betaLabel = inst.betaLabel
-                        }
+                        isBetaOS = m.isBeta
+                        betaLabel = m.betaLabel
+                        applyVersionFromInstaller(inst)
                     }
                 }
                 if let inst = selectedCustomInstaller, !inst.fileExists {
@@ -811,7 +842,10 @@ struct NewBaseVMSheet: View {
         vm.betaLabel           = betaLabel.trimmingCharacters(in: .whitespaces)
         vm.customOSMajorVersion = customOSMajorVersion.trimmingCharacters(in: .whitespaces)
         vm.customOSReleaseName  = customOSReleaseName.trimmingCharacters(in: .whitespaces)
-        vm.macOSVersion        = "macOS \(osName.rawValue) \(resolvedOSVersion)"
+        let releaseName = customOSReleaseName.trimmingCharacters(in: .whitespaces)
+        vm.macOSVersion        = osName == .custom && !releaseName.isEmpty
+            ? "\(releaseName) \(resolvedOSVersion)"
+            : "macOS \(osName.rawValue) \(resolvedOSVersion)"
         vm.sshUsername         = tmplUsername
         vm.sshPassword         = tmplPassword.isEmpty ? nil : tmplPassword
         vm.cpuCount            = tmplCPU
@@ -851,7 +885,10 @@ struct NewBaseVMSheet: View {
         vm.betaLabel            = betaLabel.trimmingCharacters(in: .whitespaces)
         vm.customOSMajorVersion = customOSMajorVersion.trimmingCharacters(in: .whitespaces)
         vm.customOSReleaseName  = customOSReleaseName.trimmingCharacters(in: .whitespaces)
-        vm.macOSVersion         = "macOS \(osName.rawValue) \(resolvedOSVersion)"
+        let manualReleaseName = customOSReleaseName.trimmingCharacters(in: .whitespaces)
+        vm.macOSVersion         = osName == .custom && !manualReleaseName.isEmpty
+            ? "\(manualReleaseName) \(resolvedOSVersion)"
+            : "macOS \(osName.rawValue) \(resolvedOSVersion)"
         vm.sshUsername  = effectivelyAutomates ? manualUsername : "admin"
         vm.sshPassword  = effectivelyAutomates ? (manualPassword.isEmpty ? nil : manualPassword) : nil
         vm.cpuCount     = cpuCount
@@ -929,6 +966,27 @@ struct NewBaseVMSheet: View {
                 }
                 return
             }
+        }
+    }
+
+    private func applyVersionFromInstaller(_ installer: Installer) {
+        let m = installer.osMetadata
+        let version = m.osVersion.isEmpty ? m.customMajorVersion : m.osVersion
+        let list = versionList
+        print("[NewBaseVM] applyVersionFromInstaller — version='\(version)' versionList.count=\(list.count) first='\(list.first ?? "nil")' contains=\(list.contains(version))")
+        guard !version.isEmpty else {
+            if let first = list.first {
+                versionPickerSel = first
+                print("[NewBaseVM] applyVersionFromInstaller — empty version, set first='\(first)'")
+            }
+            return
+        }
+        if list.contains(version) {
+            versionPickerSel = version
+            customVersionText = ""
+        } else {
+            versionPickerSel = Self.customVersionSentinel
+            customVersionText = version
         }
     }
 

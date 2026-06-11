@@ -2,8 +2,8 @@ import SwiftUI
 import AppKit
 
 struct LogView: View {
-    @EnvironmentObject var logger: AppLogger
-    @EnvironmentObject var appState: AppState
+    @Environment(AppLogger.self) private var logger
+    @Environment(AppState.self) private var appState
     @State private var filterLevel: LogEntry.Level? = nil
     @State private var searchText = ""
     @State private var isRefreshing: Bool = false

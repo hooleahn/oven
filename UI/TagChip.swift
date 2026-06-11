@@ -19,7 +19,7 @@ struct TagChip: View {
     /// Called from context menu: Delete tag everywhere.
     var onDeleteEverywhere: ((String) -> Void)? = nil
 
-    @EnvironmentObject var tagStore: TagStore
+    @Environment(TagStore.self) private var tagStore
 
     var body: some View {
         HStack(spacing: 3) {
@@ -146,7 +146,7 @@ struct PaletteSwatchGrid: View {
 struct TagPickerField: View {
     @Binding var tags: [String]
     var existingTags: [String] = []
-    @EnvironmentObject var tagStore: TagStore
+    @Environment(TagStore.self) private var tagStore
     @State private var input = ""
     @FocusState private var isFieldFocused: Bool
     @State private var isHoveringSuggestions = false
@@ -171,7 +171,7 @@ struct TagPickerField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if !tags.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
+                ScrollView(.horizontal) {
                     HStack(spacing: 4) {
                         ForEach(Array(tags.enumerated()), id: \.offset) { index, tag in
                             TagChip(tag: tag, removable: true) {
@@ -180,6 +180,7 @@ struct TagPickerField: View {
                         }
                     }
                 }
+                .scrollIndicators(.hidden)
             }
 
             // Inline palette picker for new tags
@@ -254,21 +255,22 @@ struct TagPickerField: View {
                             .foregroundStyle(.quaternary)
                     }
                     .padding(.horizontal, 2)
-                    ScrollView(.horizontal, showsIndicators: false) {
+                    ScrollView(.horizontal) {
                         HStack(spacing: 4) {
                             ForEach(Array(suggestions.enumerated()), id: \.offset) { i, tag in
                                 Button { applyTag(tag) } label: {
                                     TagChip(tag: tag)
-                                        .overlay(
-                                            selectedSuggestionIndex == i
-                                                ? Capsule().strokeBorder(.primary.opacity(0.45), lineWidth: 1.5)
-                                                : nil
-                                        )
+                                        .overlay {
+                                            if selectedSuggestionIndex == i {
+                                                Capsule().strokeBorder(.primary.opacity(0.45), lineWidth: 1.5)
+                                            }
+                                        }
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
                     }
+                    .scrollIndicators(.hidden)
                 }
                 .padding(8)
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: CornerRadius.button))

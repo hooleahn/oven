@@ -26,7 +26,7 @@ struct TemplateDetailPane: View {
     let onDuplicate: () -> Void
     let onDelete: () -> Void
 
-    @EnvironmentObject var theme: AppTheme
+    @Environment(AppTheme.self) private var theme
     @State private var copied = false
     @State private var sofaVersions: [String] = []
     @State private var isFetchingVersions = false

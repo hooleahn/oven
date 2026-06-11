@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - ProfilesPrefsTab
 
 struct ProfilesPrefsTab: View {
-    @EnvironmentObject var profileStore: ProfileStore
+    @Environment(ProfileStore.self) private var profileStore
     @State private var editingProfileID: UUID?
     @State private var showAddSheet = false
     @State private var confirmDeleteID: UUID?

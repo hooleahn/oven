@@ -5,9 +5,12 @@ import SwiftUI
 // Inject into the environment once at the root; all views read from it.
 
 @MainActor
-final class AppTheme: ObservableObject {
+@Observable
+final class AppTheme {
 
-    @AppStorage("funModeEnabled") var funModeEnabled: Bool = false
+    var funModeEnabled: Bool = UserDefaults.standard.bool(forKey: "funModeEnabled") {
+        didSet { UserDefaults.standard.set(funModeEnabled, forKey: "funModeEnabled") }
+    }
 
     // MARK: - Label resolution
 
@@ -37,72 +40,295 @@ final class AppTheme: ObservableObject {
     var buildIcon: String        { funModeEnabled ? "flame"         : "hammer.fill" }
 
     // Debug mode: logs full commands and file paths to Activity Log before builds
-    @AppStorage("debugModeEnabled") var debugModeEnabled: Bool = false
+    var debugModeEnabled: Bool = UserDefaults.standard.bool(forKey: "debugModeEnabled") {
+        didSet { UserDefaults.standard.set(debugModeEnabled, forKey: "debugModeEnabled") }
+    }
 
     // Input lock settings
-    @AppStorage("showUnlockHintOverlay") var showUnlockHintOverlay: Bool = true
-    @AppStorage("buildCompletionAction")   var buildCompletionAction: String = "nothing"  // "nothing" | "lock" | "shutdown"
-    @AppStorage("buildTimeoutMinutes")    var buildTimeoutMinutes: Int = 180   // 3 hours
-    @AppStorage("buildHeartbeatMinutes")  var buildHeartbeatMinutes: Int = 10  // warn if silent
-    @AppStorage("batteryThresholdPct")    var batteryThresholdPct: Double = 80.0
+    var showUnlockHintOverlay: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "showUnlockHintOverlay") != nil ? ud.bool(forKey: "showUnlockHintOverlay") : true
+    }() {
+        didSet { UserDefaults.standard.set(showUnlockHintOverlay, forKey: "showUnlockHintOverlay") }
+    }
+
+    var buildCompletionAction: String = UserDefaults.standard.string(forKey: "buildCompletionAction") ?? "nothing" {
+        didSet { UserDefaults.standard.set(buildCompletionAction, forKey: "buildCompletionAction") }
+    }
+
+    var buildTimeoutMinutes: Int = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "buildTimeoutMinutes") != nil ? ud.integer(forKey: "buildTimeoutMinutes") : 180
+    }() {
+        didSet { UserDefaults.standard.set(buildTimeoutMinutes, forKey: "buildTimeoutMinutes") }
+    }
+
+    var buildHeartbeatMinutes: Int = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "buildHeartbeatMinutes") != nil ? ud.integer(forKey: "buildHeartbeatMinutes") : 10
+    }() {
+        didSet { UserDefaults.standard.set(buildHeartbeatMinutes, forKey: "buildHeartbeatMinutes") }
+    }
+
+    var batteryThresholdPct: Double = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "batteryThresholdPct") != nil ? ud.double(forKey: "batteryThresholdPct") : 80.0
+    }() {
+        didSet { UserDefaults.standard.set(batteryThresholdPct, forKey: "batteryThresholdPct") }
+    }
 
     // Notification settings — master toggles
-    @AppStorage("systemNotificationsEnabled") var systemNotificationsEnabled: Bool = false
-    @AppStorage("pushoverEnabled")            var pushoverEnabled: Bool = false
-    @AppStorage("slackEnabled")               var slackEnabled: Bool = false
-    @AppStorage("teamsEnabled")               var teamsEnabled: Bool = false
+    var systemNotificationsEnabled: Bool = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled") {
+        didSet { UserDefaults.standard.set(systemNotificationsEnabled, forKey: "systemNotificationsEnabled") }
+    }
+
+    var pushoverEnabled: Bool = UserDefaults.standard.bool(forKey: "pushoverEnabled") {
+        didSet { UserDefaults.standard.set(pushoverEnabled, forKey: "pushoverEnabled") }
+    }
+
+    var slackEnabled: Bool = UserDefaults.standard.bool(forKey: "slackEnabled") {
+        didSet { UserDefaults.standard.set(slackEnabled, forKey: "slackEnabled") }
+    }
+
+    var teamsEnabled: Bool = UserDefaults.standard.bool(forKey: "teamsEnabled") {
+        didSet { UserDefaults.standard.set(teamsEnabled, forKey: "teamsEnabled") }
+    }
 
     // System notification — delivery style (banner vs alert handled by OS; we track sound preference)
-    @AppStorage("notif.system.soundEnabled")  var systemNotifSoundEnabled: Bool = true
+    var systemNotifSoundEnabled: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.system.soundEnabled") != nil ? ud.bool(forKey: "notif.system.soundEnabled") : true
+    }() {
+        didSet { UserDefaults.standard.set(systemNotifSoundEnabled, forKey: "notif.system.soundEnabled") }
+    }
 
     // Per-event toggles — System
-    @AppStorage("notif.system.baseVMBuildSucceeded") var systemNotifBaseVMBuildSucceeded: Bool = true
-    @AppStorage("notif.system.baseVMBuildFailed")    var systemNotifBaseVMBuildFailed: Bool = true
-    @AppStorage("notif.system.ipswDownloaded")       var systemNotifIPSWDownloaded: Bool = true
-    @AppStorage("notif.system.imagePullCompleted")   var systemNotifImagePullCompleted: Bool = true
-    @AppStorage("notif.system.imagePushCompleted")   var systemNotifImagePushCompleted: Bool = false
-    @AppStorage("notif.system.vmStopped")            var systemNotifVMStopped: Bool = false
-    @AppStorage("notif.system.vmStarted")            var systemNotifVMStarted: Bool = true
-    @AppStorage("notif.system.vmStartFailed")        var systemNotifVMStartFailed: Bool = true
+    var systemNotifBaseVMBuildSucceeded: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.system.baseVMBuildSucceeded") != nil ? ud.bool(forKey: "notif.system.baseVMBuildSucceeded") : true
+    }() {
+        didSet { UserDefaults.standard.set(systemNotifBaseVMBuildSucceeded, forKey: "notif.system.baseVMBuildSucceeded") }
+    }
+
+    var systemNotifBaseVMBuildFailed: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.system.baseVMBuildFailed") != nil ? ud.bool(forKey: "notif.system.baseVMBuildFailed") : true
+    }() {
+        didSet { UserDefaults.standard.set(systemNotifBaseVMBuildFailed, forKey: "notif.system.baseVMBuildFailed") }
+    }
+
+    var systemNotifIPSWDownloaded: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.system.ipswDownloaded") != nil ? ud.bool(forKey: "notif.system.ipswDownloaded") : true
+    }() {
+        didSet { UserDefaults.standard.set(systemNotifIPSWDownloaded, forKey: "notif.system.ipswDownloaded") }
+    }
+
+    var systemNotifImagePullCompleted: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.system.imagePullCompleted") != nil ? ud.bool(forKey: "notif.system.imagePullCompleted") : true
+    }() {
+        didSet { UserDefaults.standard.set(systemNotifImagePullCompleted, forKey: "notif.system.imagePullCompleted") }
+    }
+
+    var systemNotifImagePushCompleted: Bool = UserDefaults.standard.bool(forKey: "notif.system.imagePushCompleted") {
+        didSet { UserDefaults.standard.set(systemNotifImagePushCompleted, forKey: "notif.system.imagePushCompleted") }
+    }
+
+    var systemNotifVMStopped: Bool = UserDefaults.standard.bool(forKey: "notif.system.vmStopped") {
+        didSet { UserDefaults.standard.set(systemNotifVMStopped, forKey: "notif.system.vmStopped") }
+    }
+
+    var systemNotifVMStarted: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.system.vmStarted") != nil ? ud.bool(forKey: "notif.system.vmStarted") : true
+    }() {
+        didSet { UserDefaults.standard.set(systemNotifVMStarted, forKey: "notif.system.vmStarted") }
+    }
+
+    var systemNotifVMStartFailed: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.system.vmStartFailed") != nil ? ud.bool(forKey: "notif.system.vmStartFailed") : true
+    }() {
+        didSet { UserDefaults.standard.set(systemNotifVMStartFailed, forKey: "notif.system.vmStartFailed") }
+    }
 
     // Per-event toggles — Pushover
-    @AppStorage("notif.pushover.baseVMBuildSucceeded") var pushoverNotifBaseVMBuildSucceeded: Bool = true
-    @AppStorage("notif.pushover.baseVMBuildFailed")    var pushoverNotifBaseVMBuildFailed: Bool = true
-    @AppStorage("notif.pushover.ipswDownloaded")       var pushoverNotifIPSWDownloaded: Bool = true
-    @AppStorage("notif.pushover.imagePullCompleted")   var pushoverNotifImagePullCompleted: Bool = true
-    @AppStorage("notif.pushover.imagePushCompleted")   var pushoverNotifImagePushCompleted: Bool = false
-    @AppStorage("notif.pushover.vmStopped")            var pushoverNotifVMStopped: Bool = false
-    @AppStorage("notif.pushover.vmStarted")            var pushoverNotifVMStarted: Bool = true
-    @AppStorage("notif.pushover.vmStartFailed")        var pushoverNotifVMStartFailed: Bool = true
+    var pushoverNotifBaseVMBuildSucceeded: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.pushover.baseVMBuildSucceeded") != nil ? ud.bool(forKey: "notif.pushover.baseVMBuildSucceeded") : true
+    }() {
+        didSet { UserDefaults.standard.set(pushoverNotifBaseVMBuildSucceeded, forKey: "notif.pushover.baseVMBuildSucceeded") }
+    }
+
+    var pushoverNotifBaseVMBuildFailed: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.pushover.baseVMBuildFailed") != nil ? ud.bool(forKey: "notif.pushover.baseVMBuildFailed") : true
+    }() {
+        didSet { UserDefaults.standard.set(pushoverNotifBaseVMBuildFailed, forKey: "notif.pushover.baseVMBuildFailed") }
+    }
+
+    var pushoverNotifIPSWDownloaded: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.pushover.ipswDownloaded") != nil ? ud.bool(forKey: "notif.pushover.ipswDownloaded") : true
+    }() {
+        didSet { UserDefaults.standard.set(pushoverNotifIPSWDownloaded, forKey: "notif.pushover.ipswDownloaded") }
+    }
+
+    var pushoverNotifImagePullCompleted: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.pushover.imagePullCompleted") != nil ? ud.bool(forKey: "notif.pushover.imagePullCompleted") : true
+    }() {
+        didSet { UserDefaults.standard.set(pushoverNotifImagePullCompleted, forKey: "notif.pushover.imagePullCompleted") }
+    }
+
+    var pushoverNotifImagePushCompleted: Bool = UserDefaults.standard.bool(forKey: "notif.pushover.imagePushCompleted") {
+        didSet { UserDefaults.standard.set(pushoverNotifImagePushCompleted, forKey: "notif.pushover.imagePushCompleted") }
+    }
+
+    var pushoverNotifVMStopped: Bool = UserDefaults.standard.bool(forKey: "notif.pushover.vmStopped") {
+        didSet { UserDefaults.standard.set(pushoverNotifVMStopped, forKey: "notif.pushover.vmStopped") }
+    }
+
+    var pushoverNotifVMStarted: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.pushover.vmStarted") != nil ? ud.bool(forKey: "notif.pushover.vmStarted") : true
+    }() {
+        didSet { UserDefaults.standard.set(pushoverNotifVMStarted, forKey: "notif.pushover.vmStarted") }
+    }
+
+    var pushoverNotifVMStartFailed: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.pushover.vmStartFailed") != nil ? ud.bool(forKey: "notif.pushover.vmStartFailed") : true
+    }() {
+        didSet { UserDefaults.standard.set(pushoverNotifVMStartFailed, forKey: "notif.pushover.vmStartFailed") }
+    }
 
     // Per-event toggles — Slack
-    @AppStorage("notif.slack.baseVMBuildSucceeded") var slackNotifBaseVMBuildSucceeded: Bool = true
-    @AppStorage("notif.slack.baseVMBuildFailed")    var slackNotifBaseVMBuildFailed: Bool = true
-    @AppStorage("notif.slack.ipswDownloaded")       var slackNotifIPSWDownloaded: Bool = true
-    @AppStorage("notif.slack.imagePullCompleted")   var slackNotifImagePullCompleted: Bool = true
-    @AppStorage("notif.slack.imagePushCompleted")   var slackNotifImagePushCompleted: Bool = false
-    @AppStorage("notif.slack.vmStopped")            var slackNotifVMStopped: Bool = false
-    @AppStorage("notif.slack.vmStarted")            var slackNotifVMStarted: Bool = false
-    @AppStorage("notif.slack.vmStartFailed")        var slackNotifVMStartFailed: Bool = true
+    var slackNotifBaseVMBuildSucceeded: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.slack.baseVMBuildSucceeded") != nil ? ud.bool(forKey: "notif.slack.baseVMBuildSucceeded") : true
+    }() {
+        didSet { UserDefaults.standard.set(slackNotifBaseVMBuildSucceeded, forKey: "notif.slack.baseVMBuildSucceeded") }
+    }
+
+    var slackNotifBaseVMBuildFailed: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.slack.baseVMBuildFailed") != nil ? ud.bool(forKey: "notif.slack.baseVMBuildFailed") : true
+    }() {
+        didSet { UserDefaults.standard.set(slackNotifBaseVMBuildFailed, forKey: "notif.slack.baseVMBuildFailed") }
+    }
+
+    var slackNotifIPSWDownloaded: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.slack.ipswDownloaded") != nil ? ud.bool(forKey: "notif.slack.ipswDownloaded") : true
+    }() {
+        didSet { UserDefaults.standard.set(slackNotifIPSWDownloaded, forKey: "notif.slack.ipswDownloaded") }
+    }
+
+    var slackNotifImagePullCompleted: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.slack.imagePullCompleted") != nil ? ud.bool(forKey: "notif.slack.imagePullCompleted") : true
+    }() {
+        didSet { UserDefaults.standard.set(slackNotifImagePullCompleted, forKey: "notif.slack.imagePullCompleted") }
+    }
+
+    var slackNotifImagePushCompleted: Bool = UserDefaults.standard.bool(forKey: "notif.slack.imagePushCompleted") {
+        didSet { UserDefaults.standard.set(slackNotifImagePushCompleted, forKey: "notif.slack.imagePushCompleted") }
+    }
+
+    var slackNotifVMStopped: Bool = UserDefaults.standard.bool(forKey: "notif.slack.vmStopped") {
+        didSet { UserDefaults.standard.set(slackNotifVMStopped, forKey: "notif.slack.vmStopped") }
+    }
+
+    var slackNotifVMStarted: Bool = UserDefaults.standard.bool(forKey: "notif.slack.vmStarted") {
+        didSet { UserDefaults.standard.set(slackNotifVMStarted, forKey: "notif.slack.vmStarted") }
+    }
+
+    var slackNotifVMStartFailed: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.slack.vmStartFailed") != nil ? ud.bool(forKey: "notif.slack.vmStartFailed") : true
+    }() {
+        didSet { UserDefaults.standard.set(slackNotifVMStartFailed, forKey: "notif.slack.vmStartFailed") }
+    }
 
     // Per-event toggles — Teams
-    @AppStorage("notif.teams.baseVMBuildSucceeded") var teamsNotifBaseVMBuildSucceeded: Bool = true
-    @AppStorage("notif.teams.baseVMBuildFailed")    var teamsNotifBaseVMBuildFailed: Bool = true
-    @AppStorage("notif.teams.ipswDownloaded")       var teamsNotifIPSWDownloaded: Bool = true
-    @AppStorage("notif.teams.imagePullCompleted")   var teamsNotifImagePullCompleted: Bool = true
-    @AppStorage("notif.teams.imagePushCompleted")   var teamsNotifImagePushCompleted: Bool = false
-    @AppStorage("notif.teams.vmStopped")            var teamsNotifVMStopped: Bool = false
-    @AppStorage("notif.teams.vmStarted")            var teamsNotifVMStarted: Bool = false
-    @AppStorage("notif.teams.vmStartFailed")        var teamsNotifVMStartFailed: Bool = true
+    var teamsNotifBaseVMBuildSucceeded: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.teams.baseVMBuildSucceeded") != nil ? ud.bool(forKey: "notif.teams.baseVMBuildSucceeded") : true
+    }() {
+        didSet { UserDefaults.standard.set(teamsNotifBaseVMBuildSucceeded, forKey: "notif.teams.baseVMBuildSucceeded") }
+    }
+
+    var teamsNotifBaseVMBuildFailed: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.teams.baseVMBuildFailed") != nil ? ud.bool(forKey: "notif.teams.baseVMBuildFailed") : true
+    }() {
+        didSet { UserDefaults.standard.set(teamsNotifBaseVMBuildFailed, forKey: "notif.teams.baseVMBuildFailed") }
+    }
+
+    var teamsNotifIPSWDownloaded: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.teams.ipswDownloaded") != nil ? ud.bool(forKey: "notif.teams.ipswDownloaded") : true
+    }() {
+        didSet { UserDefaults.standard.set(teamsNotifIPSWDownloaded, forKey: "notif.teams.ipswDownloaded") }
+    }
+
+    var teamsNotifImagePullCompleted: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.teams.imagePullCompleted") != nil ? ud.bool(forKey: "notif.teams.imagePullCompleted") : true
+    }() {
+        didSet { UserDefaults.standard.set(teamsNotifImagePullCompleted, forKey: "notif.teams.imagePullCompleted") }
+    }
+
+    var teamsNotifImagePushCompleted: Bool = UserDefaults.standard.bool(forKey: "notif.teams.imagePushCompleted") {
+        didSet { UserDefaults.standard.set(teamsNotifImagePushCompleted, forKey: "notif.teams.imagePushCompleted") }
+    }
+
+    var teamsNotifVMStopped: Bool = UserDefaults.standard.bool(forKey: "notif.teams.vmStopped") {
+        didSet { UserDefaults.standard.set(teamsNotifVMStopped, forKey: "notif.teams.vmStopped") }
+    }
+
+    var teamsNotifVMStarted: Bool = UserDefaults.standard.bool(forKey: "notif.teams.vmStarted") {
+        didSet { UserDefaults.standard.set(teamsNotifVMStarted, forKey: "notif.teams.vmStarted") }
+    }
+
+    var teamsNotifVMStartFailed: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "notif.teams.vmStartFailed") != nil ? ud.bool(forKey: "notif.teams.vmStartFailed") : true
+    }() {
+        didSet { UserDefaults.standard.set(teamsNotifVMStartFailed, forKey: "notif.teams.vmStartFailed") }
+    }
 
     // Menu bar
-    @AppStorage("menuBarItemEnabled") var menuBarItemEnabled: Bool = true
+    var menuBarItemEnabled: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "menuBarItemEnabled") != nil ? ud.bool(forKey: "menuBarItemEnabled") : true
+    }() {
+        didSet { UserDefaults.standard.set(menuBarItemEnabled, forKey: "menuBarItemEnabled") }
+    }
 
     // MDM features
-    @AppStorage("mdmEnabled") var mdmEnabled: Bool = true
+    var mdmEnabled: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "mdmEnabled") != nil ? ud.bool(forKey: "mdmEnabled") : true
+    }() {
+        didSet { UserDefaults.standard.set(mdmEnabled, forKey: "mdmEnabled") }
+    }
 
     // Build settings
-    @AppStorage("preventSleepDuringBuild") var preventSleepDuringBuild: Bool = true
-    @AppStorage("showGraphicsDuringBuild") var showGraphicsDuringBuild: Bool = false
-    @AppStorage("lockInputDuringBuild")    var lockInputDuringBuild: Bool = false
+    var preventSleepDuringBuild: Bool = {
+        let ud = UserDefaults.standard
+        return ud.object(forKey: "preventSleepDuringBuild") != nil ? ud.bool(forKey: "preventSleepDuringBuild") : true
+    }() {
+        didSet { UserDefaults.standard.set(preventSleepDuringBuild, forKey: "preventSleepDuringBuild") }
+    }
+
+    var showGraphicsDuringBuild: Bool = UserDefaults.standard.bool(forKey: "showGraphicsDuringBuild") {
+        didSet { UserDefaults.standard.set(showGraphicsDuringBuild, forKey: "showGraphicsDuringBuild") }
+    }
+
+    var lockInputDuringBuild: Bool = UserDefaults.standard.bool(forKey: "lockInputDuringBuild") {
+        didSet { UserDefaults.standard.set(lockInputDuringBuild, forKey: "lockInputDuringBuild") }
+    }
 }

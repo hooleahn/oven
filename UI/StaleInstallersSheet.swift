@@ -5,8 +5,8 @@ import SwiftUI
 struct StaleInstallersSheet: View {
     let thresholdDays: Int
 
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var customInstallerStore: CustomInstallerStore
+    @Environment(VMStore.self) private var vmStore
+    @Environment(InstallerStore.self) private var installerStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var selectedIDs: Set<UUID> = []
@@ -20,7 +20,7 @@ struct StaleInstallersSheet: View {
     // MARK: - Derived last-used date per installer
     // Derived from base VM builtAt where manualBuildConfig.customInstallerID matches.
 
-    private func lastUsedDate(for installer: CustomInstaller) -> Date? {
+    private func lastUsedDate(for installer: Installer) -> Date? {
         vmStore.vms
             .filter { $0.isBaseVM && $0.manualBuildConfig?.customInstallerID == installer.id }
             .compactMap { $0.builtAt }
@@ -30,13 +30,13 @@ struct StaleInstallersSheet: View {
     // MARK: - Stale installer list
 
     private struct StaleInstaller: Identifiable {
-        let installer: CustomInstaller
+        let installer: Installer
         let lastUsed: Date
         var id: UUID { installer.id }
     }
 
     private var staleInstallers: [StaleInstaller] {
-        customInstallerStore.installers.compactMap { inst in
+        installerStore.installers.compactMap { inst in
             guard let date = lastUsedDate(for: inst), date < cutoff else { return nil }
             return StaleInstaller(installer: inst, lastUsed: date)
         }
@@ -139,7 +139,7 @@ struct StaleInstallersSheet: View {
     private func deleteSelected() async {
         isDeleting = true
         for item in staleInstallers where selectedIDs.contains(item.id) {
-            customInstallerStore.delete(item.installer)
+            installerStore.delete(item.installer)
         }
         selectedIDs = []
         isDeleting = false
@@ -149,7 +149,7 @@ struct StaleInstallersSheet: View {
     private func computeFileSizes() async {
         var result: [UUID: Int64] = [:]
         for item in staleInstallers {
-            let path = item.installer.localPath
+            guard let path = item.installer.localPath else { continue }
             let size = await Task.detached(priority: .utility) {
                 (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int64) ?? 0
             }.value

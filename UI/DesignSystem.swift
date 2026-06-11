@@ -75,13 +75,13 @@ struct CardStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(.background, in: RoundedRectangle(cornerRadius: CornerRadius.card))
-            .overlay(
+            .overlay {
                 RoundedRectangle(cornerRadius: CornerRadius.card)
                     .strokeBorder(
                         isSelected ? Color.cardSelected : Color.cardBorder,
                         lineWidth: isSelected ? 3 : 0.5
                     )
-            )
+            }
             .shadow(
                 color: isSelected
                     ? Color.accentColor.opacity(0.3)

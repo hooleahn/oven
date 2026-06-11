@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct IntegrationsPrefsTab: View {
-    @EnvironmentObject var theme: AppTheme
+    @Environment(AppTheme.self) private var theme
     @State private var credentials: [RegistryCredential] = []
     @State private var isPresentingCredentialSheet = false
     @State private var editingCredential: RegistryCredential?
@@ -10,7 +10,8 @@ struct IntegrationsPrefsTab: View {
         .appendingPathComponent("registry-credentials.json")
 
     var body: some View {
-        Form {
+        @Bindable var theme = theme
+        return Form {
             Section {
                 Toggle(isOn: $theme.mdmEnabled) {
                     Label("MDM features", systemImage: "lock.shield")
@@ -144,18 +145,18 @@ struct RegistryCredentialSheet: View {
                     if useCustomRegistry {
                         LabeledContent("Custom host") {
                             TextField("", text: $customRegistry,
-                                      prompt: Text("e.g. registry.example.com").foregroundColor(.secondary))
+                                      prompt: Text("e.g. registry.example.com").foregroundStyle(.secondary))
                         }
                     }
                 }
                 Section("Authentication") {
                     LabeledContent("Username / org") {
                         TextField("", text: $username,
-                                  prompt: Text("e.g. myorg").foregroundColor(.secondary))
+                                  prompt: Text("e.g. myorg").foregroundStyle(.secondary))
                     }
                     LabeledContent("Password / Token") {
                         SecureField("", text: $password,
-                                    prompt: Text("GitHub PAT or Docker Hub token").foregroundColor(.secondary))
+                                    prompt: Text("GitHub PAT or Docker Hub token").foregroundStyle(.secondary))
                     }
                 }
                 if credential != nil {

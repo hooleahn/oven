@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct BuildPrefsTab: View {
-    @EnvironmentObject var theme: AppTheme
+    @Environment(AppTheme.self) private var theme
     @State private var settings = AppSettings.load()
 
     // Default hardware
@@ -16,7 +16,8 @@ struct BuildPrefsTab: View {
     @State private var showResetConfirm = false
 
     var body: some View {
-        Form {
+        @Bindable var theme = theme
+        return Form {
             Section {
                 Picker("CPU cores", selection: $defaultCPU) {
                     ForEach([2, 4, 6, 8, 10, 12, 16], id: \.self) { Text("\($0) cores").tag($0) }
@@ -38,7 +39,7 @@ struct BuildPrefsTab: View {
             Section {
                 LabeledContent("Username") {
                     TextField("", text: $packerUsername,
-                              prompt: Text("e.g. baker").foregroundColor(.secondary))
+                              prompt: Text("e.g. baker").foregroundStyle(.secondary))
                         .multilineTextAlignment(.trailing)
                 }
                 .help("The macOS user account created inside Base VMs during the Packer build.")

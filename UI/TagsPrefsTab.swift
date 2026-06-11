@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct TagsPrefsTab: View {
-    @EnvironmentObject var tagStore: TagStore
-    @EnvironmentObject var vmStore: VMStore
+    @Environment(TagStore.self) private var tagStore
+    @Environment(VMStore.self) private var vmStore
     @State private var editingTag: String? = nil
     @State private var newName: String = ""
     @State private var showNewTag = false
@@ -33,7 +33,7 @@ struct TagsPrefsTab: View {
                 }
                 .background(.background)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator, lineWidth: 1))
+                .overlay { RoundedRectangle(cornerRadius: 8).stroke(.separator, lineWidth: 1) }
                 .padding(.horizontal, 16)
             }
         }
@@ -81,7 +81,7 @@ struct TagsPrefsTab: View {
                     Section("Tag") {
                         LabeledContent("Name") {
                             TextField("", text: $newTagName,
-                                      prompt: Text("e.g. production").foregroundColor(.secondary))
+                                      prompt: Text("e.g. production").foregroundStyle(.secondary))
                         }
                         LabeledContent("Color") {
                             PaletteSwatchGrid(selectedIndex: $newTagColorIndex)
@@ -93,7 +93,7 @@ struct TagsPrefsTab: View {
                                     .font(.caption).fontWeight(.medium)
                                     .padding(.horizontal, 8).padding(.vertical, 3)
                                     .background(color.opacity(0.25), in: Capsule())
-                                    .overlay(Capsule().stroke(color.opacity(0.5), lineWidth: 1))
+                                    .overlay { Capsule().stroke(color.opacity(0.5), lineWidth: 1) }
                                     .foregroundStyle(color)
                             }
                         }
@@ -181,7 +181,7 @@ struct TagsPrefsTab: View {
                         Circle()
                             .fill(tagStore.color(for: tag))
                             .frame(width: 18, height: 18)
-                            .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 1))
+                            .overlay { Circle().strokeBorder(.white.opacity(0.3), lineWidth: 1) }
                     }
                     .buttonStyle(.plain)
                     .help("Click to cycle color; edit row for full palette")

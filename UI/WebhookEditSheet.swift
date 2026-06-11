@@ -143,7 +143,7 @@ struct WebhookEditSheet: View {
     }
 
     private var tokenBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 4) {
                 Text("Insert:")
                     .font(.caption)
@@ -167,6 +167,7 @@ struct WebhookEditSheet: View {
                 }
             }
         }
+        .scrollIndicators(.hidden)
     }
 
     @ViewBuilder

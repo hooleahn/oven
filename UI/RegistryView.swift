@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct RegistryView: View {
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var baseVMStore: BaseVMStore
-    @EnvironmentObject var appState: AppState
+    @Environment(VMStore.self) private var vmStore
+    @Environment(BaseVMStore.self) private var baseVMStore
+    @Environment(AppState.self) private var appState
     @State private var rvm = RegistryViewModel()
     @State private var searchText: String = ""
     @State private var lastRefreshedAt: Date? = nil
@@ -93,10 +93,10 @@ struct RegistryView: View {
                     }
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(Color.orange.opacity(0.08))
-                    .overlay(
+                    .overlay {
                         RoundedRectangle(cornerRadius: 8)
                             .strokeBorder(Color.orange.opacity(0.25), lineWidth: 1)
-                    )
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .padding(.horizontal, 12).padding(.vertical, 10)
                     Divider()
@@ -287,7 +287,7 @@ struct RegistryView: View {
                 let task = Task { await pullImage(image, asBaseVM: asBase) }
                 pullTasks[image.imageRef] = task
             }
-            .environmentObject(vmStore)
+            .environment(vmStore)
         }
     }
 
@@ -382,7 +382,7 @@ struct RegistryView: View {
         HStack(spacing: 8) {
             Image(systemName: "externaldrive.badge.plus").foregroundStyle(.secondary)
             TextField("", text: $rvm.newImageRef,
-                      prompt: Text("ghcr.io/org/image:tag").foregroundColor(.secondary))
+                      prompt: Text("ghcr.io/org/image:tag").foregroundStyle(.secondary))
                 .textFieldStyle(.roundedBorder)
                 .font(.system(.callout, design: .monospaced))
                 .focused($newImageRefFocused)

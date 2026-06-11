@@ -134,7 +134,7 @@ struct OvenApp: App {
     @State private var menuBarViewModel = MenuBarViewModel()
     @State private var pushManager = PushManager()
     @State private var customOSStore = CustomOSStore()
-    @State private var customInstallerStore = CustomInstallerStore()
+    @State private var installerStore = InstallerStore()
 
     // Ensure AppDatabase uses the active profile's root before any @State store
     // initialises — @State init order is not guaranteed in SwiftUI.
@@ -201,7 +201,7 @@ struct OvenApp: App {
                     Circle()
                         .fill(Color.accentColor)
                         .frame(width: 6, height: 6)
-                        .overlay(Circle().stroke(Color(nsColor: .textBackgroundColor), lineWidth: 1))
+                        .overlay { Circle().stroke(Color(nsColor: .textBackgroundColor), lineWidth: 1) }
                         .offset(x: 3, y: -2)
                 }
             }
@@ -218,21 +218,21 @@ struct OvenApp: App {
                 if depManager.allReady {
                     AppRootView()
                         .tint(Color("AccentColor"))
-                        .environmentObject(depManager)
-                        .environmentObject(appState)
-                        .environmentObject(theme)
-                        .environmentObject(logger)
-                        .environmentObject(serverStore)
-                        .environmentObject(buildSession)
-                        .environmentObject(tagStore)
-                        .environmentObject(vmStore)
-                        .environmentObject(baseVMStore)
-                        .environmentObject(templateStore)
-                        .environmentObject(blockStore)
-                        .environmentObject(pushManager)
-                        .environmentObject(profileStore)
-                        .environmentObject(customOSStore)
-                        .environmentObject(customInstallerStore)
+                        .environment(depManager)
+                        .environment(appState)
+                        .environment(theme)
+                        .environment(logger)
+                        .environment(serverStore)
+                        .environment(buildSession)
+                        .environment(tagStore)
+                        .environment(vmStore)
+                        .environment(baseVMStore)
+                        .environment(templateStore)
+                        .environment(blockStore)
+                        .environment(pushManager)
+                        .environment(profileStore)
+                        .environment(customOSStore)
+                        .environment(installerStore)
                         .environment(recipesViewModel)
                 } else {
                     SetupView(depManager: depManager)
@@ -293,14 +293,14 @@ struct OvenApp: App {
 
         Settings {
             PreferencesView()
-                .environmentObject(theme)
-                .environmentObject(tagStore)
-                .environmentObject(vmStore)
-                .environmentObject(baseVMStore)
-                .environmentObject(depManager)
-                .environmentObject(profileStore)
-                .environmentObject(serverStore)
-                .environmentObject(customInstallerStore)
+                .environment(theme)
+                .environment(tagStore)
+                .environment(vmStore)
+                .environment(baseVMStore)
+                .environment(depManager)
+                .environment(profileStore)
+                .environment(serverStore)
+                .environment(installerStore)
         }
 
         MenuBarExtra(isInserted: Binding(
@@ -331,11 +331,11 @@ extension Notification.Name {
 // MARK: - AppRootView
 
 struct AppRootView: View {
-    @EnvironmentObject var depManager: DependencyManager
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var tagStore: TagStore
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var baseVMStore: BaseVMStore
+    @Environment(DependencyManager.self) private var depManager
+    @Environment(AppState.self) private var appState
+    @Environment(TagStore.self) private var tagStore
+    @Environment(VMStore.self) private var vmStore
+    @Environment(BaseVMStore.self) private var baseVMStore
     @Environment(RecipesViewModel.self) private var recipesViewModel
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false

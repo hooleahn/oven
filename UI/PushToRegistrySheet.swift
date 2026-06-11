@@ -55,11 +55,11 @@ struct PushToRegistrySheet: View {
                 Section("Image") {
                     LabeledContent("Name") {
                         TextField("", text: $imageName,
-                                  prompt: Text("e.g. my-macos-vm").foregroundColor(.secondary))
+                                  prompt: Text("e.g. my-macos-vm").foregroundStyle(.secondary))
                     }
                     LabeledContent("Tag") {
                         TextField("", text: $imageTag,
-                                  prompt: Text("latest").foregroundColor(.secondary))
+                                  prompt: Text("latest").foregroundStyle(.secondary))
                     }
                     if !imageRef.isEmpty {
                         LabeledContent("Full ref") {

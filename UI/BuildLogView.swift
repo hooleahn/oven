@@ -56,7 +56,7 @@ struct BuildLogView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator.opacity(0.5)))
+                .overlay { RoundedRectangle(cornerRadius: 6).stroke(.separator.opacity(0.5)) }
                 .onChange(of: baseVM.buildLog.count) { _, _ in
                     if let last = baseVM.buildLog.indices.last {
                         proxy.scrollTo(last, anchor: .bottom)

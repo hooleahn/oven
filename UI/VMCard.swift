@@ -33,11 +33,11 @@ struct VMCard: View {
                                 .scaledToFill()
                                 .frame(height: 140)
                                 .clipShape(RoundedRectangle(cornerRadius: CornerRadius.thumbnail))
-                                .overlay(
+                                .overlay {
                                     RoundedRectangle(cornerRadius: CornerRadius.thumbnail)
                                         .fill(thumbnailOverlay)
-                                )
-                                .overlay(
+                                }
+                                .overlay {
                                     // Gradient overlay on bottom 40% for text legibility
                                     LinearGradient(
                                         gradient: Gradient(stops: [
@@ -48,7 +48,7 @@ struct VMCard: View {
                                         endPoint: .bottom
                                     )
                                     .clipShape(RoundedRectangle(cornerRadius: CornerRadius.thumbnail))
-                                )
+                                }
                         } else {
                             Image(systemName: osIcon)
                                 .font(.system(.title, weight: .light))
@@ -81,7 +81,7 @@ struct VMCard: View {
                             }
                         }
                         .lineLimit(1)
-                        ScrollView(.horizontal, showsIndicators: false) {
+                        ScrollView(.horizontal) {
                             HStack(spacing: Spacing.xs) {
                                 if vm.tags.isEmpty {
                                     Color.clear
@@ -92,6 +92,7 @@ struct VMCard: View {
                                 }
                             }
                         }
+                        .scrollIndicators(.hidden)
                         .frame(height: 22)
                         // Prevent the ScrollView from swallowing taps that should select the card
                         .allowsHitTesting(false)
@@ -128,7 +129,7 @@ struct VMCard: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, Spacing.sm).padding(.vertical, Spacing.xs)
                         .background(.quaternary, in: Capsule())
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.5), lineWidth: 0.5))
+                        .overlay { RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.5), lineWidth: 0.5) }
                         .frame(width: 26 + 4 + 26, height: 26)
                 }
                 Button(action: onEdit) {
@@ -159,7 +160,7 @@ struct VMCard: View {
                     Image(systemName: "ellipsis")
                         .frame(width: 6.5, height: 0.5)
                         .padding()
-                        .foregroundColor(Color.accent.opacity(0.5))
+                        .foregroundStyle(Color.accent.opacity(0.5))
                         .background(RoundedRectangle(cornerRadius: 5).fill(Color.accentColor.opacity(0.05)))
                 }
                 .menuStyle(.button)

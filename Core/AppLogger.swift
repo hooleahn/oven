@@ -39,7 +39,7 @@ struct LogEntry: Identifiable, Sendable {
 
 @MainActor
 @Observable
-final class AppLogger: ObservableObject {
+final class AppLogger {
 
     static let shared = AppLogger()
 

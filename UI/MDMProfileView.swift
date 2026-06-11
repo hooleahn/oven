@@ -52,7 +52,7 @@ final class MDMEnrollmentViewModel {
 /// List column — pure display and selection only.
 /// All sheet presentation is handled by ContentView's DetailColumn.
 struct MDMEnrollmentView: View {
-    @EnvironmentObject var serverStore: MDMServerStore
+    @Environment(MDMServerStore.self) private var serverStore
     @Bindable var model: MDMEnrollmentViewModel
 
     var body: some View {
@@ -343,10 +343,10 @@ struct MDMProfileSheet: View {
             Form {
                 Section("Identity") {
                     LabeledContent("Display Name") {
-                        TextField("", text: $displayName, prompt: Text("e.g. Dev Enrollment").foregroundColor(.secondary))
+                        TextField("", text: $displayName, prompt: Text("e.g. Dev Enrollment").foregroundStyle(.secondary))
                     }
                     LabeledContent("Description") {
-                        TextField("", text: $description, prompt: Text("Optional").foregroundColor(.secondary))
+                        TextField("", text: $description, prompt: Text("Optional").foregroundStyle(.secondary))
                     }
                 }
 
@@ -357,14 +357,14 @@ struct MDMProfileSheet: View {
                     }
                     if useCustomServer {
                         LabeledContent("Server URL") {
-                            TextField("", text: $customServerURL, prompt: Text("https://yourorg.jamfcloud.com").foregroundColor(.secondary))
+                            TextField("", text: $customServerURL, prompt: Text("https://yourorg.jamfcloud.com").foregroundStyle(.secondary))
                         }
                     }
                 }
 
                 Section("Enrollment") {
                     LabeledContent("Invitation ID") {
-                        TextField("", text: $invitationID, prompt: Text("Paste enrollment invitation ID").foregroundColor(.secondary))
+                        TextField("", text: $invitationID, prompt: Text("Paste enrollment invitation ID").foregroundStyle(.secondary))
                     }
                     Toggle("Set expiration date manually", isOn: $hasExpiration)
                     if hasExpiration {

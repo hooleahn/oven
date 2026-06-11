@@ -103,8 +103,10 @@
 		B9E73BFA2FA2D2CD006B5437 /* ProfilesPrefsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9E73BF92FA2D2CD006B5437 /* ProfilesPrefsTab.swift */; };
 		B9F42A4B2FA96E6D00294F3C /* CustomOSEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A4A2FA96E6D00294F3C /* CustomOSEntry.swift */; };
 		B9F42A4D2FA96E6E00294F3C /* CustomInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A4C2FA96E6E00294F3C /* CustomInstaller.swift */; };
+		A1B2C3D4E5F600001234AA02 /* OSMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600001234AA01 /* OSMetadata.swift */; };
+		A1B2C3D4E5F600001234AA04 /* Installer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600001234AA03 /* Installer.swift */; };
+		A1B2C3D4E5F600001234AA06 /* InstallerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600001234AA05 /* InstallerStore.swift */; };
 		B9F42A4F2FA96E8A00294F3C /* CustomOSStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A4E2FA96E8A00294F3C /* CustomOSStore.swift */; };
-		B9F42A512FA96E8A00294F3C /* CustomInstallerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A502FA96E8A00294F3C /* CustomInstallerStore.swift */; };
 		B9F42A532FA96EC300294F3C /* AddCustomOSSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A522FA96EC300294F3C /* AddCustomOSSheet.swift */; };
 		B9F42A552FA96EC300294F3C /* AddCustomInstallerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A542FA96EC300294F3C /* AddCustomInstallerSheet.swift */; };
 		B9F42A572FA9AD4800294F3C /* BrowseGHCRSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F42A562FA9AD4800294F3C /* BrowseGHCRSheet.swift */; };
@@ -236,8 +238,10 @@
 		B9E73BF92FA2D2CD006B5437 /* ProfilesPrefsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilesPrefsTab.swift; sourceTree = "<group>"; };
 		B9F42A4A2FA96E6D00294F3C /* CustomOSEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomOSEntry.swift; sourceTree = "<group>"; };
 		B9F42A4C2FA96E6E00294F3C /* CustomInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomInstaller.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600001234AA01 /* OSMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSMetadata.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600001234AA03 /* Installer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Installer.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600001234AA05 /* InstallerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallerStore.swift; sourceTree = "<group>"; };
 		B9F42A4E2FA96E8A00294F3C /* CustomOSStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomOSStore.swift; sourceTree = "<group>"; };
-		B9F42A502FA96E8A00294F3C /* CustomInstallerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomInstallerStore.swift; sourceTree = "<group>"; };
 		B9F42A522FA96EC300294F3C /* AddCustomOSSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddCustomOSSheet.swift; sourceTree = "<group>"; };
 		B9F42A542FA96EC300294F3C /* AddCustomInstallerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddCustomInstallerSheet.swift; sourceTree = "<group>"; };
 		B9F42A562FA9AD4800294F3C /* BrowseGHCRSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseGHCRSheet.swift; sourceTree = "<group>"; };
@@ -410,6 +414,8 @@
 				B9E73BF52FA2D199006B5437 /* OvenProfile.swift */,
 				B9F42A4A2FA96E6D00294F3C /* CustomOSEntry.swift */,
 				B9F42A4C2FA96E6E00294F3C /* CustomInstaller.swift */,
+				A1B2C3D4E5F600001234AA01 /* OSMetadata.swift */,
+				A1B2C3D4E5F600001234AA03 /* Installer.swift */,
 				B94EA63B2FBDE95B00EDCB68 /* WebhookNotification.swift */,
 			);
 			path = Models;
@@ -445,7 +451,7 @@
 				B91426CC2F9970CA00F13968 /* ManualBuildHCLGenerator.swift */,
 				B91426D62F9F256F00F13968 /* PushManager.swift */,
 				B9F42A4E2FA96E8A00294F3C /* CustomOSStore.swift */,
-				B9F42A502FA96E8A00294F3C /* CustomInstallerStore.swift */,
+				A1B2C3D4E5F600001234AA05 /* InstallerStore.swift */,
 				B94EA6392FBD4A1A00EDCB68 /* VMScheduler.swift */,
 			);
 			path = Services;
@@ -620,6 +626,9 @@
 				A1AA6C9C58C480F05F0988F2 /* TemplateDetailPane.swift in Sources */,
 				B9F42A532FA96EC300294F3C /* AddCustomOSSheet.swift in Sources */,
 				B9F42A4D2FA96E6E00294F3C /* CustomInstaller.swift in Sources */,
+				A1B2C3D4E5F600001234AA02 /* OSMetadata.swift in Sources */,
+				A1B2C3D4E5F600001234AA04 /* Installer.swift in Sources */,
+				A1B2C3D4E5F600001234AA06 /* InstallerStore.swift in Sources */,
 				8A76F26E9669B5589A03E929 /* VarsFileDetailPane.swift in Sources */,
 				D106B83FBF5548850499ACB6 /* NewPackerObjectSheet.swift in Sources */,
 				542CCC4E31BEF50B1A871918 /* Services/PackerTemplateStore.swift in Sources */,
@@ -658,7 +667,6 @@
 				43CBAFEB428D4276994B436F /* NotificationPrefsTab.swift in Sources */,
 				17FA307EDDB4424C8719B4A5 /* IntegrationsPrefsTab.swift in Sources */,
 				7C98E251A01F4BBDBD88C4B7 /* TagsPrefsTab.swift in Sources */,
-				B9F42A512FA96E8A00294F3C /* CustomInstallerStore.swift in Sources */,
 				AA001122334455667788AABB /* StaleVMsSheet.swift in Sources */,
 				AA001122334455667788EEFF /* StaleInstallersSheet.swift in Sources */,
 			);

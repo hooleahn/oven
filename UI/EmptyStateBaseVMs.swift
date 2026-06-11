@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - EmptyStateBaseVMs
 
 struct EmptyStateBaseVMs: View {
-    @EnvironmentObject var theme: AppTheme
+    @Environment(AppTheme.self) private var theme
 
     var onBrowsePrebuilt: () -> Void
     var onBuildFromIPSW: () -> Void

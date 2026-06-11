@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ToolsPrefsTab: View {
-    @EnvironmentObject var depManager: DependencyManager
+    @Environment(DependencyManager.self) private var depManager
 
     // Local mirror of persisted settings
     @State private var mode: AppSettings.DependencyMode = .managed
@@ -175,7 +175,7 @@ private struct CustomPathRow: View {
         LabeledContent(label) {
             HStack {
                 TextField("", text: $path,
-                          prompt: Text("/usr/local/bin/\(label)").foregroundColor(.secondary))
+                          prompt: Text("/usr/local/bin/\(label)").foregroundStyle(.secondary))
                     .font(.system(.body, design: .monospaced))
                 Button {
                     let panel = NSOpenPanel()

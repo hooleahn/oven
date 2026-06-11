@@ -80,7 +80,7 @@ extension TagStore {
 /// can read colours without prop-drilling.
 @MainActor
 @Observable
-final class TagStore: ObservableObject {
+final class TagStore {
 
     /// tag → palette index (0-based into `TagStore.palette`).
     private(set) var colorIndices: [String: Int] = [:]

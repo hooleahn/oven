@@ -7,10 +7,10 @@ import SwiftUI
 struct NewVMSheet: View {
     var preselectedBase: VirtualMachine? = nil   // pre-select a base VM when opening from Base VMs view
 
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var baseVMStore: BaseVMStore
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var theme: AppTheme
+    @Environment(VMStore.self) private var vmStore
+    @Environment(BaseVMStore.self) private var baseVMStore
+    @Environment(AppState.self) private var appState
+    @Environment(AppTheme.self) private var theme
     @Environment(\.dismiss) var dismiss
 
     // Loaded from disk
@@ -141,10 +141,10 @@ struct NewVMSheet: View {
                                 .foregroundStyle(.secondary)
                         }
                         LabeledContent("Display name") {
-                            TextField("", text: $displayName, prompt: Text("Optional — shown in the VM list").foregroundColor(.secondary))
+                            TextField("", text: $displayName, prompt: Text("Optional — shown in the VM list").foregroundStyle(.secondary))
                         }
                         LabeledContent("Description") {
-                            TextField("", text: $description, prompt: Text("Optional").foregroundColor(.secondary))
+                            TextField("", text: $description, prompt: Text("Optional").foregroundStyle(.secondary))
                         }
                         VStack(alignment: .leading) {
                             Text("Tags").font(.callout)
@@ -160,12 +160,12 @@ struct NewVMSheet: View {
                     Section("SSH credentials") {
                     LabeledContent("Username") {
                         TextField("", text: $sshUsername,
-                                  prompt: Text("e.g. baker").foregroundColor(.secondary))
+                                  prompt: Text("e.g. baker").foregroundStyle(.secondary))
                             .multilineTextAlignment(.trailing)
                     }
                     LabeledContent("Password") {
                         SecureField("", text: $sshPassword,
-                                    prompt: Text("optional, stored in Keychain").foregroundColor(.secondary))
+                                    prompt: Text("optional, stored in Keychain").foregroundStyle(.secondary))
                             .multilineTextAlignment(.trailing)
                     }
                 }
@@ -247,14 +247,21 @@ struct NewVMSheet: View {
                 displayName: displayName.isEmpty ? nil : displayName,
                 description: description,
                 tags: tags,
-                macOSVersion: "\(base.osName.rawValue) \(base.osVersion)",
+                macOSVersion: base.macOSVersion,
+                osName: base.osName,
+                osVersion: base.osVersion,
+                isBetaOS: base.isBetaOS,
+                betaLabel: base.betaLabel,
+                customOSMajorVersion: base.customOSMajorVersion,
+                customOSReleaseName: base.customOSReleaseName,
                 baseVMID: base.id,
                 mdmProfileID: selectedMDMProfileID,
                 cpuCount: cpuCount,
                 memoryGB: memoryGB,
                 diskGB: diskGB,
                 mdmServerID: selectedMDMServer?.id,
-                sshUsername: sshUsername.isEmpty ? base.sshUsername : sshUsername
+                sshUsername: sshUsername.isEmpty ? base.sshUsername : sshUsername,
+                osMetadata: base.osMetadata
             )
             // Store password in Keychain on the newly created VM
             if let vm = vmStore.vms.first(where: { $0.name == name }) {

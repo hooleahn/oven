@@ -74,13 +74,13 @@ enum SidebarItem: String, Hashable, CaseIterable {
 // MARK: - ContentView
 
 struct ContentView: View {
-    @EnvironmentObject var theme: AppTheme
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var baseVMStore: BaseVMStore
-    @EnvironmentObject var serverStore: MDMServerStore
-    @EnvironmentObject var templateStore: PackerTemplateStore
-    @EnvironmentObject var blockStore: BuildingBlockStore
+    @Environment(AppTheme.self) private var theme
+    @Environment(AppState.self) private var appState
+    @Environment(VMStore.self) private var vmStore
+    @Environment(BaseVMStore.self) private var baseVMStore
+    @Environment(MDMServerStore.self) private var serverStore
+    @Environment(PackerTemplateStore.self) private var templateStore
+    @Environment(BuildingBlockStore.self) private var blockStore
 
     // SceneStorage persists the selected tab across relaunches within the same scene.
     @SceneStorage("oven.selectedTab") private var storedSelection: String = SidebarItem.virtualMachines.rawValue
@@ -197,10 +197,10 @@ struct ContentView: View {
 /// All .sheet and .confirmationDialog modifiers for MDM views live here so they
 /// are anchored in the detail column where macOS can present them correctly.
 private struct DetailColumn: View {
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var baseVMStore: BaseVMStore
-    @EnvironmentObject var serverStore: MDMServerStore
-    @EnvironmentObject var appState: AppState
+    @Environment(VMStore.self) private var vmStore
+    @Environment(BaseVMStore.self) private var baseVMStore
+    @Environment(MDMServerStore.self) private var serverStore
+    @Environment(AppState.self) private var appState
 
     let selection: SidebarItem?
     @Bindable var vmListModel: VMListViewModel
@@ -317,8 +317,8 @@ private struct DetailColumn: View {
                 },
                 onStart: { Task { await startVM(vm) } }
             )
-            .environmentObject(baseVMStore)
-            .environmentObject(serverStore)
+            .environment(baseVMStore)
+            .environment(serverStore)
         } else {
             ContentUnavailableView(
                 "No VM Selected",
@@ -457,12 +457,12 @@ private struct DetailColumn: View {
 // MARK: - Sidebar
 
 struct SidebarView: View {
-    @EnvironmentObject var theme: AppTheme
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var tagStore: TagStore
-    @EnvironmentObject var pushManager: PushManager
-    @EnvironmentObject var profileStore: ProfileStore
+    @Environment(AppTheme.self) private var theme
+    @Environment(VMStore.self) private var vmStore
+    @Environment(AppState.self) private var appState
+    @Environment(TagStore.self) private var tagStore
+    @Environment(PushManager.self) private var pushManager
+    @Environment(ProfileStore.self) private var profileStore
     @Binding var selection: SidebarItem?
 
     private var runningVMCount: Int {
@@ -701,7 +701,7 @@ private struct SidebarSectionHeader: View {
 // MARK: - Status bar
 
 struct OvenStatusBar: View {
-    @EnvironmentObject var depManager: DependencyManager
+    @Environment(DependencyManager.self) private var depManager
     var body: some View {
         HStack(spacing: 6) {
             Circle()
@@ -744,7 +744,7 @@ struct OvenStatusBar: View {
 /// Routes the selected SidebarItem to the appropriate list/content view.
 /// Displayed in the content column of the NavigationSplitView.
 struct ContentRouter: View {
-    @EnvironmentObject var theme: AppTheme
+    @Environment(AppTheme.self) private var theme
     let selection: SidebarItem?
     @Bindable var vmListModel: VMListViewModel
     @Bindable var baseVMModel: BaseVMViewModel

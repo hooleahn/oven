@@ -51,7 +51,7 @@ struct BaseVMRow: View {
                     .foregroundStyle(statusColor)
                     .padding(.horizontal, Spacing.sm).padding(.vertical, 3)
                     .background(statusColor.opacity(0.12), in: Capsule())
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.5), lineWidth: 0.5))
+                    .overlay { RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.5), lineWidth: 0.5) }
 //                    .overlay(Capsule().strokeBorder(statusColor.opacity(0.25), lineWidth: 0.5))
             }
         }

@@ -3,13 +3,13 @@ import SwiftUI
 // MARK: - BaseVMView
 
 struct BaseVMView: View {
-    @EnvironmentObject var baseVMStore: BaseVMStore
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var theme: AppTheme
-    @EnvironmentObject var templateStore: PackerTemplateStore
-    @EnvironmentObject var blockStore: BuildingBlockStore
-    @EnvironmentObject var pushManager: PushManager
+    @Environment(BaseVMStore.self) private var baseVMStore
+    @Environment(VMStore.self) private var vmStore
+    @Environment(AppState.self) private var appState
+    @Environment(AppTheme.self) private var theme
+    @Environment(PackerTemplateStore.self) private var templateStore
+    @Environment(BuildingBlockStore.self) private var blockStore
+    @Environment(PushManager.self) private var pushManager
     @State private var lastRefreshedAt: Date? = nil
     @State private var isRefreshing: Bool = false
     @State private var refreshRotation: Double = 0
@@ -195,19 +195,19 @@ struct BaseVMView: View {
         }
         .sheet(isPresented: $model.isPresentingNewSheet) {
             NewBaseVMSheet()
-                .environmentObject(baseVMStore)
-                .environmentObject(theme)
-                .environmentObject(templateStore)
-                .environmentObject(blockStore)
+                .environment(baseVMStore)
+                .environment(theme)
+                .environment(templateStore)
+                .environment(blockStore)
         }
         .sheet(item: $model.createVMFromBase) { base in
             NewVMFromBaseSheet(baseVM: base)
         }
         .sheet(item: $model.editingBaseVM) { vm in
             BaseVMEditSheet(baseVM: vm)
-                .environmentObject(baseVMStore)
-                .environmentObject(vmStore)
-                .environmentObject(templateStore)
+                .environment(baseVMStore)
+                .environment(vmStore)
+                .environment(templateStore)
         }
         .sheet(isPresented: Binding(
             get: { model.pushToRegistryBaseVM != nil },
@@ -376,13 +376,13 @@ func buildLogLineColor(_ line: String) -> Color {
 /// Thin sheet wrapper that opens NewVMSheet pre-selecting a specific base VM.
 struct NewVMFromBaseSheet: View {
     let baseVM: VirtualMachine
-    @EnvironmentObject var baseVMStore: BaseVMStore
-    @EnvironmentObject var appState: AppState
+    @Environment(BaseVMStore.self) private var baseVMStore
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         NewVMSheet(preselectedBase: baseVM)
-            .environmentObject(baseVMStore)
-            .environmentObject(appState)
+            .environment(baseVMStore)
+            .environment(appState)
     }
 }
 

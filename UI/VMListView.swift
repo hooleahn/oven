@@ -4,11 +4,11 @@ import AppKit
 // MARK: - VMListView
 
 struct VMListView: View {
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var baseVMStore: BaseVMStore
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var serverStore: MDMServerStore
-    @EnvironmentObject var tagStore: TagStore
+    @Environment(VMStore.self) private var vmStore
+    @Environment(BaseVMStore.self) private var baseVMStore
+    @Environment(AppState.self) private var appState
+    @Environment(MDMServerStore.self) private var serverStore
+    @Environment(TagStore.self) private var tagStore
     /// Model is owned by ContentView so the detail column can also access it.
     @Bindable var model: VMListViewModel
 
@@ -39,6 +39,7 @@ struct VMListView: View {
     @State private var isRefreshing: Bool = false
 
     var body: some View {
+        @Bindable var appState = appState
         // ── Content column: list only ──────────────────────────────────────
         // The detail pane lives in ContentView's detail column, not here.
         contentStack
@@ -406,7 +407,7 @@ struct VMListView: View {
 
     @ViewBuilder private var activeTagFilterBar: some View {
         if !model.selectedTagFilters.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 HStack(spacing: 6) {
                     Image(systemName: "line.3.horizontal.decrease.circle.fill")
                         .font(.caption)
@@ -438,6 +439,7 @@ struct VMListView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
             }
+            .scrollIndicators(.hidden)
             .background(.bar)
             Divider()
         }
@@ -762,9 +764,9 @@ private struct VMListSheets: ViewModifier {
             }
             .sheet(item: $model.cloneVM) { vm in
                 CloneVMSheet(vm: vm)
-                    .environmentObject(vmStore)
-                    .environmentObject(baseVMStore)
-                    .environmentObject(appState)
+                    .environment(vmStore)
+                    .environment(baseVMStore)
+                    .environment(appState)
             }
             .confirmationDialog(deleteTitle,
                 isPresented: Binding(get: { model.confirmDelete != nil }, set: { if !$0 { model.confirmDelete = nil } }),
@@ -811,9 +813,9 @@ private struct VMListSheets: ViewModifier {
             }
             .sheet(isPresented: Binding(get: { appState.isPresentingNewVM }, set: { appState.isPresentingNewVM = $0 })) {
                 NewVMSheet()
-                    .environmentObject(vmStore)
-                    .environmentObject(baseVMStore)
-                    .environmentObject(appState)
+                    .environment(vmStore)
+                    .environment(baseVMStore)
+                    .environment(appState)
             }
             .sheet(item: $model.pendingLaunchVM) { vm in
                 LaunchModeSheet(vm: vm) { mode in
@@ -845,7 +847,7 @@ private struct VMListSheets: ViewModifier {
             }
             .sheet(item: $model.editingVM) { vm in
                 VMEditSheet(vm: vm)
-                    .environmentObject(vmStore)
+                    .environment(vmStore)
             }
             .sheet(isPresented: Binding(
                 get: { model.pushVM != nil },

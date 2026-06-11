@@ -208,7 +208,7 @@ struct ExecuteCommandSheet: View {
         }
         .background(.background)
         .clipShape(RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator, lineWidth: 0.5))
+        .overlay { RoundedRectangle(cornerRadius: 6).stroke(.separator, lineWidth: 0.5) }
     }
 
     // MARK: - Run logic

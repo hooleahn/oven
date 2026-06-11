@@ -28,7 +28,7 @@ struct StatusPill: View {
             .padding(.horizontal, Spacing.sm + 2) // 10 pt
             .padding(.vertical, Spacing.xs)
             .background(pillColor.opacity(reduceTransparency ? 0.35 : 0.15), in: Capsule())
-            .overlay(Capsule().strokeBorder(pillColor.opacity(0.4), lineWidth: 0.5))
+            .overlay { Capsule().strokeBorder(pillColor.opacity(0.4), lineWidth: 0.5) }
             .accessibilityLabel("Status: \(status.label)")
     }
 

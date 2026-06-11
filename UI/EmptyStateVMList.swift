@@ -3,8 +3,8 @@ import SwiftUI
 // MARK: - EmptyStateVMList
 
 struct EmptyStateVMList: View {
-    @EnvironmentObject var baseVMStore: BaseVMStore
-    @EnvironmentObject var appState: AppState
+    @Environment(BaseVMStore.self) private var baseVMStore
+    @Environment(AppState.self) private var appState
 
     var onClone: (VirtualMachine) -> Void
     var onNewVM: () -> Void

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct AddCustomOSSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var customOSStore: CustomOSStore
+    @Environment(CustomOSStore.self) private var customOSStore
 
     var onAdd: ((CustomOSEntry) -> Void)? = nil
 

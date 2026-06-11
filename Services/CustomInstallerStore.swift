@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 @Observable
-final class CustomInstallerStore: ObservableObject {
+final class CustomInstallerStore {
 
     var installers: [CustomInstaller] = []
     var isCopying = false

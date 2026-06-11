@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 @Observable
-final class CustomOSStore: ObservableObject {
+final class CustomOSStore {
 
     var entries: [CustomOSEntry] = []
 

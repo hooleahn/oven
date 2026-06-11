@@ -4,7 +4,7 @@ import SwiftUI
 
 @MainActor
 @Observable
-final class MDMServerStore: ObservableObject {
+final class MDMServerStore {
     var servers: [MDMServer] = []
     private let metadataURL = AppSettings.defaultLocalStorageRoot
         .appendingPathComponent("mdm-servers.json")
@@ -59,7 +59,7 @@ final class MDMServersViewModel {
 /// List column — pure display and selection only.
 /// All sheet presentation is handled by ContentView's DetailColumn.
 struct MDMServersView: View {
-    @EnvironmentObject var serverStore: MDMServerStore
+    @Environment(MDMServerStore.self) private var serverStore
     @Bindable var model: MDMServersViewModel
 
     var body: some View {
@@ -160,7 +160,7 @@ struct MDMServerDetailPane: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
     @State private var isTesting = false
-    @EnvironmentObject var serverStore: MDMServerStore
+    @Environment(MDMServerStore.self) private var serverStore
 
     struct RequiredPrivilege {
         let name: String
@@ -439,12 +439,12 @@ struct MDMServerSheet: View {
             Form {
                 Section("Identity") {
                     LabeledContent("Friendly name") {
-                        TextField("", text: $friendlyName, prompt: Text("e.g. Jamf Pro Production").foregroundColor(.secondary))
+                        TextField("", text: $friendlyName, prompt: Text("e.g. Jamf Pro Production").foregroundStyle(.secondary))
                     }
                 }
                 Section("Connection") {
                     LabeledContent("Server URL") {
-                        TextField("", text: $serverURL, prompt: Text("https://yourorg.jamfcloud.com").foregroundColor(.secondary))
+                        TextField("", text: $serverURL, prompt: Text("https://yourorg.jamfcloud.com").foregroundStyle(.secondary))
                     }
                     
                     Picker("Authentication Type", selection: $serverAuthType) {
@@ -452,10 +452,10 @@ struct MDMServerSheet: View {
                         Text("API Client/Secret").tag("API Client")
                     }.pickerStyle(.inline)
                     LabeledContent("API Client ID or Username") {
-                        TextField("", text: $serverUsername, prompt: Text(" Client ID/Username").foregroundColor(.secondary))
+                        TextField("", text: $serverUsername, prompt: Text(" Client ID/Username").foregroundStyle(.secondary))
                     }
                     LabeledContent("API Client Secret or Password") {
-                        SecureField("", text: $serverPassword, prompt: Text("Stored in Keychain").foregroundColor(.secondary))
+                        SecureField("", text: $serverPassword, prompt: Text("Stored in Keychain").foregroundStyle(.secondary))
                     }
                 }
                 Section("Features") {

@@ -5,8 +5,8 @@ import SwiftUI
 struct StaleVMsSheet: View {
     let thresholdDays: Int
 
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var serverStore: MDMServerStore
+    @Environment(VMStore.self) private var vmStore
+    @Environment(MDMServerStore.self) private var serverStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var selectedIDs: Set<UUID> = []

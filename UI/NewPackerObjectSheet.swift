@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 // Building Block, or Boot Command Block before filling in details.
 
 struct NewPackerObjectSheet: View {
-    @EnvironmentObject var theme: AppTheme
+    @Environment(AppTheme.self) private var theme
     @Environment(\.dismiss) private var dismiss
 
     enum ObjectKind: String, CaseIterable, Identifiable {
@@ -124,7 +124,7 @@ struct NewPackerObjectSheet: View {
         switch selectedKind {
         case .fullTemplate:
             FullTemplateCreationForm(onCreated: { id in onCreatedTemplate(id); dismiss() })
-                .environmentObject(theme)
+                .environment(theme)
         case .varsFile:
             VarsFileCreationForm(onCreated: { id in onCreatedTemplate(id); dismiss() })
         case .block:
@@ -160,8 +160,8 @@ private struct CreationFooter: View {
 // MARK: - Full Template Creation Form
 
 private struct FullTemplateCreationForm: View {
-    @EnvironmentObject var theme: AppTheme
-    @EnvironmentObject var templateStore: PackerTemplateStore
+    @Environment(AppTheme.self) private var theme
+    @Environment(PackerTemplateStore.self) private var templateStore
 
     let onCreated: (UUID) -> Void
 
@@ -368,7 +368,7 @@ build {
 // MARK: - Vars File Creation Form
 
 private struct VarsFileCreationForm: View {
-    @EnvironmentObject var templateStore: PackerTemplateStore
+    @Environment(PackerTemplateStore.self) private var templateStore
 
     let onCreated: (UUID) -> Void
 

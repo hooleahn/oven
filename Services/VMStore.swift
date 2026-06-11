@@ -26,7 +26,7 @@ enum VMStoreError: LocalizedError {
 ///   3. Delegate all tart operations to TartService.
 @MainActor
 @Observable
-final class VMStore: ObservableObject {
+final class VMStore {
 
     // MARK: Published state
 
@@ -198,6 +198,12 @@ final class VMStore: ObservableObject {
         description: String = "",
         tags: [String] = [],
         macOSVersion: String = "",
+        osName: MacOSRelease.Name = .unknown,
+        osVersion: String = "",
+        isBetaOS: Bool = false,
+        betaLabel: String = "",
+        customOSMajorVersion: String = "",
+        customOSReleaseName: String = "",
         baseVMID: UUID? = nil,
         mdmProfileID: UUID? = nil,
         cpuCount: Int = 4,
@@ -205,14 +211,15 @@ final class VMStore: ObservableObject {
         diskGB: Int = 80,
         registryImageRef: String? = nil,
         mdmServerID: UUID? = nil,
-        sshUsername: String = "baker"
+        sshUsername: String = "baker",
+        osMetadata: OSMetadata = OSMetadata()
     ) async throws {
         guard !vms.contains(where: { $0.name == newName }) else {
             throw VMStoreError.nameAlreadyExists(newName)
         }
 
         // Optimistically add a building entry so the UI shows progress
-        let placeholder = VirtualMachine(
+        var placeholder = VirtualMachine(
             name: newName,
             displayName: displayName ?? newName,
             description: description,
@@ -228,6 +235,7 @@ final class VMStore: ObservableObject {
             mdmServerID: mdmServerID,
             sshUsername: sshUsername
         )
+        placeholder.applyOSMetadata(osMetadata)
         vms.append(placeholder)
         saveToDisk()
 

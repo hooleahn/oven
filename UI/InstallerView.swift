@@ -11,52 +11,48 @@ private enum FirmwareSortOrder: String, CaseIterable {
 // MARK: - InstallerView
 
 struct InstallerView: View {
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var customInstallerStore: CustomInstallerStore
-    @EnvironmentObject var customOSStore: CustomOSStore
+    @Environment(AppState.self) private var appState
+    @Environment(CustomOSStore.self) private var customOSStore
+    @Environment(InstallerStore.self) private var installerStore
     @State private var firmwares: [IPSWFirmware] = []
-    @State private var localIPSWs: [URL] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var lastRefreshedAt: Date? = nil
     @State private var loadedFromCache = false
     @State private var searchText: String = ""
-    @State private var isPresentingBaseVMSheet = false
-    @State private var selectedIPSWForBaseVM: URL? = nil
     @State private var sortOrder: FirmwareSortOrder = .date
     @State private var isPresentingAddCustomInstaller = false
-    @State private var selectedCustomInstallerForBaseVM: CustomInstaller? = nil
+    @State private var selectedCustomInstallerForBaseVM: Installer? = nil
     @State private var downloadTasks: [String: Task<Void, Never>] = [:]
 
-    private var settings: AppSettings { AppSettings.load() }
+    @State private var settings = AppSettings.load()
 
-    var filteredLocalIPSWs: [URL] {
-        let base = searchText.isEmpty ? localIPSWs : localIPSWs.filter {
-            $0.lastPathComponent.localizedCaseInsensitiveContains(searchText)
+    // MARK: - Computed filtered lists
+
+    private var visibleCustomInstallers: [Installer] {
+        guard !searchText.isEmpty else { return installerStore.customInstallers }
+        return installerStore.customInstallers.filter {
+            $0.displayName.localizedStandardContains(searchText)
+            || $0.description.localizedStandardContains(searchText)
+            || $0.osMetadata.displayString.localizedStandardContains(searchText)
         }
-        switch sortOrder {
-        case .date:
-            return base.sorted {
-                let a = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                let b = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                return a > b
-            }
-        case .size:
-            return base.sorted {
-                let a = (try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-                let b = (try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-                return a > b
-            }
-        case .version:
-            return base.sorted { $0.lastPathComponent > $1.lastPathComponent }
+    }
+
+    private var visibleDownloadedInstallers: [Installer] {
+        let base = installerStore.downloadedInstallers.filter { $0.fileExists }
+        guard !searchText.isEmpty else { return base }
+        return base.filter {
+            $0.displayName.localizedStandardContains(searchText)
+            || $0.buildNumber.localizedStandardContains(searchText)
+            || $0.osMetadata.displayString.localizedStandardContains(searchText)
         }
     }
 
     var filteredFirmwares: [IPSWFirmware] {
         let base = searchText.isEmpty ? firmwares : firmwares.filter {
-            $0.displayName.lowercased().contains(searchText.lowercased())
-            || $0.version.contains(searchText)
-            || $0.buildid.contains(searchText)
+            $0.displayName.localizedStandardContains(searchText)
+            || $0.version.localizedStandardContains(searchText)
+            || $0.buildid.localizedStandardContains(searchText)
         }
         switch sortOrder {
         case .date:    return base.sorted { $0.releasedate > $1.releasedate }
@@ -79,6 +75,16 @@ struct InstallerView: View {
             } else {
                 firmwareList
             }
+        }
+        .sheet(item: $selectedCustomInstallerForBaseVM,
+               onDismiss: { selectedCustomInstallerForBaseVM = nil }) { installer in
+            NewBaseVMSheetWithIPSW(preselectedIPSW: installer.fileURL,
+                                   preselectedInstaller: installer)
+        }
+        .sheet(isPresented: $isPresentingAddCustomInstaller) {
+            AddCustomInstallerSheet()
+                .environment(installerStore)
+                .environment(customOSStore)
         }
         .navigationTitle("macOS Installers")
         .searchable(text: $searchText, prompt: "Search macOS installers…")
@@ -107,15 +113,12 @@ struct InstallerView: View {
                     } } label: {
                         Label("Refresh Installers", systemImage: "arrow.clockwise")
                     }
-    //                .buttonStyle(.bordered).controlSize(.small)
                     .keyboardShortcut("r", modifiers: .command)
                     .help("Refresh installer list (⌘R)")
-                    
+
                 }
             }
-            
-            
-            
+
             ToolbarItem(placement: .automatic) {
                 Spacer()
             }
@@ -139,14 +142,6 @@ struct InstallerView: View {
             }
         }
         .task { await loadFirmwares() }
-        .sheet(isPresented: $isPresentingBaseVMSheet) {
-            NewBaseVMSheetWithIPSW(preselectedIPSW: selectedIPSWForBaseVM)
-        }
-        .sheet(isPresented: $isPresentingAddCustomInstaller) {
-            AddCustomInstallerSheet()
-                .environmentObject(customInstallerStore)
-                .environmentObject(customOSStore)
-        }
     }
 
     // MARK: List
@@ -154,23 +149,15 @@ struct InstallerView: View {
     private var firmwareList: some View {
         List {
             // Custom Installers section
-            let visibleCustom = customInstallerStore.installers.filter {
-                searchText.isEmpty
-                || $0.displayName.localizedCaseInsensitiveContains(searchText)
-                || $0.osDisplayLabel.localizedCaseInsensitiveContains(searchText)
-            }
-            if !visibleCustom.isEmpty || true {
+            if !visibleCustomInstallers.isEmpty || true {
                 Section {
-                    ForEach(visibleCustom) { inst in
+                    ForEach(visibleCustomInstallers) { inst in
                         CustomInstallerRow(
                             installer: inst,
                             onCreateBaseVM: {
                                 selectedCustomInstallerForBaseVM = inst
-                                isPresentingBaseVMSheet = true
-                                // Bridge: set the file URL so NewBaseVMSheetWithIPSW picks it up
-                                selectedIPSWForBaseVM = inst.fileURL
                             },
-                            onDelete: { customInstallerStore.delete(inst) }
+                            onDelete: { installerStore.delete(inst) }
                         )
                     }
                     Button {
@@ -184,16 +171,18 @@ struct InstallerView: View {
                 }
             }
 
-            if !filteredLocalIPSWs.isEmpty {
+            if !visibleDownloadedInstallers.isEmpty {
                 Section("Downloaded") {
-                    ForEach(filteredLocalIPSWs, id: \.path) { url in
-                        LocalIPSWRow(url: url, onCreateBaseVM: {
-                            selectedIPSWForBaseVM = url
-                            isPresentingBaseVMSheet = true
-                        }, onDelete: {
-                            try? FileManager.default.removeItem(at: url)
-                            localIPSWs.removeAll { $0 == url }
-                        })
+                    ForEach(visibleDownloadedInstallers) { installer in
+                        DownloadedInstallerRow(
+                            installer: installer,
+                            onCreateBaseVM: {
+                                selectedCustomInstallerForBaseVM = installer
+                            },
+                            onDelete: {
+                                installerStore.delete(installer)
+                            }
+                        )
                     }
                 }
             }
@@ -204,20 +193,12 @@ struct InstallerView: View {
                         IPSWFirmwareRow(
                             firmware: fw,
                             downloadProgress: appState.activeIPSWDownloads[fw.buildid],
-                            isDownloaded: localIPSWs.contains(where: {
-                                let name = $0.lastPathComponent
-                                // 1. Exact Apple filename (downloaded via ipsw.me)
+                            isDownloaded: installerStore.downloadedInstallers.contains(where: { installer in
+                                guard let path = installer.localPath else { return false }
+                                let name = (path as NSString).lastPathComponent
                                 if name == fw.suggestedFilename { return true }
-                                // 2. Buildid match (unique per release, present in Apple filenames)
                                 if name.contains(fw.buildid) { return true }
-                                // 3. Version match — the character immediately after the version
-                                //    string must NOT be a digit OR a dot (which would indicate
-                                //    another version component, e.g. "15.6" must not match "15.6.1").
-                                //    Handles mist-cli naming: "macOS-15.6.1.ipsw" → version "15.6.1"
-                                //    is followed by "." then end-of-stem, so we check the full stem.
-                                // Strip extension so "macOS-15.6.1.ipsw" → "macOS-15.6.1"
-                                // Then "15.6.1" ends at nil (match), "15.6" is followed by ".1" (reject)
-                                let stem = ($0.deletingPathExtension()).lastPathComponent
+                                let stem = (path as NSString).deletingPathExtension.components(separatedBy: "/").last ?? ""
                                 let v = fw.version
                                 if let r = stem.range(of: v) {
                                     let nextChar = stem[r.upperBound...].first
@@ -235,35 +216,35 @@ struct InstallerView: View {
                                 appState.activeIPSWDownloads.removeValue(forKey: fw.buildid)
                             },
                             onDelete: {
-                                if let url = localIPSWs.first(where: { u in
-                                    let name = u.lastPathComponent
+                                if let installer = installerStore.downloadedInstallers.first(where: { inst in
+                                    guard let path = inst.localPath else { return false }
+                                    let name = (path as NSString).lastPathComponent
                                     if name == fw.suggestedFilename { return true }
                                     if name.contains(fw.buildid) { return true }
-                                    let stem = u.deletingPathExtension().lastPathComponent
+                                    let stem = (path as NSString).deletingPathExtension.components(separatedBy: "/").last ?? ""
                                     if let r = stem.range(of: fw.version) {
                                         let next = stem[r.upperBound...].first
                                         return next == nil || next == "-" || next == "_"
                                     }
                                     return false
                                 }) {
-                                    try? FileManager.default.removeItem(at: url)
-                                    localIPSWs.removeAll { $0 == url }
+                                    installerStore.delete(installer)
                                 }
                             },
                             onCreateBaseVM: {
-                                if let url = localIPSWs.first(where: { u in
-                                    let name = u.lastPathComponent
+                                if let installer = installerStore.downloadedInstallers.first(where: { inst in
+                                    guard let path = inst.localPath else { return false }
+                                    let name = (path as NSString).lastPathComponent
                                     if name == fw.suggestedFilename { return true }
                                     if name.contains(fw.buildid) { return true }
-                                    let stem = u.deletingPathExtension().lastPathComponent
+                                    let stem = (path as NSString).deletingPathExtension.components(separatedBy: "/").last ?? ""
                                     if let r = stem.range(of: fw.version) {
                                         let next = stem[r.upperBound...].first
                                         return next == nil || next == "-" || next == "_"
                                     }
                                     return false
                                 }) {
-                                    selectedIPSWForBaseVM = url
-                                    isPresentingBaseVMSheet = true
+                                    selectedCustomInstallerForBaseVM = installer
                                 }
                             }
                         )
@@ -302,9 +283,9 @@ struct InstallerView: View {
                 ? isMistCacheFresh()
                 : await IPSWService.shared.isCacheFresh
             async let remoteFirmwares = fetchFirmwareList()
-            async let localFiles = localIPSWFiles(in: ipswRoot)
-            firmwares  = try await remoteFirmwares
-            localIPSWs = await localFiles
+            firmwares = try await remoteFirmwares
+            // Auto-import untracked local IPSW files
+            installerStore.importUntrackedFiles(in: ipswRoot, knownFirmwares: firmwares)
             loadedFromCache = wasFresh
             lastRefreshedAt = settings.ipswDownloadMode == .mistCli
                 ? mistCacheDate() ?? Date()
@@ -404,7 +385,7 @@ struct InstallerView: View {
                 appState.activeIPSWDownloads[fw.buildid] = fraction
             case .completed(let url):
                 appState.activeIPSWDownloads.removeValue(forKey: fw.buildid)
-                localIPSWs = await localIPSWFiles(in: directory)
+                installerStore.recordDownload(firmware: fw, localURL: url)
                 AppLogger.shared.success("Downloaded: \(url.lastPathComponent)", source: "InstallerView")
             case .failed(let error):
                 appState.activeIPSWDownloads.removeValue(forKey: fw.buildid)
@@ -437,7 +418,21 @@ struct InstallerView: View {
             case .exit(let code):
                 appState.activeIPSWDownloads.removeValue(forKey: fw.buildid)
                 if code == 0 {
-                    localIPSWs = await localIPSWFiles(in: directory)
+                    // Find the downloaded file in the directory and record it
+                    let localFiles = await localIPSWFiles(in: directory)
+                    if let foundURL = localFiles.first(where: { url in
+                        let name = url.lastPathComponent
+                        if name == fw.suggestedFilename { return true }
+                        if name.contains(fw.buildid) { return true }
+                        let stem = url.deletingPathExtension().lastPathComponent
+                        if let r = stem.range(of: fw.version) {
+                            let next = stem[r.upperBound...].first
+                            return next == nil || next == "-" || next == "_"
+                        }
+                        return false
+                    }) {
+                        installerStore.recordDownload(firmware: fw, localURL: foundURL)
+                    }
                     AppLogger.shared.success("Downloaded: \(fw.displayName)", source: "InstallerView")
                 } else {
                     errorMessage = "mist-cli download failed for \(fw.displayName)"
@@ -592,7 +587,7 @@ struct IPSWFirmwareRow: View {
                                 .padding(.horizontal, Spacing.sm).padding(.vertical, 3)
                                 .background(Color.green.opacity(0.12),
                                             in: Capsule())
-                                .overlay(Capsule().stroke(Color.green.opacity(0.3), lineWidth: 1))
+                                .overlay { Capsule().stroke(Color.green.opacity(0.3), lineWidth: 1) }
 
                             if let onDelete {
                                 Button(role: .destructive,
@@ -649,21 +644,24 @@ struct IPSWFirmwareRow: View {
     }
 }
 
-// MARK: - Local IPSW row (downloaded)
+// MARK: - Downloaded Installer Row
 
-struct LocalIPSWRow: View {
-    let url: URL
+struct DownloadedInstallerRow: View {
+    let installer: Installer
     let onCreateBaseVM: () -> Void
     var onDelete: (() -> Void)? = nil
 
     @State private var isPresentingDeleteConfirm = false
 
-    private var displayName: String { url.deletingPathExtension().lastPathComponent }
-
     private var formattedFileSize: String? {
-        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize else { return nil }
+        if let bytes = installer.sizeBytes {
+            let gb = Double(bytes) / 1_073_741_824
+            return String(format: "%.2f GB", gb)
+        }
+        guard let url = installer.fileURL,
+              let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize else { return nil }
         let gb = Double(size) / 1_073_741_824
-        return String(format: "%.2f GB", gb)
+        return gb.formatted(.number.precision(.fractionLength(2))) + " GB"
     }
 
     var body: some View {
@@ -682,7 +680,7 @@ struct LocalIPSWRow: View {
             .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(displayName).fontWeight(.medium)
+                Text(installer.displayName).fontWeight(.medium)
                 HStack(spacing: 8) {
                     // Prominent file size
                     if let size = formattedFileSize {
@@ -690,13 +688,19 @@ struct LocalIPSWRow: View {
                             .font(.caption).fontWeight(.semibold)
                             .foregroundStyle(.primary)
                     }
+                    // Build number if present
+                    if !installer.buildNumber.isEmpty {
+                        Text(installer.buildNumber)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
                     // "Ready to use" status pill
                     Text("Ready to use")
                         .font(.caption2).fontWeight(.medium)
                         .foregroundStyle(.green)
                         .padding(.horizontal, Spacing.sm).padding(.vertical, 3)
                         .background(Color.green.opacity(0.12), in: Capsule())
-                        .overlay(Capsule().stroke(Color.green.opacity(0.3), lineWidth: 1))
+                        .overlay { Capsule().stroke(Color.green.opacity(0.3), lineWidth: 1) }
                 }
             }
 
@@ -717,7 +721,7 @@ struct LocalIPSWRow: View {
                     .buttonStyle(.bordered).controlSize(.small)
                     .help("Delete IPSW file")
                     .confirmationDialog(
-                        "Delete \"\(displayName)\"?",
+                        "Delete \"\(installer.displayName)\"?",
                         isPresented: $isPresentingDeleteConfirm,
                         titleVisibility: .visible
                     ) {
@@ -735,8 +739,10 @@ struct LocalIPSWRow: View {
             Button { onCreateBaseVM() } label: {
                 Label("Create Base VM", systemImage: "plus.circle.fill")
             }
-            Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: {
-                Label("Show in Finder", systemImage: "folder")
+            if let url = installer.fileURL {
+                Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: {
+                    Label("Show in Finder", systemImage: "folder")
+                }
             }
             Divider()
             if let onDelete {
@@ -751,7 +757,7 @@ struct LocalIPSWRow: View {
 // MARK: - Custom Installer Row
 
 private struct CustomInstallerRow: View {
-    let installer: CustomInstaller
+    let installer: Installer
     let onCreateBaseVM: () -> Void
     let onDelete: () -> Void
 
@@ -760,11 +766,11 @@ private struct CustomInstallerRow: View {
     var body: some View {
         HStack(spacing: 12) {
             ZStack(alignment: .bottomTrailing) {
-                Image(systemName: installer.fileExists ? "doc.zipper" : "doc.badge.exclamationmark")
+                Image(systemName: installer.fileExists ? "doc.zipper" : "externaldrive.fill.trianglebadge.exclamationmark")
                     .font(.title3)
                     .foregroundStyle(installer.fileExists ? .blue : .orange)
                     .frame(width: 28, height: 28)
-                if installer.isBeta {
+                if installer.osMetadata.isBeta {
                     Image(systemName: "bolt.fill")
                         .font(.caption2)
                         .foregroundStyle(.white, .orange)
@@ -776,8 +782,13 @@ private struct CustomInstallerRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(installer.displayName).fontWeight(.medium)
                 HStack(spacing: 8) {
-                    Text(installer.osDisplayLabel)
+                    Text(installer.osMetadata.displayString)
                         .font(.caption).foregroundStyle(.secondary)
+                    if !installer.description.isEmpty {
+                        Text(installer.description)
+                            .font(.caption).foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
                     if !installer.fileExists {
                         Text("File not found")
                             .font(.caption2).fontWeight(.medium)
@@ -829,10 +840,12 @@ private struct CustomInstallerRow: View {
                 Button { onCreateBaseVM() } label: {
                     Label("Create Base VM", systemImage: "plus.circle.fill")
                 }
-                Button {
-                    NSWorkspace.shared.activateFileViewerSelecting([installer.fileURL])
-                } label: {
-                    Label("Show in Finder", systemImage: "folder")
+                if let url = installer.fileURL {
+                    Button {
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    } label: {
+                        Label("Show in Finder", systemImage: "folder")
+                    }
                 }
                 Divider()
             }
@@ -849,10 +862,12 @@ private struct CustomInstallerRow: View {
 
 struct NewBaseVMSheetWithIPSW: View {
     let preselectedIPSW: URL?
+    var preselectedInstaller: Installer? = nil
 
     var body: some View {
         // Environment objects (BaseVMStore, AppTheme, PackerTemplateStore, BuildingBlockStore)
         // are already injected by the presenting view via the app-level environment chain.
-        NewBaseVMSheet(preselectedIPSWURL: preselectedIPSW)
+        NewBaseVMSheet(preselectedIPSWURL: preselectedIPSW,
+                       preselectedInstaller: preselectedInstaller)
     }
 }

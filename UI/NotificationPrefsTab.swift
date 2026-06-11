@@ -54,7 +54,7 @@ enum NotificationEvent: String, CaseIterable, Identifiable {
 // MARK: - NotificationPrefsTab
 
 struct NotificationPrefsTab: View {
-    @EnvironmentObject var theme: AppTheme
+    @Environment(AppTheme.self) private var theme
 
     // Credential input state
     @State private var pushoverToken  = ""
@@ -97,7 +97,8 @@ struct NotificationPrefsTab: View {
     }
 
     var body: some View {
-        Form {
+        @Bindable var theme = theme
+        return Form {
             systemSection
             pushoverSection
             slackSection
@@ -123,7 +124,8 @@ struct NotificationPrefsTab: View {
     // MARK: - System section
 
     private var systemSection: some View {
-        Section {
+        @Bindable var theme = theme
+        return Section {
             Toggle(isOn: $theme.systemNotificationsEnabled) {
                 Label("System notifications", systemImage: "bell.circle")
             }
@@ -184,7 +186,8 @@ struct NotificationPrefsTab: View {
     // MARK: - Pushover section
 
     private var pushoverSection: some View {
-        Section {
+        @Bindable var theme = theme
+        return Section {
             Toggle(isOn: $theme.pushoverEnabled) {
                 Label("Pushover notifications", systemImage: "bell.badge")
             }
@@ -217,7 +220,8 @@ struct NotificationPrefsTab: View {
     // MARK: - Slack section
 
     private var slackSection: some View {
-        Section {
+        @Bindable var theme = theme
+        return Section {
             Toggle(isOn: $theme.slackEnabled) {
                 Label("Slack notifications", systemImage: "message.badge")
             }
@@ -247,7 +251,8 @@ struct NotificationPrefsTab: View {
     // MARK: - Teams section
 
     private var teamsSection: some View {
-        Section {
+        @Bindable var theme = theme
+        return Section {
             Toggle(isOn: $theme.teamsEnabled) {
                 Label("Microsoft Teams notifications", systemImage: "person.3.sequence")
             }
@@ -383,7 +388,7 @@ struct NotificationPrefsTab: View {
                 } else {
                     Image(systemName: "lock.slash").foregroundStyle(.orange).help("Not yet saved")
                 }
-                SecureField("", text: text, prompt: Text(prompt).foregroundColor(.secondary))
+                SecureField("", text: text, prompt: Text(prompt).foregroundStyle(.secondary))
             }
         }
     }
@@ -444,7 +449,8 @@ struct NotificationPrefsTab: View {
     // MARK: - Per-service event bindings
 
     private var systemEventBindings: [(NotificationEvent, Binding<Bool>)] {
-        [
+        @Bindable var theme = theme
+        return [
             (.baseVMBuildSucceeded, $theme.systemNotifBaseVMBuildSucceeded),
             (.baseVMBuildFailed,    $theme.systemNotifBaseVMBuildFailed),
             (.ipswDownloaded,       $theme.systemNotifIPSWDownloaded),
@@ -457,7 +463,8 @@ struct NotificationPrefsTab: View {
     }
 
     private var pushoverEventBindings: [(NotificationEvent, Binding<Bool>)] {
-        [
+        @Bindable var theme = theme
+        return [
             (.baseVMBuildSucceeded, $theme.pushoverNotifBaseVMBuildSucceeded),
             (.baseVMBuildFailed,    $theme.pushoverNotifBaseVMBuildFailed),
             (.ipswDownloaded,       $theme.pushoverNotifIPSWDownloaded),
@@ -470,7 +477,8 @@ struct NotificationPrefsTab: View {
     }
 
     private var slackEventBindings: [(NotificationEvent, Binding<Bool>)] {
-        [
+        @Bindable var theme = theme
+        return [
             (.baseVMBuildSucceeded, $theme.slackNotifBaseVMBuildSucceeded),
             (.baseVMBuildFailed,    $theme.slackNotifBaseVMBuildFailed),
             (.ipswDownloaded,       $theme.slackNotifIPSWDownloaded),
@@ -483,7 +491,8 @@ struct NotificationPrefsTab: View {
     }
 
     private var teamsEventBindings: [(NotificationEvent, Binding<Bool>)] {
-        [
+        @Bindable var theme = theme
+        return [
             (.baseVMBuildSucceeded, $theme.teamsNotifBaseVMBuildSucceeded),
             (.baseVMBuildFailed,    $theme.teamsNotifBaseVMBuildFailed),
             (.ipswDownloaded,       $theme.teamsNotifIPSWDownloaded),

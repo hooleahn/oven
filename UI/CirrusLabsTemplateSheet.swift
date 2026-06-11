@@ -6,7 +6,7 @@ import SwiftUI
 // The created template is read-write — it is not flagged as isBase.
 
 struct CirrusLabsTemplateSheet: View {
-    @EnvironmentObject var templateStore: PackerTemplateStore
+    @Environment(PackerTemplateStore.self) private var templateStore
     let onCreated: (UUID) -> Void
 
     @Environment(\.dismiss) private var dismiss

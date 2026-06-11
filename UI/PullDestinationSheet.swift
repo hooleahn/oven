@@ -30,12 +30,12 @@ struct PullDestinationSheet: View {
                 Section {
                     LabeledContent("Username") {
                         TextField("", text: $username,
-                                  prompt: Text("e.g. baker").foregroundColor(.secondary))
+                                  prompt: Text("e.g. baker").foregroundStyle(.secondary))
                             .textFieldStyle(.roundedBorder)
                     }
                     LabeledContent("Password") {
                         SecureField("", text: $password,
-                                    prompt: Text("optional, stored in Keychain").foregroundColor(.secondary))
+                                    prompt: Text("optional, stored in Keychain").foregroundStyle(.secondary))
                             .textFieldStyle(.roundedBorder)
                     }
                 }

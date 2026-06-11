@@ -5,11 +5,11 @@ import SwiftUI
 // Uses HSplitView for a proper resizable sidebar/detail divider.
 
 struct RecipesView: View {
-    @EnvironmentObject var theme: AppTheme
-    @EnvironmentObject var templateStore: PackerTemplateStore
-    @EnvironmentObject var blockStore: BuildingBlockStore
-    @EnvironmentObject var baseVMStore: BaseVMStore
-    @EnvironmentObject var appState: AppState
+    @Environment(AppTheme.self) private var theme
+    @Environment(PackerTemplateStore.self) private var templateStore
+    @Environment(BuildingBlockStore.self) private var blockStore
+    @Environment(BaseVMStore.self) private var baseVMStore
+    @Environment(AppState.self) private var appState
 
     @Environment(RecipesViewModel.self) private var model
 
@@ -460,7 +460,7 @@ struct RecipesView: View {
                     onDuplicate: { _ = templateStore.duplicate(id: id) },
                     onDelete: { model.confirmDeleteTemplateID = id }
                 )
-                .environmentObject(theme)
+                .environment(theme)
                 .onChange(of: model.isDirty) { _, dirty in
                     if dirty, let id = model.selectedTemplateID {
                         templateStore.update(id: id) { $0.validationState = .unknown }
@@ -667,7 +667,7 @@ private struct RecipesDialogs: ViewModifier {
                         model.selectedTab = .blocks
                     }
                 )
-                .environmentObject(theme)
+                .environment(theme)
                 .environment(templateStore)
             }
             .sheet(isPresented: bindableModel.isPresentingCirrusSheet) {
@@ -676,7 +676,7 @@ private struct RecipesDialogs: ViewModifier {
                     model.loadTemplateContent(id, from: templateStore)
                     model.selectedTab = .templates
                 }
-                .environmentObject(templateStore)
+                .environment(templateStore)
             }
     }
 }

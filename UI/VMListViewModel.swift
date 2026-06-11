@@ -108,17 +108,16 @@ final class VMListViewModel {
             }
         }
         if !searchQuery.isEmpty {
-            let q = searchQuery.lowercased()
             base = base.filter {
-                $0.name.localizedCaseInsensitiveContains(q) ||
-                $0.displayName.localizedCaseInsensitiveContains(q) ||
-                $0.description.localizedCaseInsensitiveContains(q) ||
-                $0.tags.contains(where: { $0.localizedCaseInsensitiveContains(q) })
+                $0.name.localizedStandardContains(searchQuery) ||
+                $0.displayName.localizedStandardContains(searchQuery) ||
+                $0.description.localizedStandardContains(searchQuery) ||
+                $0.tags.contains(where: { $0.localizedStandardContains(searchQuery) })
             }
         }
 
         switch sortOrder {
-        case .name:        return base.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
+        case .name:        return base.sorted { $0.displayName.localizedCompare($1.displayName) == .orderedAscending }
         case .osVersion:   return base.sorted { $0.osVersion < $1.osVersion }
         case .createdAt:     return base.sorted { $0.createdAt > $1.createdAt }
         case .lastStarted: return base.sorted { ($0.lastStartedAt ?? .distantPast) > ($1.lastStartedAt ?? .distantPast) }

@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 @Observable
-final class BaseVMStore: ObservableObject {
+final class BaseVMStore {
 
     // BaseVMStore is now a thin build/sync coordinator.
     // VM records live in VMStore — baseVMs is a computed filter.

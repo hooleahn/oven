@@ -5,10 +5,10 @@ import LocalAuthentication
 
 struct VMEditSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var tagStore: TagStore
-    @EnvironmentObject var serverStore: MDMServerStore
-    @EnvironmentObject var theme: AppTheme
+    @Environment(VMStore.self) private var vmStore
+    @Environment(TagStore.self) private var tagStore
+    @Environment(MDMServerStore.self) private var serverStore
+    @Environment(AppTheme.self) private var theme
 
     let vm: VirtualMachine
 
@@ -192,7 +192,7 @@ struct VMEditSheet: View {
             Form {
                 Section("Identity") {
                     LabeledContent("Display name") {
-                        TextField("", text: $displayName, prompt: Text(vm.name).foregroundColor(.secondary))
+                        TextField("", text: $displayName, prompt: Text(vm.name).foregroundStyle(.secondary))
                     }
                     LabeledContent("Tart name") {
                         VStack(alignment: .trailing, spacing: 2) {
@@ -214,7 +214,7 @@ struct VMEditSheet: View {
                     }
                     LabeledContent("Description") {
                         TextField("", text: $description,
-                                  prompt: Text("What is this VM for?").foregroundColor(.secondary),
+                                  prompt: Text("What is this VM for?").foregroundStyle(.secondary),
                                   axis: .vertical)
                             .lineLimit(3...6)
                     }
@@ -310,7 +310,7 @@ struct VMEditSheet: View {
                         }
                     }
                     LabeledContent("Serial Number") {
-                        TextField("", text: $serialNumber, prompt: Text(vm.serialNumber).foregroundColor(.secondary))
+                        TextField("", text: $serialNumber, prompt: Text(vm.serialNumber).foregroundStyle(.secondary))
                     }
                 }
 
@@ -334,13 +334,13 @@ struct VMEditSheet: View {
                 Section("Default VM and SSH credentials") {
                     LabeledContent("Username") {
                         TextField("", text: $sshUsername,
-                                  prompt: Text("e.g. baker").foregroundColor(.secondary))
+                                  prompt: Text("e.g. baker").foregroundStyle(.secondary))
                             .multilineTextAlignment(.trailing)
                     }
                     LabeledContent("Password") {
                         HStack(spacing: 6) {
                             let prompt = Text(vm.sshPassword != nil ? "Stored in Keychain" : "No password set")
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                             Group {
                                 if isPasswordRevealed {
                                     TextField("", text: $sshPassword, prompt: prompt)
@@ -704,11 +704,11 @@ struct SharedFolderSheet: View {
             Divider()
             Form {
                 Section("Mount name") {
-                    TextField("", text: $name, prompt: Text("e.g. projects").foregroundColor(.secondary))
+                    TextField("", text: $name, prompt: Text("e.g. projects").foregroundStyle(.secondary))
                 }
                 Section("Host path") {
                     HStack {
-                        TextField("", text: $hostPath, prompt: Text("/Users/you/Projects").foregroundColor(.secondary))
+                        TextField("", text: $hostPath, prompt: Text("/Users/you/Projects").foregroundStyle(.secondary))
                         Button("Browse…") { showPicker = true }
                             .controlSize(.small)
                     }

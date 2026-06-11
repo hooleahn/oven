@@ -4,7 +4,7 @@ import SwiftUI
 
 @MainActor
 @Observable
-final class BuildingBlockStore: ObservableObject {
+final class BuildingBlockStore {
 
     // MARK: - Provisioner blocks
 

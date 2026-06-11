@@ -31,7 +31,7 @@ struct BrowseGHCRSheet: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField("", text: $ownerInput,
-                          prompt: Text("GitHub org or username (e.g. cirruslabs)").foregroundColor(.secondary))
+                          prompt: Text("GitHub org or username (e.g. cirruslabs)").foregroundStyle(.secondary))
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { Task { await search() } }
                 if isLoading {

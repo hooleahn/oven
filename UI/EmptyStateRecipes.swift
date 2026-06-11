@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - EmptyStateRecipes
 
 struct EmptyStateRecipes: View {
-    @EnvironmentObject var theme: AppTheme
+    @Environment(AppTheme.self) private var theme
 
     enum RecipeTab {
         case templates, varsFiles, blocks

@@ -42,7 +42,7 @@ enum BuildPhase: Int, CaseIterable, Sendable {
 
 @MainActor
 @Observable
-final class BuildMonitor: ObservableObject {
+final class BuildMonitor {
 
     static let shared = BuildMonitor()
     private init() {}

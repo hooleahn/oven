@@ -2,7 +2,7 @@ import SwiftUI
 
 @MainActor
 @Observable
-final class AppState: ObservableObject {
+final class AppState {
 
     // Navigation
     var activeSheet: AppSheet?

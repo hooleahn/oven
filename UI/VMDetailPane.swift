@@ -4,10 +4,10 @@ import LocalAuthentication
 
 
 struct VMDetailPane: View {
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var baseVMStore: BaseVMStore
-    @EnvironmentObject var serverStore: MDMServerStore
-    @EnvironmentObject var theme: AppTheme
+    @Environment(VMStore.self) private var vmStore
+    @Environment(BaseVMStore.self) private var baseVMStore
+    @Environment(MDMServerStore.self) private var serverStore
+    @Environment(AppTheme.self) private var theme
     let vm: VirtualMachine
     let onDismiss: () -> Void
     let onStart: () -> Void
@@ -421,13 +421,14 @@ struct VMDetailPane: View {
                 }
                 if !vm.tags.isEmpty {
                     LabeledContent("Tags") {
-                        ScrollView(.horizontal, showsIndicators: false) {
+                        ScrollView(.horizontal) {
                             HStack(spacing: 4) {
                                 ForEach(Array(vm.tags.enumerated()), id: \.offset) { _, tag in
                                     TagChip(tag: tag)
                                 }
                             }
                         }
+                        .scrollIndicators(.hidden)
                     }
                 }
             }

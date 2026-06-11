@@ -6,12 +6,12 @@ struct BaseVMDetailPane: View {
     let onBuild: () -> Void
     let onDelete: () -> Void
     let onCreateVM: () -> Void
-    @EnvironmentObject var theme: AppTheme
-    @EnvironmentObject var baseVMStore: BaseVMStore
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var templateStore: PackerTemplateStore
-    @EnvironmentObject var pushManager: PushManager
-    @EnvironmentObject var depManager: DependencyManager
+    @Environment(AppTheme.self) private var theme
+    @Environment(BaseVMStore.self) private var baseVMStore
+    @Environment(VMStore.self) private var vmStore
+    @Environment(PackerTemplateStore.self) private var templateStore
+    @Environment(PushManager.self) private var pushManager
+    @Environment(DependencyManager.self) private var depManager
     @State private var isPresentingPushSheet = false
     @State private var liveConfig: TartService.TartVMConfig? = nil
     @State private var isLoadingConfig = false
@@ -23,9 +23,9 @@ struct BaseVMDetailPane: View {
         if baseVM.vmSource == .registry {
             let last = (baseVM.name.components(separatedBy: "/").last ?? baseVM.name)
             let clean = (last.components(separatedBy: ":").first ?? last)
-            return clean.replacingOccurrences(of: "macos-", with: "")
-                .replacingOccurrences(of: "-base", with: " Base")
-                .replacingOccurrences(of: "-", with: " ").capitalized
+            return clean.replacing("macos-", with: "")
+                .replacing("-base", with: " Base")
+                .replacing("-", with: " ").capitalized
         }
         return baseVM.name
     }
@@ -54,7 +54,7 @@ struct BaseVMDetailPane: View {
                     .padding(.horizontal, 10).padding(.vertical, 4)
                     .background(tint.opacity(0.12), in: Capsule())
                     .background(.bar, in: Rectangle())
-                    .overlay(Capsule().strokeBorder(tint.opacity(0.25), lineWidth: 0.5))
+                    .overlay { Capsule().strokeBorder(tint.opacity(0.25), lineWidth: 0.5) }
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
 
@@ -229,9 +229,9 @@ struct BaseVMDetailPane: View {
         .task(id: baseVM.id) { await loadLiveConfig() }
         .sheet(isPresented: $isPresentingEditSheet) {
             BaseVMEditSheet(baseVM: baseVM)
-                .environmentObject(baseVMStore)
-                .environmentObject(vmStore)
-                .environmentObject(templateStore)
+                .environment(baseVMStore)
+                .environment(vmStore)
+                .environment(templateStore)
         }
         .sheet(isPresented: $isPresentingPushSheet) {
             PushToRegistrySheet(vmName: baseVM.name) { imageRef, credentials in

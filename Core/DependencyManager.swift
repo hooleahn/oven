@@ -20,7 +20,7 @@ case pkgWithInstaller(binaryName: String) // copy binary out after expanding pkg
 
 @MainActor
 @Observable
-final class DependencyManager: ObservableObject {
+final class DependencyManager {
 
     var dependencies: [Dependency] = []
     var isCheckingVersions = false

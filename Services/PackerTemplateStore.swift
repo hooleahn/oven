@@ -4,7 +4,7 @@ import SwiftUI
 
 @MainActor
 @Observable
-final class PackerTemplateStore: ObservableObject {
+final class PackerTemplateStore {
 
     private(set) var templates: [PackerTemplate] = []
 

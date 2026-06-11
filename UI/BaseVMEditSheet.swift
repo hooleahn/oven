@@ -2,9 +2,9 @@ import SwiftUI
 
 struct BaseVMEditSheet: View {
     let baseVM: VirtualMachine
-    @EnvironmentObject var baseVMStore: BaseVMStore
-    @EnvironmentObject var vmStore: VMStore
-    @EnvironmentObject var templateStore: PackerTemplateStore
+    @Environment(BaseVMStore.self) private var baseVMStore
+    @Environment(VMStore.self) private var vmStore
+    @Environment(PackerTemplateStore.self) private var templateStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var displayName: String

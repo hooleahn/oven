@@ -3,10 +3,10 @@ import UniformTypeIdentifiers
 
 struct AddCustomInstallerSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var customInstallerStore: CustomInstallerStore
-    @EnvironmentObject var customOSStore: CustomOSStore
+    @Environment(InstallerStore.self) private var installerStore
+    @Environment(CustomOSStore.self) private var customOSStore
 
-    @State private var displayName = ""
+    @State private var description = ""
     @State private var osName: MacOSRelease.Name = .sequoia
     @State private var customOSReleaseName = ""
     @State private var customOSMajorVersion = ""
@@ -20,6 +20,7 @@ struct AddCustomInstallerSheet: View {
     @State private var isPresentingFilePicker = false
     @State private var pickerCommittedURL: URL? = nil
     @State private var pickerPendingURL: URL? = nil
+    @State private var duplicateConflict: Installer? = nil
 
     private static let ipswVersionRegex = /^\d+(\.\d+)*$/
 
@@ -28,7 +29,7 @@ struct AddCustomInstallerSheet: View {
         && osVersionError == nil
         && majorVersionError == nil
         && (osName != .custom || (!customOSReleaseName.isEmpty && !customOSMajorVersion.isEmpty))
-        && !customInstallerStore.isCopying
+        && !installerStore.isCopying
     }
 
     private var pickerOSNames: [MacOSRelease.Name] {
@@ -41,7 +42,7 @@ struct AddCustomInstallerSheet: View {
                 Text("Add Custom Installer").font(.headline)
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.escape)
-                if customInstallerStore.isCopying {
+                if installerStore.isCopying {
                     ProgressView().controlSize(.small)
                 } else {
                     Button("Add") { Task { await register() } }
@@ -145,19 +146,19 @@ struct AddCustomInstallerSheet: View {
                 }
 
                 Section {
-                    LabeledContent("Display name") {
-                        TextField(autoDisplayName, text: $displayName)
+                    LabeledContent("Notes") {
+                        TextField(autoDisplayName, text: $description)
                             .multilineTextAlignment(.trailing)
                     }
                 } header: {
-                    Text("Label")
+                    Text("Notes")
                 } footer: {
-                    Text("Leave blank to use the auto-generated name.")
+                    Text("Optional notes. The display name is generated automatically from the OS fields.")
                 }
             }
             .formStyle(.grouped)
 
-            if let err = customInstallerStore.copyError {
+            if let err = installerStore.copyError {
                 Text(err)
                     .font(.caption).foregroundStyle(.red)
                     .padding(.horizontal, 16).padding(.bottom, 8)
@@ -172,6 +173,26 @@ struct AddCustomInstallerSheet: View {
             guard let url, url != pickerCommittedURL else { return }
             pickerCommittedURL = url
             ipswPath = url.path
+        }
+        .confirmationDialog(
+            "An installer for this OS version already exists",
+            isPresented: Binding(
+                get: { duplicateConflict != nil },
+                set: { if !$0 { duplicateConflict = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Replace Existing", role: .destructive) {
+                duplicateConflict = nil
+                Task { await register(replacingExisting: true) }
+            }
+            Button("Cancel", role: .cancel) {
+                duplicateConflict = nil
+            }
+        } message: {
+            if let existing = duplicateConflict {
+                Text("\"\(existing.displayName)\" is already registered. Replacing it will remove the existing entry\(existing.isManagedCopy ? " and delete its managed copy" : "").")
+            }
         }
     }
 
@@ -191,21 +212,38 @@ struct AddCustomInstallerSheet: View {
         }
     }
 
-    private func register() async {
-        let name = displayName.trimmingCharacters(in: .whitespaces)
-        await customInstallerStore.register(
-            displayName: name.isEmpty ? autoDisplayName : name,
+    private func register(replacingExisting: Bool = false) async {
+        let meta = OSMetadata(
             osName: osName,
-            customOSReleaseName: customOSReleaseName.trimmingCharacters(in: .whitespaces),
-            customOSMajorVersion: customOSMajorVersion.trimmingCharacters(in: .whitespaces),
             osVersion: osVersion.trimmingCharacters(in: .whitespaces),
             isBeta: isBeta,
             betaLabel: betaLabel.trimmingCharacters(in: .whitespaces),
-            sourceURL: URL(fileURLWithPath: ipswPath),
+            customMajorVersion: customOSMajorVersion.trimmingCharacters(in: .whitespaces),
+            customReleaseName: customOSReleaseName.trimmingCharacters(in: .whitespaces)
+        )
+        let source = URL(fileURLWithPath: ipswPath)
+
+        if !replacingExisting, let existing = installerStore.existingCustomInstaller(for: meta) {
+            // Both are managed copies, or both are external — block with replace prompt.
+            // If one is managed and the other is external, allow coexistence.
+            let bothSameKind = existing.isManagedCopy == copyToStorage
+            if bothSameKind {
+                duplicateConflict = existing
+                return
+            }
+        }
+
+        if replacingExisting, let existing = installerStore.existingCustomInstaller(for: meta) {
+            installerStore.delete(existing)
+        }
+
+        await installerStore.register(
+            osMetadata: meta,
+            description: description.trimmingCharacters(in: .whitespaces),
+            sourceURL: source,
             copyToStorage: copyToStorage
         )
-        if customInstallerStore.copyError == nil {
-            // Auto-save to custom OS store if using a custom release name
+        if installerStore.copyError == nil {
             if osName == .custom,
                !customOSReleaseName.isEmpty,
                let major = Int(customOSMajorVersion) {
