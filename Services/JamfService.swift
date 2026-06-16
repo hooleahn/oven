@@ -2,20 +2,9 @@ import Foundation
 
 // MARK: - Jamf Pro API types
 
-struct JamfDevice: Decodable {
-    let id: Int
-    let name: String
-    let serialNumber: String
-    let udid: String
-    let managed: Bool
-
-    enum CodingKeys: String, CodingKey {
-        case id, name
-        case serialNumber = "serialNumber"
-        case udid = "udid"
-        case managed = "managementStatus"
-    }
-}
+// JamfDevice (computers-preview) has been replaced by JamfInventoryResult
+// (computers-inventory), which uses the correct string ID format and the
+// non-deprecated DELETE /api/v1/computers-inventory/{id} endpoint.
 
 // MARK: - Inventory-API types (Jamf Pro API v1/computers-inventory)
 
@@ -56,8 +45,8 @@ struct JamfMDMCapable: Decodable {
     let capable: Bool
 }
 
-/// Distilled result surfaced in the UI.
-struct JamfEnrollmentStatus {
+/// Distilled result surfaced in the UI. Codable + Hashable so it can be stored in VirtualMachine.
+struct JamfEnrollmentStatus: Codable, Hashable {
     let deviceName: String?
     let enrolled: Bool
     let managed: Bool
@@ -127,6 +116,14 @@ actor JamfService {
         self.username = username
         self.password = password
         self.credentialType = credentialType
+    }
+
+    // MARK: - Debug logging
+
+    /// Logs a message only when Debug Mode is enabled in Preferences.
+    private func debugLog(_ message: String) async {
+        guard UserDefaults.standard.bool(forKey: "debugModeEnabled") else { return }
+        await AppLogger.shared.log("[debug] \(message)", source: "JamfService")
     }
 
     // MARK: - Authentication
@@ -263,7 +260,7 @@ actor JamfService {
         let token = try await ensureToken()
 
         // Step 1: filter by serial number to get the device ID
-        var filterURL = serverURL.appendingPathComponent("api/v1/computers-inventory")
+        var filterURL = serverURL.appendingPathComponent("api/v3/computers-inventory")
         filterURL = filterURL.appending(queryItems: [
             URLQueryItem(name: "filter", value: "hardware.serialNumber==\"\(serialNumber)\""),
             URLQueryItem(name: "section",  value: "GENERAL"),
@@ -272,11 +269,16 @@ actor JamfService {
         filterReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         filterReq.setValue("application/json",  forHTTPHeaderField: "Accept")
 
+        await debugLog("GET \(filterURL.absoluteString)")
         let (filterData, filterResp) = try await URLSession.shared.data(for: filterReq)
         guard let filterHTTP = filterResp as? HTTPURLResponse,
               (200...299).contains(filterHTTP.statusCode) else {
+            if let filterHTTP = filterResp as? HTTPURLResponse {
+                await debugLog("Response: HTTP \(filterHTTP.statusCode)")
+            }
             throw JamfError.lookupFailed
         }
+        await debugLog("Response: HTTP \(filterHTTP.statusCode)")
 
         struct FilterResponse: Decodable {
             let results: [JamfInventoryResult]
@@ -287,7 +289,7 @@ actor JamfService {
         }
 
         // Step 2: fetch full inventory detail for that device ID
-        let detailURL = serverURL.appendingPathComponent("api/v1/computers-inventory-detail/\(first.id)")
+        let detailURL = serverURL.appendingPathComponent("api/v3/computers-inventory-detail/\(first.id)")
         var detailReq = URLRequest(url: detailURL)
         detailReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         detailReq.setValue("application/json",  forHTTPHeaderField: "Accept")
@@ -324,19 +326,32 @@ actor JamfService {
 
     // MARK: - Device lookup
 
-    func findDevice(serialNumber: String) async throws -> JamfDevice? {
+    /// Finds a computer by serial number using GET /api/v1/computers-inventory.
+    /// Returns the first matching inventory record (containing the string ID needed
+    /// for deletion) or nil if no computer with that serial number exists.
+    func findDevice(serialNumber: String) async throws -> JamfInventoryResult? {
         let token = try await ensureToken()
-        let url = serverURL.appendingPathComponent("api/v1/computers-preview")
-            .appending(queryItems: [URLQueryItem(name: "filter", value: "serialNumber==\(serialNumber)")])
+        var url = serverURL.appendingPathComponent("api/v1/computers-inventory")
+        url = url.appending(queryItems: [
+            URLQueryItem(name: "filter",  value: "hardware.serialNumber==\"\(serialNumber)\""),
+            URLQueryItem(name: "section", value: "GENERAL"),
+        ])
+        await debugLog("GET \(url.absoluteString)")
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse {
+            await debugLog("Response: HTTP \(http.statusCode)")
+        }
+        if let body = String(data: data, encoding: .utf8) {
+            await debugLog("Body: \(String(body.prefix(1000)))")
+        }
 
-        struct Response: Decodable { let results: [JamfDevice] }
-        let response = try JSONDecoder().decode(Response.self, from: data)
-        return response.results.first
+        struct Response: Decodable { let results: [JamfInventoryResult] }
+        let parsed = try JSONDecoder().decode(Response.self, from: data)
+        return parsed.results.first
     }
 
     // MARK: - Enrollment URL
@@ -350,17 +365,27 @@ actor JamfService {
 
     // MARK: - Remove device
 
-    func removeDevice(id: Int) async throws {
+    /// Removes a computer record using DELETE /api/v1/computers-inventory/{id}.
+    /// The `id` is a string (as returned by the computers-inventory endpoint).
+    func removeDevice(id: String) async throws {
         let token = try await ensureToken()
-        let url = serverURL.appendingPathComponent("api/v1/computers/\(id)")
+        let url = serverURL.appendingPathComponent("api/v1/computers-inventory/\(id)")
+        await debugLog("DELETE \(url.absoluteString)")
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            if let http = response as? HTTPURLResponse {
+                await debugLog("Response: HTTP \(http.statusCode)")
+                if let body = String(data: data, encoding: .utf8), !body.isEmpty {
+                    await debugLog("Body: \(String(body.prefix(500)))")
+                }
+            }
             throw JamfError.deleteFailed
         }
+        await debugLog("Response: HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0) — device removed")
     }
 
     // MARK: - Privilege fetch

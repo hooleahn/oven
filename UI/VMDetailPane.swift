@@ -31,9 +31,8 @@ struct VMDetailPane: View {
     @State private var revealedPassword: String? = nil
     @State private var isAuthenticating = false
 
-    // MDM enrollment status
-    @State private var enrollmentStatus: JamfEnrollmentStatus? = nil
-    @State private var enrollmentError: String? = nil
+    // MDM enrollment status (cached value lives in vm.cachedEnrollmentStatus)
+    @State private var enrollmentError: String? = nil   // transient; cleared on each new lookup
     @State private var isLookingUpEnrollment = false
 
     /// True when serial number is long enough, an MDM server is linked, and the feature is enabled
@@ -211,7 +210,6 @@ struct VMDetailPane: View {
         }
         .task(id: vm.id) {
             // Reset transient state when VM selection changes
-            enrollmentStatus = nil
             enrollmentError  = nil
             revealedPassword = nil
             // Start IP polling when detail pane opens for a running VM (skip if already exhausted)
@@ -220,9 +218,13 @@ struct VMDetailPane: View {
                 await vmStore.refreshIP(for: vm)
             }
             await loadLiveConfig()
-            // Auto-look up enrollment status if eligible
+            // Auto-look up enrollment: on first view or if cached data is older than 24 h
             if canLookUpEnrollment {
-                await lookUpEnrollment()
+                let isStale: Bool = {
+                    guard let fetched = vm.enrollmentStatusFetchedAt else { return true }
+                    return Date().timeIntervalSince(fetched) > 24 * 3600
+                }()
+                if isStale { await lookUpEnrollment() }
             }
         }
         .onChange(of: vm.status) { _, newStatus in
@@ -460,11 +462,12 @@ struct VMDetailPane: View {
                             Text(name).foregroundStyle(.secondary)
                         }
                     }
-                    if canLookUpEnrollment {
+                    if canLookUpEnrollment || vm.cachedEnrollmentStatus != nil {
                         MDMEnrollmentStatusRow(
                             vm: vm,
                             server: serverStore.servers.first(where: { $0.id == vm.mdmServerID }),
-                            status: enrollmentStatus,
+                            status: vm.cachedEnrollmentStatus,
+                            fetchedAt: vm.enrollmentStatusFetchedAt,
                             error: enrollmentError,
                             isLoading: isLookingUpEnrollment
                         ) {
@@ -659,19 +662,25 @@ struct VMDetailPane: View {
 
     @MainActor
     private func lookUpEnrollment() async {
-        guard canLookUpEnrollment,
-              let serverID = vm.mdmServerID,
+        guard let serverID = vm.mdmServerID,
               let server = serverStore.servers.first(where: { $0.id == serverID }),
               let jamf = server.makeJamfService() else { return }
         isLookingUpEnrollment = true
         enrollmentError = nil
         do {
-            enrollmentStatus = try await jamf.lookupEnrollment(serialNumber: vm.serialNumber)
-            if enrollmentStatus == nil {
+            let status = try await jamf.lookupEnrollment(serialNumber: vm.serialNumber)
+            // Persist in the VM model so it survives navigation and re-launches
+            vmStore.updateMetadata(id: vm.id) {
+                $0.cachedEnrollmentStatus = status
+                $0.enrollmentStatusFetchedAt = Date()
+            }
+            if status == nil {
                 enrollmentError = "Not found in \(server.friendlyName)"
             }
         } catch {
             enrollmentError = error.localizedDescription
+            // Still record the fetch time so we don't hammer the server on every view
+            vmStore.updateMetadata(id: vm.id) { $0.enrollmentStatusFetchedAt = Date() }
         }
         isLookingUpEnrollment = false
     }
@@ -719,15 +728,17 @@ private struct MDMEnrollmentStatusRow: View {
     let vm: VirtualMachine
     let server: MDMServer?
     let status: JamfEnrollmentStatus?
+    let fetchedAt: Date?
     let error: String?
     let isLoading: Bool
     let onRefresh: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
+            // ── Header ──────────────────────────────────────────────────────
             HStack(spacing: 6) {
-                Text("Enrollment")
-                    .font(.caption).fontWeight(.medium)
+                Text("Enrollment Status")
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                 Spacer()
                 if isLoading {
@@ -738,39 +749,67 @@ private struct MDMEnrollmentStatusRow: View {
                             .font(.caption2).foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help("Look up enrollment status in \(server?.friendlyName ?? "MDM")")
+                    .help("Refresh enrollment status from \(server?.friendlyName ?? "MDM")")
                 }
             }
 
+            // ── Enrollment details ───────────────────────────────────────────
             if let status {
-                HStack(spacing: 5) {
-                    Image(systemName: status.enrolled ? "checkmark.shield.fill" : "xmark.shield")
-                        .foregroundStyle(status.enrolled ? (status.managed ? .green : .orange) : .red)
-                        .font(.callout)
-                    Text(status.summary)
-                        .font(.callout)
-                }
                 if let name = status.deviceName, !name.isEmpty {
-                    Text(name)
-                        .font(.caption).foregroundStyle(.secondary)
+                    enrollmentRow("Name", name)
+                }
+                boolRow("Supervised", status.enrolled)
+                boolRow("Managed", status.managed)
+                if let contact = status.lastContact {
+                    enrollmentRow("Last Check-In",
+                                  contact.formatted(date: .abbreviated, time: .shortened))
                 }
                 if status.enrolledViaADE {
-                    Text("Enrolled via ADE")
-                        .font(.caption).foregroundStyle(.secondary)
+                    enrollmentRow("ADE", "Yes")
                 }
-                if let contact = status.lastContact {
-                    Text("Last contact: \(contact.formatted(date: .numeric, time: .shortened))")
-                        .font(.caption).foregroundStyle(.secondary)
+
+                if let fetched = fetchedAt {
+                    Divider().padding(.vertical, 2)
+                    HStack {
+                        (Text("Retrieved ") + Text(fetched, style: .relative) + Text(" ago"))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        Spacer()
+                    }
                 }
             } else if let error {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("Tap \(Image(systemName: "arrow.clockwise")) to look up in \(server?.friendlyName ?? "MDM")")
+                if let fetched = fetchedAt {
+                    (Text("Checked ") + Text(fetched, style: .relative) + Text(" ago"))
+                        .font(.caption2).foregroundStyle(.tertiary)
+                }
+            } else if !isLoading {
+                Text("Tap ↺ to look up in \(server?.friendlyName ?? "MDM")")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 6)
+    }
+
+    private func enrollmentRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label).font(.callout).foregroundStyle(.secondary)
+            Spacer()
+            Text(value).font(.callout)
+        }
+    }
+
+    private func boolRow(_ label: String, _ value: Bool) -> some View {
+        HStack {
+            Text(label).font(.callout).foregroundStyle(.secondary)
+            Spacer()
+            Label(value ? "Yes" : "No",
+                  systemImage: value ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .font(.callout)
+                .foregroundStyle(value ? Color.green : Color.red)
+                .labelStyle(.titleAndIcon)
+        }
     }
 }

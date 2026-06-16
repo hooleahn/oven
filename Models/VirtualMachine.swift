@@ -79,6 +79,11 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         }
     }
     var mdmServerID: UUID?         // MDM server used during enrollment
+
+    // Cached MDM enrollment status — refreshed on app launch or after 24 h
+    var cachedEnrollmentStatus: JamfEnrollmentStatus? = nil
+    var enrollmentStatusFetchedAt: Date? = nil
+
     var sharedFolders: [SharedFolder] = []
     var sshUsername: String = "baker"  // username for SSH access
 

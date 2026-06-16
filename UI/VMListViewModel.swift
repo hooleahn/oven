@@ -70,6 +70,8 @@ final class VMListViewModel {
     var macOSLimitError: String?    // shown when 2 VMs already running
     var confirmStopAll = false      // Stop All confirmation
     var confirmBulkDelete = false   // bulk delete confirmation
+    /// Set when Jamf deletion fails on a single-VM delete; drives the "remove from tart anyway?" alert.
+    var jamfDeleteFailed: (vm: VirtualMachine, message: String)? = nil
     var bulkAddTagSheet = false
     var bulkRemoveTagSheet = false
 

@@ -773,12 +773,20 @@ private struct VMListSheets: ViewModifier {
                 titleVisibility: .visible
             ) {
                 if let vm = model.confirmDelete, let server = jamfServer(for: vm) {
-                    Button("Delete and Remove from Jamf", role: .destructive) {
+                    Button("Delete and Remove from Jamf/MDM", role: .destructive) {
+                        let vmToDelete = vm
                         model.confirmDelete = nil
-                        Task { try? await vmStore.delete(vm: vm, mdmServer: server) }
+                        Task {
+                            do {
+                                try await vmStore.delete(vm: vmToDelete, mdmServer: server)
+                            } catch VMStoreError.jamfDeletionFailed(let message) {
+                                // Surface to the user — let them decide whether to continue with tart
+                                model.jamfDeleteFailed = (vm: vmToDelete, message: message)
+                            } catch {}
+                        }
                     }
                 }
-                Button("Delete", role: .destructive) {
+                Button("Delete from Tart Only", role: .destructive) {
                     guard let vmToDelete = model.confirmDelete else { return }
                     model.confirmDelete = nil
                     Task { try? await vmStore.delete(vm: vmToDelete) }
@@ -787,16 +795,44 @@ private struct VMListSheets: ViewModifier {
             } message: {
                 Text("This permanently removes the VM image from disk. This cannot be undone.")
             }
+            .alert(
+                "Jamf/MDM Removal Failed",
+                isPresented: Binding(
+                    get: { model.jamfDeleteFailed != nil },
+                    set: { if !$0 { model.jamfDeleteFailed = nil } }
+                )
+            ) {
+                Button("Remove from Tart Anyway", role: .destructive) {
+                    if let failed = model.jamfDeleteFailed {
+                        model.jamfDeleteFailed = nil
+                        Task { try? await vmStore.delete(vm: failed.vm) }
+                    }
+                }
+                Button("Cancel", role: .cancel) { model.jamfDeleteFailed = nil }
+            } message: {
+                if let failed = model.jamfDeleteFailed {
+                    let name = failed.vm.displayName.isEmpty ? failed.vm.name : failed.vm.displayName
+                    Text("Could not remove \"\(name)\" from Jamf/MDM:\n\n\(failed.message)\n\nDo you still want to remove it from tart?")
+                }
+            }
             .confirmationDialog("Delete \(model.selectedIDs.count) VMs?",
                 isPresented: $model.confirmBulkDelete,
                 titleVisibility: .visible
             ) {
                 if bulkHasJamf {
-                    Button("Delete \(model.selectedIDs.count) VMs and Remove from Jamf", role: .destructive) {
+                    Button("Delete \(model.selectedIDs.count) VMs and Remove from Jamf/MDM", role: .destructive) {
                         let ids = model.selectedIDs
                         model.selectedIDs.removeAll()
                         for vm in vmStore.vms where ids.contains(vm.id) {
-                            Task { try? await vmStore.delete(vm: vm, mdmServer: jamfServer(for: vm)) }
+                            let vmCopy = vm
+                            Task {
+                                do {
+                                    try await vmStore.delete(vm: vmCopy, mdmServer: jamfServer(for: vmCopy))
+                                } catch VMStoreError.jamfDeletionFailed(_) {
+                                    // Bulk: log and still remove from tart
+                                    try? await vmStore.delete(vm: vmCopy)
+                                } catch {}
+                            }
                         }
                     }
                 }

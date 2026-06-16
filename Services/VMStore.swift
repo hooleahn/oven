@@ -6,12 +6,14 @@ enum VMStoreError: LocalizedError {
     case vmNotFound(String)
     case nameAlreadyExists(String)
     case tartServiceUnavailable
+    case jamfDeletionFailed(String)
 
     var errorDescription: String? {
         switch self {
-        case .vmNotFound(let name):       return "VM '\(name)' not found."
-        case .nameAlreadyExists(let n):   return "A VM named '\(n)' already exists."
-        case .tartServiceUnavailable:     return "tart is not installed or not ready."
+        case .vmNotFound(let name):        return "VM '\(name)' not found."
+        case .nameAlreadyExists(let n):    return "A VM named '\(n)' already exists."
+        case .tartServiceUnavailable:      return "tart is not installed or not ready."
+        case .jamfDeletionFailed(let msg): return msg
         }
     }
 }
@@ -319,7 +321,9 @@ final class VMStore {
     }
 
     /// Delete a VM from tart and remove its metadata record.
-    /// Pass `mdmServer` to also remove the computer from Jamf Pro (non-fatal if it fails).
+    /// Pass `mdmServer` to remove from Jamf Pro first. If Jamf removal fails,
+    /// throws `VMStoreError.jamfDeletionFailed` and does NOT proceed to tart deletion —
+    /// the caller should ask the user whether to continue without Jamf.
     func delete(vm: VirtualMachine, mdmServer: MDMServer? = nil) async throws {
         if let server = mdmServer,
            server.featureDeleteFromJamf,
@@ -329,11 +333,17 @@ final class VMStore {
                 if let device = try await jamf.findDevice(serialNumber: vm.serialNumber) {
                     try await jamf.removeDevice(id: device.id)
                     AppLogger.shared.success("Removed \(vm.name) from Jamf Pro", source: "VMStore")
+                } else {
+                    AppLogger.shared.log("Device not found in Jamf Pro for \(vm.name) (serial: \(vm.serialNumber))", source: "VMStore")
                 }
             } catch {
-                AppLogger.shared.warning("Jamf removal failed for \(vm.name): \(error.localizedDescription)", source: "VMStore")
+                let msg = error.localizedDescription
+                AppLogger.shared.warning("Jamf removal failed for \(vm.name): \(msg)", source: "VMStore")
+                // Surface to the caller so the UI can ask the user whether to continue
+                throw VMStoreError.jamfDeletionFailed(msg)
             }
         }
+        // Jamf succeeded (or no MDM server configured) — proceed to tart deletion
         do {
             try await tartService.delete(name: vm.name)
         } catch {
