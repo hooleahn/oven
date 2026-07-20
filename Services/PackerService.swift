@@ -3,10 +3,18 @@ import Foundation
 actor PackerService {
 
     private let runner: ProcessRunner
+    /// Managed or initial binary path. If AppSettings is in custom mode and a
+    /// non-empty packer path is configured, `resolvedPackerPath` returns that instead.
     private let packerPath: String
     private let pluginDir: String
     // Read dynamically so profile switches are reflected without re-creating the service.
     private var templatesRoot: URL { AppSettings.load().packerTemplatesRoot }
+
+    /// Returns the effective packer binary path, checking AppSettings at call time
+    /// so that mid-session custom-path changes are immediately reflected.
+    private var resolvedPackerPath: String {
+        AppSettings.load().effectivePath(for: "packer") ?? packerPath
+    }
 
     init(runner: ProcessRunner, packerPath: String, pluginDir: String) {
         self.runner = runner
@@ -24,7 +32,7 @@ actor PackerService {
                 let templateURL = templatesRoot.appendingPathComponent(templateName)
                 let varsURL     = templatesRoot.appendingPathComponent(varsFileName)
                 // Sanitised minimal env for packer/tart -- don't inherit the full Oven process env
-                let depsDir = URL(fileURLWithPath: packerPath).deletingLastPathComponent().path
+                let depsDir = URL(fileURLWithPath: resolvedPackerPath).deletingLastPathComponent().path
                 let parentEnv = ProcessInfo.processInfo.environment
                 let debug = UserDefaults.standard.bool(forKey: "debugModeEnabled")
                 var env: [String: String] = [
@@ -58,13 +66,13 @@ actor PackerService {
 
                 continuation.yield(.stdout("==> packer init \(templateURL.lastPathComponent)"))
                 if debug {
-                    continuation.yield(.stdout("[debug] Binary: \(packerPath)"))
+                    continuation.yield(.stdout("[debug] Binary: \(resolvedPackerPath)"))
                     continuation.yield(.stdout("[debug] Template: \(templateURL.path)"))
                     continuation.yield(.stdout("[debug] Plugin dir: \(pluginDir)"))
                     continuation.yield(.stdout("[debug] PATH prefix: \(depsDir)"))
                 }
                 do {
-                    try await runner.run(packerPath, arguments: ["init", templateURL.path], environment: env)
+                    try await runner.run(resolvedPackerPath, arguments: ["init", templateURL.path], environment: env)
                     continuation.yield(.stdout("==> Init complete"))
                 } catch {
                     continuation.yield(.stderr("Init failed: \(error.localizedDescription)"))
@@ -75,7 +83,7 @@ actor PackerService {
 
                 continuation.yield(.stdout("==> packer build \(templateURL.lastPathComponent)"))
                 // Always log the command so the user can verify which template is being used
-                continuation.yield(.stdout("[cmd] \"\(packerPath)\" build -color=false -var-file=\"\(varsURL.path)\" -var-file=<creds> \"\(templateURL.path)\""))
+                continuation.yield(.stdout("[cmd] \"\(resolvedPackerPath)\" build -color=false -var-file=\"\(varsURL.path)\" -var-file=<creds> \"\(templateURL.path)\""))
                 if debug {
                     continuation.yield(.stdout("[debug] Full vars file path: \(varsURL.path)"))
                     continuation.yield(.stdout("[debug] Vars file exists: \(FileManager.default.fileExists(atPath: varsURL.path))"))
@@ -97,7 +105,7 @@ actor PackerService {
                     continuation.yield(.stdout("[debug] PACKER_LOG=1 \(debug ? "enabled" : "disabled")"))
                 }
                 let stream = await runner.stream(
-                    packerPath,
+                    resolvedPackerPath,
                     arguments: ["build", "-color=false",
                                 "-var-file=\(varsURL.path)",
                                 "-var-file=\(credVarsURL.path)",
@@ -121,7 +129,7 @@ actor PackerService {
                           showGraphics: Bool = false) async -> AsyncStream<ProcessEvent> {
         AsyncStream { continuation in
             Task {
-                let depsDir = URL(fileURLWithPath: packerPath).deletingLastPathComponent().path
+                let depsDir = URL(fileURLWithPath: resolvedPackerPath).deletingLastPathComponent().path
                 let parentEnv = ProcessInfo.processInfo.environment
                 let debug = UserDefaults.standard.bool(forKey: "debugModeEnabled")
                 var env: [String: String] = [
@@ -149,12 +157,12 @@ actor PackerService {
 
                 continuation.yield(.stdout("==> packer init \(templateURL.lastPathComponent)"))
                 if debug {
-                    continuation.yield(.stdout("[debug] Binary: \(packerPath)"))
+                    continuation.yield(.stdout("[debug] Binary: \(resolvedPackerPath)"))
                     continuation.yield(.stdout("[debug] Template: \(templateURL.path)"))
                     continuation.yield(.stdout("[debug] Plugin dir: \(pluginDir)"))
                 }
                 do {
-                    try await runner.run(packerPath, arguments: ["init", templateURL.path], environment: env)
+                    try await runner.run(resolvedPackerPath, arguments: ["init", templateURL.path], environment: env)
                     continuation.yield(.stdout("==> Init complete"))
                 } catch {
                     continuation.yield(.stderr("Init failed: \(error.localizedDescription)"))
@@ -164,10 +172,10 @@ actor PackerService {
                 }
 
                 continuation.yield(.stdout("==> packer build \(templateURL.lastPathComponent)"))
-                continuation.yield(.stdout("[cmd] \"\(packerPath)\" build -color=false -var-file=<creds> \"\(templateURL.path)\""))
+                continuation.yield(.stdout("[cmd] \"\(resolvedPackerPath)\" build -color=false -var-file=<creds> \"\(templateURL.path)\""))
 
                 let stream = await runner.stream(
-                    packerPath,
+                    resolvedPackerPath,
                     arguments: ["build", "-color=false",
                                 "-var-file=\(credVarsURL.path)",
                                 templateURL.path],
@@ -187,7 +195,7 @@ actor PackerService {
     func validateStandalone(at url: URL) -> AsyncStream<String> {
         AsyncStream { continuation in
             Task {
-                let depsDir = URL(fileURLWithPath: packerPath).deletingLastPathComponent().path
+                let depsDir = URL(fileURLWithPath: resolvedPackerPath).deletingLastPathComponent().path
                 let parentEnv = ProcessInfo.processInfo.environment
                 let env: [String: String] = [
                     "PACKER_PLUGIN_PATH": pluginDir,
@@ -199,13 +207,13 @@ actor PackerService {
                 let debug = UserDefaults.standard.bool(forKey: "debugModeEnabled")
                 // Capture output to parse errors
                 let process = Process()
-                process.executableURL = URL(fileURLWithPath: packerPath)
+                process.executableURL = URL(fileURLWithPath: resolvedPackerPath)
                 process.arguments = ["validate", "-syntax-only", url.path]
                 process.environment = env
                 
                 continuation.yield("> Running packer validate for template at \(url.path)...")
                 if debug {
-                    continuation.yield("[debug] Binary: \(packerPath)")
+                    continuation.yield("[debug] Binary: \(resolvedPackerPath)")
                     continuation.yield("[debug] Template: \(url.path)")
                     continuation.yield("[debug] Plugin dir: \(pluginDir)")
                     continuation.yield("[debug] PATH prefix: \(depsDir)")
@@ -251,10 +259,10 @@ actor PackerService {
     func validate(templateName: String, varsFileName: String) async throws {
         let templateURL = templatesRoot.appendingPathComponent(templateName)
         let varsURL     = templatesRoot.appendingPathComponent(varsFileName)
-        let depsDir = URL(fileURLWithPath: packerPath).deletingLastPathComponent().path
+        let depsDir = URL(fileURLWithPath: resolvedPackerPath).deletingLastPathComponent().path
         let parentEnv2 = ProcessInfo.processInfo.environment
         try await runner.run(
-            packerPath,
+            resolvedPackerPath,
             arguments: ["validate", "-var-file=\(varsURL.path)", templateURL.path],
             environment: [
                 "PACKER_PLUGIN_PATH": pluginDir,

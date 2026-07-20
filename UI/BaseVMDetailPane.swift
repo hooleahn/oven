@@ -236,7 +236,7 @@ struct BaseVMDetailPane: View {
         .sheet(isPresented: $isPresentingPushSheet) {
             PushToRegistrySheet(vmName: baseVM.name) { imageRef, credentials in
                 isPresentingPushSheet = false
-                let tartPath = depManager.dependencies.first { $0.id == "tart" }?.binaryPath.path
+                let tartPath = depManager.dependencies.first { $0.id == "tart" }?.location
                     ?? AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps/tart").path
                 Task { await pushManager.push(baseVM: baseVM, to: imageRef,
                                               credentials: credentials, tartPath: tartPath) }
@@ -264,7 +264,7 @@ struct BaseVMDetailPane: View {
     // MARK: - Async helpers
 
     @MainActor private func loadLiveConfig() async {
-        let tartPath = depManager.dependencies.first { $0.id == "tart" }?.binaryPath.path
+        let tartPath = depManager.dependencies.first { $0.id == "tart" }?.location
             ?? AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
         guard FileManager.default.fileExists(atPath: tartPath) else { return }
         isLoadingConfig = true

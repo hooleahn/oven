@@ -318,7 +318,10 @@ struct BaseVMEditSheet: View {
             v.betaLabel            = betaLabel.trimmingCharacters(in: .whitespaces)
             v.customOSMajorVersion = customOSMajorVersion.trimmingCharacters(in: .whitespaces)
             v.customOSReleaseName  = customOSReleaseName.trimmingCharacters(in: .whitespaces)
-            if !v.isOCIBased { v.isBaseVM = isBaseVM }
+            if !v.isOCIBased {
+                v.isBaseVM = isBaseVM
+                if isBaseVM && v.buildStatus == .notBuilt { v.buildStatus = .ready }
+            }
             applyTemplate(&v)
         }
         vmStore.update(id: baseVM.id) { v in
@@ -328,7 +331,10 @@ struct BaseVMEditSheet: View {
             v.betaLabel            = betaLabel.trimmingCharacters(in: .whitespaces)
             v.customOSMajorVersion = customOSMajorVersion.trimmingCharacters(in: .whitespaces)
             v.customOSReleaseName  = customOSReleaseName.trimmingCharacters(in: .whitespaces)
-            if !v.isOCIBased { v.isBaseVM = isBaseVM }
+            if !v.isOCIBased {
+                v.isBaseVM = isBaseVM
+                if isBaseVM && v.buildStatus == .notBuilt { v.buildStatus = .ready }
+            }
             applyTemplate(&v)
         }
         dismiss()

@@ -581,7 +581,11 @@ struct VMEditSheet: View {
             v.serialNumber         = serialNumber
             v.mdmServerID   = mdmServerID
             v.sshPassword   = sshPassword.isEmpty ? nil : sshPassword
-            if !v.isOCIBased { v.isBaseVM = isBaseVM }
+            if !v.isOCIBased {
+                v.isBaseVM = isBaseVM
+                // A VM already present in tart is by definition built — fix stale notBuilt status
+                if isBaseVM && v.buildStatus == .notBuilt { v.buildStatus = .ready }
+            }
             // Schedule
             v.scheduleEnabled          = scheduleEnabled
             v.scheduleStartTime        = scheduleEnabled && scheduleStartTimeEnabled ? scheduleStartTime : nil

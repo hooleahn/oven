@@ -154,8 +154,10 @@ final class PreflightCheck {
     // MARK: - 4. Packer plugin version
 
     func checkPackerPluginVersion(into result: inout PreflightResult) async {
+        let settings   = AppSettings.load()
         let depsRoot   = AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps")
-        let packerPath = depsRoot.appendingPathComponent("packer").path
+        let packerPath = settings.effectivePath(for: "packer")
+            ?? depsRoot.appendingPathComponent("packer").path
         let pluginDir  = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".packer.d/plugins/github.com/cirruslabs/tart").path
 
@@ -211,11 +213,13 @@ final class PreflightCheck {
     // MARK: - Template validation
 
     func validateTemplate(templateName: String, varsName: String) async -> Result<Void, PreflightError> {
+        let settings   = AppSettings.load()
         let depsRoot   = AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps")
-        let packerPath = depsRoot.appendingPathComponent("packer").path
+        let packerPath = settings.effectivePath(for: "packer")
+            ?? depsRoot.appendingPathComponent("packer").path
         let pluginDir  = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".packer.d/plugins/github.com/cirruslabs/tart").path
-        let templatesRoot = AppSettings.load().packerTemplatesRoot
+        let templatesRoot = settings.packerTemplatesRoot
         let templateURL   = templatesRoot.appendingPathComponent(templateName)
         let varsURL       = templatesRoot.appendingPathComponent(varsName)
 

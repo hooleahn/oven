@@ -9,22 +9,45 @@ struct AppSettings: Codable {
     var ipswDownloadMode: IPSWDownloadMode = .ipswMe
     var mistIncludeBetas: Bool = false
 
-    /// Whether Oven manages (downloads/updates) its own tool binaries, or the
-    /// user supplies their own paths.
-    var dependencyMode: DependencyMode = .managed
+    // Per-dependency install configuration (replaces legacy dependencyMode/customPaths)
+    var dependencySettings: [String: DependencyInstallSetting] = [:]
 
-    /// Custom binary paths used when dependencyMode == .custom
+    // Legacy — retained so old settings round-trip; logic has moved to dependencySettings
+    var dependencyMode: DependencyMode = .managed
     var customPaths: CustomBinaryPaths = CustomBinaryPaths()
 
+    // MARK: - Per-dependency install setting
+
+    struct DependencyInstallSetting: Codable, Equatable, Sendable {
+        enum Method: String, Codable, CaseIterable, Sendable {
+            case managed  // Oven downloads and updates the binary
+            case custom   // User-specified path (includes detected system binaries)
+        }
+        var method: Method = .managed
+        var customPath: String = ""
+    }
+
+    func setting(for id: String) -> DependencyInstallSetting {
+        dependencySettings[id] ?? DependencyInstallSetting()
+    }
+
+    /// Returns the effective binary path for `id` when the user has selected a custom path.
+    /// Returns nil if the dependency is in managed mode or has no custom path configured.
+    func effectivePath(for id: String) -> String? {
+        let s = setting(for: id)
+        guard s.method == .custom, !s.customPath.isEmpty else { return nil }
+        return s.customPath
+    }
+
+    // MARK: - Legacy types (kept for migration)
+
     enum IPSWDownloadMode: String, Codable {
-        case ipswMe  = "ipsw_me"   // default: direct from ipsw.me API
-        case mistCli = "mist_cli"  // use mist-cli (must be installed)
+        case ipswMe  = "ipsw_me"
+        case mistCli = "mist_cli"
     }
 
     enum DependencyMode: String, Codable {
-        /// Oven downloads and manages tool binaries automatically.
         case managed
-        /// User supplies their own binary paths; Oven never checks for updates.
         case custom
     }
 
@@ -51,6 +74,8 @@ struct AppSettings: Codable {
         }
     }
 
+    // MARK: - Defaults and storage
+
     static var defaultLocalStorageRoot: URL {
         FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -75,8 +100,7 @@ struct AppSettings: Codable {
 
     static func load() -> AppSettings {
         guard let data = try? Data(contentsOf: settingsURL) else { return .default }
-        let decoder = JSONDecoder()
-        if let settings = try? decoder.decode(AppSettings.self, from: data) {
+        if let settings = try? JSONDecoder().decode(AppSettings.self, from: data) {
             return settings
         }
         Task { await AppLogger.shared.log("app-settings.json could not be decoded — resetting to defaults", source: "AppSettings") }
@@ -95,8 +119,6 @@ struct AppSettings: Codable {
             .appendingPathComponent(".tart", isDirectory: true)
     }
 
-    /// Checks whether the resolved TART_HOME directory exists and is readable/writable.
-    /// Returns nil on success, or a user-facing error string on failure.
     func checkTartHomeAccessibility() -> String? {
         let url = resolvedTartHome
         let fm = FileManager.default
@@ -116,11 +138,13 @@ struct AppSettings: Codable {
         return nil
     }
 
-    // Explicit memberwise init (required once we define a custom Decodable init)
+    // MARK: - Explicit memberwise init
+
     init(vmStorageRoot: URL, ipswStorageRoot: URL, packerTemplatesRoot: URL,
          depsRoot: URL, tartHome: String? = nil,
          ipswDownloadMode: IPSWDownloadMode = .ipswMe,
          mistIncludeBetas: Bool = false,
+         dependencySettings: [String: DependencyInstallSetting] = [:],
          dependencyMode: DependencyMode = .managed,
          customPaths: CustomBinaryPaths = CustomBinaryPaths()) {
         self.vmStorageRoot       = vmStorageRoot
@@ -130,17 +154,21 @@ struct AppSettings: Codable {
         self.tartHome            = tartHome
         self.ipswDownloadMode    = ipswDownloadMode
         self.mistIncludeBetas    = mistIncludeBetas
+        self.dependencySettings  = dependencySettings
         self.dependencyMode      = dependencyMode
         self.customPaths         = customPaths
     }
 
-    // CodingKeys for custom Decodable init
+    // MARK: - Codable
+
     enum CodingKeys: String, CodingKey {
         case vmStorageRoot, ipswStorageRoot, packerTemplatesRoot, depsRoot, tartHome, ipswDownloadMode
-        case dependencyMode, customPaths, mistIncludeBetas
+        case mistIncludeBetas
+        case dependencySettings
+        // Legacy keys — decoded for migration only
+        case dependencyMode, customPaths
     }
 
-    // Custom Decodable so new fields added in future builds don't wipe existing settings
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let root = AppSettings.defaultLocalStorageRoot
@@ -153,6 +181,22 @@ struct AppSettings: Codable {
         mistIncludeBetas    = (try? c.decodeIfPresent(Bool.self, forKey: .mistIncludeBetas)) ?? false
         dependencyMode      = (try? c.decodeIfPresent(DependencyMode.self, forKey: .dependencyMode)) ?? .managed
         customPaths         = (try? c.decodeIfPresent(CustomBinaryPaths.self, forKey: .customPaths)) ?? CustomBinaryPaths()
+
+        // Per-dependency settings — migrate from legacy global format if absent
+        let savedDepSettings = (try? c.decodeIfPresent([String: DependencyInstallSetting].self, forKey: .dependencySettings)) ?? [:]
+        if savedDepSettings.isEmpty, dependencyMode == .custom {
+            var migrated: [String: DependencyInstallSetting] = [:]
+            let pairs: [(String, String)] = [
+                ("tart", customPaths.tart), ("packer", customPaths.packer),
+                ("mist-cli", customPaths.mistCli), ("jq", customPaths.jq), ("sshpass", customPaths.sshpass)
+            ]
+            for (id, path) in pairs where !path.isEmpty {
+                migrated[id] = DependencyInstallSetting(method: .custom, customPath: path)
+            }
+            dependencySettings = migrated
+        } else {
+            dependencySettings = savedDepSettings
+        }
     }
 
     func save() throws {

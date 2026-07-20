@@ -152,8 +152,7 @@ struct OvenApp: App {
     }
 
     private static func makePackerService() -> PackerService {
-        let packerPath = AppSettings.defaultLocalStorageRoot
-            .appendingPathComponent("deps/packer").path
+        let packerPath = resolvedPackerPath()
         let pluginDir  = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".packer.d/plugins/github.com/cirruslabs/tart").path
         return PackerService(
@@ -167,8 +166,7 @@ struct OvenApp: App {
         let settings   = AppSettings.load()
         let runner     = ProcessRunner()
         let tartPath   = resolvedTartPath()
-        let packerPath = AppSettings.defaultLocalStorageRoot
-            .appendingPathComponent("deps/packer").path
+        let packerPath = resolvedPackerPath()
         let pluginDir  = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".packer.d/plugins/github.com/cirruslabs/tart").path
         let tartSvc    = TartService(runner: runner, tartPath: tartPath)
@@ -182,12 +180,20 @@ struct OvenApp: App {
     }
 
     private static func resolvedTartPath() -> String {
+        let settings = AppSettings.load()
+        if let custom = settings.effectivePath(for: "tart") { return custom }
         let tartAppBinary = AppSettings.defaultLocalStorageRoot
             .appendingPathComponent("deps/tart.app/Contents/MacOS/tart")
         return FileManager.default.fileExists(atPath: tartAppBinary.path)
             ? tartAppBinary.path
             : AppSettings.defaultLocalStorageRoot
                 .appendingPathComponent("deps/tart").path
+    }
+
+    private static func resolvedPackerPath() -> String {
+        let settings = AppSettings.load()
+        return settings.effectivePath(for: "packer")
+            ?? AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps/packer").path
     }
 
     // MARK: - Menu bar icon label

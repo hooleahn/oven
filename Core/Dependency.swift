@@ -2,7 +2,6 @@ import Foundation
 
 // MARK: - Dependency definition
 
-/// A binary dependency that Oven manages, downloads, and version-tracks.
 struct Dependency: Identifiable, Codable, Sendable {
     let id: String               // e.g. "tart", "packer", "mist-cli", "jq"
     let displayName: String
@@ -10,11 +9,13 @@ struct Dependency: Identifiable, Codable, Sendable {
     let icon: String             // SF Symbol name
     var currentVersion: String?  // nil = not yet installed
     var latestVersion: String?   // nil = not yet checked
-    var binaryPath: URL          // absolute path inside deps/ (managed) or user-chosen
+    var binaryPath: URL          // absolute path inside deps/ (managed fallback)
     let isRequired: Bool         // false = nice-to-have; app works without it
     let requiredForLaunch: Bool  // false = can skip; app opens but feature is limited
     let installURL: URL?         // GitHub release page for manual reference
-    var systemBinaryPath: URL?   // User-supplied override path (from "Use system binary…")
+    var installMethod: AppSettings.DependencyInstallSetting.Method = .managed
+    var customPath: String = ""  // effective path when installMethod == .custom
+    var detectedSystemPath: URL? // Binary found on the OS at launch (e.g. via Homebrew)
     var status: Status
 
     enum Status: String, Codable, Sendable {
@@ -30,9 +31,13 @@ struct Dependency: Identifiable, Codable, Sendable {
 
     /// The effective binary location shown to the user.
     var location: String? {
-        if let sys = systemBinaryPath { return sys.path }
-        guard isReady else { return nil }
-        return binaryPath.path
+        switch installMethod {
+        case .custom:
+            return customPath.isEmpty ? nil : customPath
+        case .managed:
+            guard isReady else { return nil }
+            return binaryPath.path
+        }
     }
 
     /// Version string to display (version or "—")

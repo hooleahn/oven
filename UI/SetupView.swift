@@ -8,9 +8,16 @@ struct SetupView: View {
 
     @State private var storageRoot: URL = AppSettings.defaultLocalStorageRoot
     @State private var isInstalling = false
+    @State private var showInstallAllAlert = false
 
-    private var canInstallAll: Bool {
+    private var canInstallMissing: Bool {
         depManager.dependencies.contains { $0.status == .notInstalled || $0.status == .error }
+    }
+
+    private var hasMissingWithDetected: Bool {
+        depManager.dependencies.contains {
+            ($0.status == .notInstalled || $0.status == .error) && $0.detectedSystemPath != nil
+        }
     }
 
     var body: some View {
@@ -23,7 +30,7 @@ struct SetupView: View {
                     .fontWeight(.semibold)
 
                 HStack(spacing: 4) {
-                    Text("Components install to \(storageRoot.path).")
+                    Text("Oven-managed components install to \(storageRoot.path).")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -82,13 +89,12 @@ struct SetupView: View {
             // MARK: Footer
             HStack {
                 Button("Skip for now") {
-                    // Mark all not-required-for-launch deps as skipped so allReady passes
                     for dep in depManager.dependencies where dep.status == .notInstalled {
                         depManager.skipDependency(id: dep.id)
                     }
                 }
                 .buttonStyle(.bordered)
-                .disabled(!canInstallAll || depManager.isCheckingVersions)
+                .disabled(!canInstallMissing || depManager.isCheckingVersions)
 
                 Spacer()
 
@@ -104,6 +110,37 @@ struct SetupView: View {
                         .font(.subheadline)
                 }
 
+                if hasMissingWithDetected {
+                    Button("Install Missing") {
+                        isInstalling = true
+                        Task {
+                            await depManager.installMissing()
+                            isInstalling = false
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!canInstallMissing || isInstalling || depManager.isCheckingVersions)
+                    .help("Use detected system binaries where found; download only the rest.")
+                }
+
+                Button("Install All") {
+                    if hasMissingWithDetected {
+                        showInstallAllAlert = true
+                    } else {
+                        isInstalling = true
+                        Task {
+                            await depManager.installAll()
+                            isInstalling = false
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canInstallMissing || isInstalling || depManager.isCheckingVersions)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 14)
+            .alert("Override Detected Binaries?", isPresented: $showInstallAllAlert) {
+                Button("Cancel", role: .cancel) {}
                 Button("Install All") {
                     isInstalling = true
                     Task {
@@ -111,13 +148,15 @@ struct SetupView: View {
                         isInstalling = false
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(!canInstallAll || isInstalling || depManager.isCheckingVersions)
+            } message: {
+                let detected = depManager.dependencies.filter {
+                    $0.detectedSystemPath != nil && ($0.status == .notInstalled || $0.status == .error)
+                }
+                let names = detected.map(\.displayName).joined(separator: ", ")
+                Text("Oven will download and install its own copies of \(names). These will be used instead of the versions already found on this Mac.")
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 14)
         }
-        .frame(width: 580, height: 520)
+        .frame(width: 600, height: 560)
         .onAppear {
             storageRoot = AppSettings.load().depsRoot.deletingLastPathComponent()
         }
@@ -134,18 +173,8 @@ struct SetupView: View {
         panel.message = "Select a folder where Oven will install its tools."
         if panel.runModal() == .OK, let url = panel.url {
             storageRoot = url
-            // Persist change via AppSettings
             var settings = AppSettings.load()
-            settings = AppSettings(
-                vmStorageRoot: settings.vmStorageRoot,
-                ipswStorageRoot: settings.ipswStorageRoot,
-                packerTemplatesRoot: settings.packerTemplatesRoot,
-                depsRoot: url.appendingPathComponent("deps", isDirectory: true),
-                tartHome: settings.tartHome,
-                ipswDownloadMode: settings.ipswDownloadMode,
-                dependencyMode: settings.dependencyMode,
-                customPaths: settings.customPaths
-            )
+            settings.depsRoot = url.appendingPathComponent("deps", isDirectory: true)
             try? settings.save()
         }
     }
@@ -157,63 +186,166 @@ private struct DependencyRow: View {
     let dep: Dependency
     let depManager: DependencyManager
 
+    @State private var showInstallOverrideAlert = false
+    @State private var editingCustomPath: String = ""
+    @State private var isEditingPath = false
+
+    private var isPlugin: Bool { dep.id == "tart-packer-plugin" }
+
     var body: some View {
-        HStack(spacing: 12) {
-
-            // Tool icon
-            Image(systemName: dep.icon)
-                .font(.system(.body, weight: .light))
-                .foregroundStyle(.secondary)
-                .frame(width: 24)
-
-            // Name + purpose
-            VStack(alignment: .leading, spacing: 2) {
-                Text(dep.displayName)
-                    .font(.body)
-                    .fontWeight(.medium)
-                Text(dep.purpose)
-                    .font(.caption)
+        VStack(alignment: .leading, spacing: 0) {
+            // ── Main row ──────────────────────────────────────────────────────
+            HStack(spacing: 12) {
+                Image(systemName: dep.icon)
+                    .font(.system(.body, weight: .light))
                     .foregroundStyle(.secondary)
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(dep.displayName)
+                        .font(.body)
+                        .fontWeight(.medium)
+                    Text(dep.purpose)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                // Version + location
+                VStack(alignment: .trailing, spacing: 2) {
+                    if dep.isReady {
+                        Text(dep.displayVersion)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.primary)
+                        if let loc = dep.location {
+                            Text(loc)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .frame(maxWidth: 200, alignment: .trailing)
+                        }
+                    } else {
+                        Text(dep.status == .skipped ? "Skipped" : "Not installed")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+
+                // Method picker (disabled for plugin — always managed)
+                if !isPlugin {
+                    Picker("", selection: methodBinding) {
+                        Text("Oven-managed").tag(AppSettings.DependencyInstallSetting.Method.managed)
+                        Text("Custom path").tag(AppSettings.DependencyInstallSetting.Method.custom)
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                    .labelsHidden()
+                }
+
+                // Status icon
+                statusIcon
+
+                // Action menu
+                Menu {
+                    menuItems
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .foregroundStyle(.secondary)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
             }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 16)
 
-            Spacer()
+            // ── Expanded content (below main row) ─────────────────────────────
+            if dep.installMethod == .custom && !isPlugin {
+                customPathEditor
+            } else if dep.installMethod == .managed, let detected = dep.detectedSystemPath, !dep.isReady {
+                detectedBinaryHint(detected: detected)
+            }
+        }
+        .background(.background.opacity(0.001))
+        .contentShape(Rectangle())
+        .alert("Override Detected Binary?", isPresented: $showInstallOverrideAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Install Anyway") {
+                Task { await depManager.install(dep) }
+            }
+        } message: {
+            if let detected = dep.detectedSystemPath {
+                Text("Oven will download and install its own copy of \(dep.displayName), using it instead of the version already found at \(detected.path).")
+            }
+        }
+        .onAppear { editingCustomPath = dep.customPath }
+        .onChange(of: dep.customPath) { _, new in editingCustomPath = new }
+    }
 
-            // Version + location
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(dep.displayVersion)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.primary)
-                if let loc = dep.location {
-                    Text(loc)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .frame(maxWidth: 200, alignment: .trailing)
-                } else {
-                    Text(dep.status == .skipped ? "Skipped" : "Not installed")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+    // MARK: Expanded: custom path editor
+
+    private var customPathEditor: some View {
+        HStack(spacing: 8) {
+            TextField("", text: $editingCustomPath,
+                      prompt: Text("/usr/local/bin/\(dep.displayName)").foregroundStyle(.tertiary))
+                .font(.system(.caption, design: .monospaced))
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { commitCustomPath() }
+
+            Button("Browse…") { pickBinary() }
+                .controlSize(.small)
+
+            if !editingCustomPath.isEmpty {
+                let exists = FileManager.default.fileExists(atPath: editingCustomPath)
+                Image(systemName: exists ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .foregroundStyle(exists ? .green : .red)
+                    .font(.caption)
+            }
+        }
+        .padding(.horizontal, 52)  // align under name text (icon 24 + gap 12 + 16 padding)
+        .padding(.bottom, 10)
+    }
+
+    // MARK: Expanded: detected binary hint
+
+    private func detectedBinaryHint(detected: URL) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.caption2)
+                .foregroundStyle(.orange)
+            Text("Found at \(detected.path)")
+                .font(.caption2)
+                .foregroundStyle(.orange)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Button("Use this") {
+                Task { await depManager.useDetectedBinary(id: dep.id) }
+            }
+            .font(.caption2)
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+        }
+        .padding(.horizontal, 52)
+        .padding(.bottom, 10)
+    }
+
+    // MARK: Method binding
+
+    private var methodBinding: Binding<AppSettings.DependencyInstallSetting.Method> {
+        Binding(
+            get: { dep.installMethod },
+            set: { newMethod in
+                Task {
+                    // When switching to custom, pre-fill with detected path if available
+                    if newMethod == .custom, let detected = dep.detectedSystemPath {
+                        await depManager.setInstallMethod(id: dep.id, to: .custom, customPath: detected.path)
+                    } else {
+                        await depManager.setInstallMethod(id: dep.id, to: newMethod)
+                    }
                 }
             }
-
-            // Status icon
-            statusIcon
-
-            // Action menu
-            Menu {
-                menuItems
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .foregroundStyle(.secondary)
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-        }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 16)
-        .background(.background.opacity(0.001)) // makes full row hittable
-        .contentShape(Rectangle())
+        )
     }
 
     // MARK: Status icon
@@ -243,30 +375,42 @@ private struct DependencyRow: View {
 
     @ViewBuilder
     private var menuItems: some View {
-        // Install (default)
         Button {
-            Task { await depManager.install(dep) }
+            if dep.detectedSystemPath != nil && dep.installMethod == .managed {
+                showInstallOverrideAlert = true
+            } else {
+                Task { await depManager.install(dep) }
+            }
         } label: {
-            Label("Install", systemImage: "arrow.down.circle")
+            Label("Download & Install", systemImage: "arrow.down.circle")
         }
         .disabled(dep.status == .installing)
 
-        // Use system binary
-        Button {
-            pickSystemBinary()
-        } label: {
-            Label("Use system binary…", systemImage: "folder")
+        if let detected = dep.detectedSystemPath {
+            Button {
+                Task { await depManager.useDetectedBinary(id: dep.id) }
+            } label: {
+                Label("Use \(detected.lastPathComponent) at \(detected.deletingLastPathComponent().path)",
+                      systemImage: "checkmark.seal")
+            }
         }
 
-        // Skip
         Button {
-            depManager.skipDependency(id: dep.id)
+            pickBinary()
         } label: {
-            Label("Skip", systemImage: "minus.circle")
+            Label("Browse for binary…", systemImage: "folder")
         }
-        .disabled(dep.status == .skipped)
 
-        // Reveal in Finder (only if installed)
+        if !isPlugin {
+            Divider()
+            Button {
+                depManager.skipDependency(id: dep.id)
+            } label: {
+                Label("Skip", systemImage: "minus.circle")
+            }
+            .disabled(dep.status == .skipped)
+        }
+
         if dep.isReady, let loc = dep.location {
             Divider()
             Button {
@@ -277,9 +421,14 @@ private struct DependencyRow: View {
         }
     }
 
-    // MARK: System binary picker
+    // MARK: Helpers
 
-    private func pickSystemBinary() {
+    private func commitCustomPath() {
+        let path = editingCustomPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task { await depManager.setInstallMethod(id: dep.id, to: .custom, customPath: path) }
+    }
+
+    private func pickBinary() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false

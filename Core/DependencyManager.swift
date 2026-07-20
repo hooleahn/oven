@@ -27,9 +27,6 @@ final class DependencyManager {
     var isCheckingForUpdates = false
     var installLog: [String] = []
 
-    /// When true, Oven manages downloads/updates. When false, user supplies paths.
-    var mode: AppSettings.DependencyMode = .managed
-
     /// Last time we successfully checked for upstream updates.
     var lastUpdateCheck: Date? = nil
 
@@ -41,27 +38,20 @@ final class DependencyManager {
     init(storageRoot: URL) {
         self.depsDirectory = storageRoot.appendingPathComponent("deps", isDirectory: true)
         self.manifestURL = depsDirectory.appendingPathComponent("versions.json")
-        let settings = AppSettings.load()
-        self.mode = settings.dependencyMode
-        buildInitialState(settings: settings)
+        buildInitialState(settings: AppSettings.load())
     }
 
     // MARK: - Public API
 
     func bootstrap() async {
         let settings = AppSettings.load()
-        mode = settings.dependencyMode
-
-        if mode == .custom {
-            // In custom mode just verify the paths exist and read versions
-            await refreshCustomPathStatuses(settings: settings)
-            return
-        }
+        buildInitialState(settings: settings)
 
         isCheckingVersions = true
         log("Checking dependencies…")
         AppLogger.shared.log("Checking dependencies…", source: "DependencyManager")
         try? FileManager.default.createDirectory(at: depsDirectory, withIntermediateDirectories: true)
+        await detectSystemBinaries()
         await refreshStatuses()
 
         let alreadyReady = dependencies.filter { $0.isReady }
@@ -79,37 +69,41 @@ final class DependencyManager {
         }
         isCheckingVersions = false
 
-        // Check for updates now, then schedule recurrent checks every 12 hours
-        await checkForUpdates()
-        schedulePeriodicUpdateChecks()
-    }
-
-    /// Re-load settings and refresh dependency state. Called when the user
-    /// changes the dependency mode or custom paths in Preferences.
-    func reloadSettings() async {
-        let settings = AppSettings.load()
-        mode = settings.dependencyMode
-        buildInitialState(settings: settings)
-        if mode == .custom {
-            updateCheckTask?.cancel()
-            updateCheckTask = nil
-            await refreshCustomPathStatuses(settings: settings)
-        } else {
-            await refreshStatuses()
+        if dependencies.contains(where: { $0.installMethod == .managed && $0.id != "tart-packer-plugin" }) {
             await checkForUpdates()
             schedulePeriodicUpdateChecks()
         }
     }
 
+    /// Re-load settings and refresh dependency state. Called when the user
+    /// changes install method or custom paths in Preferences or SetupView.
+    func reloadSettings() async {
+        let settings = AppSettings.load()
+        buildInitialState(settings: settings)
+        await detectSystemBinaries()
+        await refreshStatuses()
+
+        if dependencies.contains(where: { $0.installMethod == .managed && $0.id != "tart-packer-plugin" }) {
+            await checkForUpdates()
+            schedulePeriodicUpdateChecks()
+        } else {
+            updateCheckTask?.cancel()
+            updateCheckTask = nil
+        }
+    }
+
     /// Explicitly check GitHub for the latest versions of all managed tools.
     func checkForUpdates() async {
-        guard mode == .managed else { return }
+        let managedDeps = dependencies.filter { $0.installMethod == .managed && $0.id != "tart-packer-plugin" }
+        guard !managedDeps.isEmpty else {
+            isCheckingForUpdates = false
+            return
+        }
         isCheckingForUpdates = true
         AppLogger.shared.log("Checking for dependency updates…", source: "DependencyManager")
-        for dep in dependencies where dep.id != "tart-packer-plugin" {
+        for dep in managedDeps {
             guard let (owner, repo) = githubCoords(for: dep.id) else { continue }
             if let latest = try? await fetchLatestGitHubTag(owner: owner, repo: repo) {
-                // Strip any non-numeric prefix (e.g. "v" in "v0.9", "jq-" in "jq-1.8.1")
                 let latestVersion: String
                 if let r = latest.range(of: #"\d+\.\d+[\.\d]*"#, options: .regularExpression) {
                     latestVersion = String(latest[r])
@@ -117,7 +111,6 @@ final class DependencyManager {
                     latestVersion = latest
                 }
                 updateLatestVersion(id: dep.id, latestVersion: latestVersion)
-                // Mark updateAvailable when installed version differs from latest
                 if let current = dependencies.first(where: { $0.id == dep.id })?.currentVersion,
                    current != latestVersion,
                    dependencies.first(where: { $0.id == dep.id })?.status == .installed {
@@ -137,6 +130,14 @@ final class DependencyManager {
             let installedPath = try await downloadAndInstall(dep: dependency)
             let version = try? await readVersion(binaryPath: installedPath, id: dependency.id)
             updateInstalledVersion(id: dependency.id, version: version ?? "installed")
+            // Switch to managed and clear any custom path override
+            if let i = dependencies.firstIndex(where: { $0.id == dependency.id }) {
+                dependencies[i].installMethod = .managed
+                dependencies[i].customPath = ""
+            }
+            var settings = AppSettings.load()
+            settings.dependencySettings[dependency.id] = AppSettings.DependencyInstallSetting(method: .managed, customPath: "")
+            try? settings.save()
             updateStatus(id: dependency.id, to: .installed)
             log("✓ \(dependency.displayName) \(version ?? "") installed.")
             AppLogger.shared.success("\(dependency.displayName) \(version ?? "") installed", source: "DependencyManager")
@@ -147,23 +148,71 @@ final class DependencyManager {
         }
     }
 
-    /// The storage root directory where managed binaries are stored.
     var storageRoot: URL { depsDirectory.deletingLastPathComponent() }
 
     var allReady: Bool {
         dependencies
             .filter { $0.requiredForLaunch }
-            .allSatisfy { $0.isReady || $0.status == .skipped || $0.systemBinaryPath != nil }
+            .allSatisfy { $0.isReady || $0.status == .skipped }
     }
 
-    /// Point a dependency at a user-supplied binary instead of the managed one.
-    /// Validates the path with `--version` (or `version` for packer) before accepting it.
+    /// Point a dependency at a user-supplied binary. Validates with `--version` before accepting.
+    /// Persists the choice to AppSettings so services read the new path immediately.
     func setSystemBinary(id: String, path: URL) async {
         guard let i = dependencies.firstIndex(where: { $0.id == id }) else { return }
         let version = try? await readVersion(binaryPath: path.path, id: id)
-        dependencies[i].systemBinaryPath = path
+        dependencies[i].installMethod = .custom
+        dependencies[i].customPath = path.path
         dependencies[i].currentVersion = version
         dependencies[i].status = version != nil ? .installed : .error
+        var settings = AppSettings.load()
+        settings.dependencySettings[id] = AppSettings.DependencyInstallSetting(method: .custom, customPath: path.path)
+        try? settings.save()
+    }
+
+    /// Accept a previously detected system binary as the custom-path override.
+    func useDetectedBinary(id: String) async {
+        guard let dep = dependencies.first(where: { $0.id == id }),
+              let detected = dep.detectedSystemPath else { return }
+        await setSystemBinary(id: id, path: detected)
+    }
+
+    /// Change the install method for a dependency and optionally set a custom path.
+    /// Persists the choice and re-evaluates the dep status.
+    func setInstallMethod(id: String, to method: AppSettings.DependencyInstallSetting.Method, customPath: String = "") async {
+        guard let i = dependencies.firstIndex(where: { $0.id == id }) else { return }
+        dependencies[i].installMethod = method
+        dependencies[i].customPath = customPath
+
+        var settings = AppSettings.load()
+        settings.dependencySettings[id] = AppSettings.DependencyInstallSetting(method: method, customPath: customPath)
+        try? settings.save()
+
+        switch method {
+        case .managed:
+            // Re-check managed binary on disk
+            let binaryPath = dependencies[i].binaryPath.path
+            if FileManager.default.fileExists(atPath: binaryPath) {
+                let version = try? await readVersion(binaryPath: binaryPath, id: id)
+                dependencies[i].currentVersion = version
+                dependencies[i].status = version != nil ? .installed : .notInstalled
+            } else {
+                dependencies[i].currentVersion = nil
+                dependencies[i].status = .notInstalled
+            }
+        case .custom:
+            guard !customPath.isEmpty else {
+                dependencies[i].status = .notInstalled
+                return
+            }
+            if FileManager.default.fileExists(atPath: customPath) {
+                let version = try? await readVersion(binaryPath: customPath, id: id)
+                dependencies[i].currentVersion = version
+                dependencies[i].status = version != nil ? .installed : .error
+            } else {
+                dependencies[i].status = .notInstalled
+            }
+        }
     }
 
     /// Mark a dependency as skipped — the user acknowledges it won't be installed.
@@ -172,27 +221,31 @@ final class DependencyManager {
         dependencies[i].status = .skipped
     }
 
-    /// Install all dependencies that are not yet installed (or skipped).
+    /// Install all dependencies that are not yet installed (or in error state).
     func installAll() async {
         for dep in dependencies where dep.status == .notInstalled || dep.status == .error {
             await install(dep)
         }
     }
 
+    /// For each uninstalled dependency: use the detected system binary if available,
+    /// otherwise download and install Oven's managed copy.
+    func installMissing() async {
+        for dep in dependencies where dep.status == .notInstalled || dep.status == .error {
+            if dep.detectedSystemPath != nil {
+                await useDetectedBinary(id: dep.id)
+            } else {
+                await install(dep)
+            }
+        }
+    }
+
     var hasUpdatesAvailable: Bool {
-        mode == .managed && dependencies.contains { $0.status == .updateAvailable }
+        dependencies.contains { $0.installMethod == .managed && $0.status == .updateAvailable }
     }
 
     func path(for id: String) throws -> String {
-        // In custom mode, return the user-specified path if set
-        if mode == .custom {
-            let settings = AppSettings.load()
-            let customPath = customPath(for: id, in: settings.customPaths)
-            if !customPath.isEmpty { return customPath }
-        }
-
         if id == "tart-packer-plugin" {
-            // packer plugins install puts it here; packer finds it automatically
             let pluginDir = FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent(".packer.d/plugins/github.com/cirruslabs/tart", isDirectory: true)
             if let file = try? FileManager.default.contentsOfDirectory(atPath: pluginDir.path)
@@ -201,51 +254,85 @@ final class DependencyManager {
             }
             throw ProcessError.binaryNotFound("packer-plugin-tart not found in \(pluginDir.path)")
         }
-        guard let dep = dependencies.first(where: { $0.id == id }), dep.isReady else {
-            throw ProcessError.binaryNotFound("\(depsDirectory.path)/\(id)")
+        guard let dep = dependencies.first(where: { $0.id == id }) else {
+            throw ProcessError.binaryNotFound(id)
         }
-        return dep.binaryPath.path
-    }
-
-    // MARK: - Private helpers: custom mode
-
-    private func customPath(for id: String, in paths: AppSettings.CustomBinaryPaths) -> String {
-        switch id {
-        case "tart":     return paths.tart
-        case "packer":   return paths.packer
-        case "mist-cli": return paths.mistCli
-        case "jq":       return paths.jq
-        case "sshpass":  return paths.sshpass
-        default:         return ""
+        switch dep.installMethod {
+        case .custom:
+            guard !dep.customPath.isEmpty else {
+                throw ProcessError.binaryNotFound("\(id) — no custom path configured")
+            }
+            return dep.customPath
+        case .managed:
+            guard dep.isReady else {
+                throw ProcessError.binaryNotFound("\(depsDirectory.path)/\(id)")
+            }
+            return dep.binaryPath.path
         }
     }
 
-    private func refreshCustomPathStatuses(settings: AppSettings) async {
+    // MARK: - System binary detection
+
+    /// Searches well-known locations and the user's shell PATH for each dependency,
+    /// storing any match in `detectedSystemPath`. Two-pass:
+    ///   1. Check known fixed directories (fast, no subprocess)
+    ///   2. Ask `which` with an extended PATH as a fallback
+    private func detectSystemBinaries() async {
+        let fm = FileManager.default
+        let searchDirs = [
+            "/opt/homebrew/bin",
+            "/opt/homebrew/sbin",
+            "/usr/local/bin",
+            "/usr/local/sbin",
+            "/opt/local/bin",
+            "/usr/bin",
+            "/usr/sbin",
+            "/bin",
+        ]
+        let extendedPATH = searchDirs.joined(separator: ":") + ":/sbin"
+
+        func binaryName(for id: String) -> String? {
+            switch id {
+            case "tart":     return "tart"
+            case "packer":   return "packer"
+            case "mist-cli": return "mist"
+            case "jq":       return "jq"
+            case "sshpass":  return "sshpass"
+            default:         return nil
+            }
+        }
+
         for i in dependencies.indices {
             let dep = dependencies[i]
-            let p = customPath(for: dep.id, in: settings.customPaths)
-            guard !p.isEmpty, FileManager.default.fileExists(atPath: p) else {
-                dependencies[i] = Dependency(
-                    id: dep.id, displayName: dep.displayName,
-                    purpose: dep.purpose, icon: dep.icon,
-                    currentVersion: nil, latestVersion: nil,
-                    binaryPath: URL(fileURLWithPath: p.isEmpty ? dep.binaryPath.path : p),
-                    isRequired: dep.isRequired, requiredForLaunch: dep.requiredForLaunch,
-                    installURL: dep.installURL, systemBinaryPath: dep.systemBinaryPath,
-                    status: .notInstalled
-                )
-                continue
+            guard let name = binaryName(for: dep.id) else { continue }
+
+            var found: String? = nil
+
+            for dir in searchDirs {
+                let candidate = "\(dir)/\(name)"
+                var isDir: ObjCBool = false
+                if fm.fileExists(atPath: candidate, isDirectory: &isDir), !isDir.boolValue {
+                    found = candidate
+                    break
+                }
             }
-            let version = try? await readVersion(binaryPath: p, id: dep.id)
-            dependencies[i] = Dependency(
-                id: dep.id, displayName: dep.displayName,
-                purpose: dep.purpose, icon: dep.icon,
-                currentVersion: version, latestVersion: nil,
-                binaryPath: URL(fileURLWithPath: p),
-                isRequired: dep.isRequired, requiredForLaunch: dep.requiredForLaunch,
-                installURL: dep.installURL, systemBinaryPath: dep.systemBinaryPath,
-                status: .installed
-            )
+
+            if found == nil {
+                if let (stdout, _) = try? await processRunner.run(
+                    "/usr/bin/which", arguments: [name],
+                    environment: ["PATH": extendedPATH]
+                ) {
+                    let whichPath = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !whichPath.isEmpty, fm.fileExists(atPath: whichPath) {
+                        found = whichPath
+                    }
+                }
+            }
+
+            if let path = found {
+                dependencies[i].detectedSystemPath = URL(fileURLWithPath: path)
+                AppLogger.shared.log("Detected system \(dep.displayName) at \(path)", source: "DependencyManager")
+            }
         }
     }
 
@@ -280,7 +367,6 @@ final class DependencyManager {
         switch dep.id {
 
         // ── tart ──────────────────────────────────────────────────────────────
-        // Release: tart.tar.gz  →  tart.app/Contents/MacOS/tart
         case "tart":
             let tag = try await fetchLatestGitHubTag(owner: "cirruslabs", repo: "tart")
             let url = URL(string: "https://github.com/cirruslabs/tart/releases/download/\(tag)/tart.tar.gz")!
@@ -288,28 +374,22 @@ final class DependencyManager {
             let downloaded = try await download(from: url)
             let extractDir = makeTempDir()
             try runSync("/usr/bin/tar", args: ["-xzf", downloaded.path, "-C", extractDir.path])
-            let binary = extractDir
-                .appendingPathComponent("tart.app/Contents/MacOS/tart")
+            let binary = extractDir.appendingPathComponent("tart.app/Contents/MacOS/tart")
             guard FileManager.default.fileExists(atPath: binary.path) else {
                 throw ProcessError.launchFailed("tart binary not found inside tar.gz at expected path")
             }
-            // Copy the entire tart.app — tart requires its embedded provisioning
-            // profile (.app/Contents/embedded.provisionprofile) to get the
-            // Virtualization.Framework entitlements. Using the bare binary fails.
             let appSrc = extractDir.appendingPathComponent("tart.app")
             let appDest = depsDirectory.appendingPathComponent("tart.app")
             try? FileManager.default.removeItem(at: appDest)
             try FileManager.default.copyItem(at: appSrc, to: appDest)
             let tartBinary = appDest.appendingPathComponent("Contents/MacOS/tart")
             try setExecutable(tartBinary)
-            // Also keep a symlink at deps/tart for compatibility
             let symlink = depsDirectory.appendingPathComponent("tart")
             try? FileManager.default.removeItem(at: symlink)
             try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: tartBinary)
             return tartBinary.path
 
         // ── packer ───────────────────────────────────────────────────────────
-        // Release: packer_<ver>_darwin_arm64.zip  →  binary named "packer"
         case "packer":
             let tag = try await fetchLatestGitHubTag(owner: "hashicorp", repo: "packer")
             let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
@@ -326,18 +406,8 @@ final class DependencyManager {
             return dest.path
 
         // ── mist-cli ──────────────────────────────────────────────────────────
-        // Release: mist-cli.pkg  →  use the GitHub API assets list to get the
-        // exact asset URL, then expand the pkg payload manually.
-        //
-        // The pkg payload structure from ninxsoft/mist-cli is:
-        //   Payload  (cpio archive inside the pkg)
-        //     usr/local/bin/mist
-        //
-        // pkgutil --expand-full can fail on newer pkgs with SLA/distribution XML.
-        // Instead we use: xar -x to unpack, then cpio to extract the Payload.
         case "mist-cli":
             let tag = try await fetchLatestGitHubTag(owner: "ninxsoft", repo: "mist-cli")
-            // Fetch the actual asset list to find the .pkg URL
             let pkgURL = try await fetchGitHubAssetURL(
                 owner: "ninxsoft", repo: "mist-cli", tag: tag,
                 matching: { $0.hasSuffix(".pkg") }
@@ -345,14 +415,11 @@ final class DependencyManager {
             log("  Downloading mist-cli \(tag)…")
             let downloaded = try await download(from: pkgURL)
 
-            // Expand pkg with xar (built into macOS)
             let expandDir = makeTempDir()
             try runSync("/usr/bin/xar", args: ["-xf", downloaded.path, "-C", expandDir.path])
 
-            // Find and extract the Payload cpio archive
             let payloadURL = try findFile(named: "Payload", in: expandDir, exact: true)
             let cpioDir = makeTempDir()
-            // gunzip | cpio -i
             let gunzip = Process()
             gunzip.executableURL = URL(fileURLWithPath: "/usr/bin/gunzip")
             gunzip.arguments = ["-c", payloadURL.path]
@@ -374,7 +441,6 @@ final class DependencyManager {
                 throw ProcessError.nonZeroExit(cpio.terminationStatus, "cpio extraction failed")
             }
 
-            // Binary is at usr/local/bin/mist inside the extracted tree
             let binary = try findFile(named: "mist", in: cpioDir, exact: true)
             let dest = depsDirectory.appendingPathComponent("mist-cli")
             try? FileManager.default.removeItem(at: dest)
@@ -383,10 +449,6 @@ final class DependencyManager {
             return dest.path
 
         // ── packer-plugin-tart ────────────────────────────────────────────────
-        // Download directly from GitHub releases and place at the path Packer
-        // expects: ~/.packer.d/plugins/github.com/cirruslabs/tart/<binary>
-        // This avoids relying on `packer plugins install` making network calls,
-        // which can fail when the app sandbox restricts subprocess networking.
         case "tart-packer-plugin":
             let tag = try await fetchLatestGitHubTag(owner: "cirruslabs", repo: "packer-plugin-tart")
             let version = tag.hasPrefix("v") ? tag : "v\(tag)"
@@ -414,7 +476,6 @@ final class DependencyManager {
             return dest.path
 
         // ── jq ────────────────────────────────────────────────────────────────
-        // Release: jq-macos-arm64  →  raw binary
         case "jq":
             let tag = try await fetchLatestGitHubTag(owner: "jqlang", repo: "jq")
             let url = URL(string: "https://github.com/jqlang/jq/releases/download/\(tag)/jq-macos-arm64")!
@@ -443,7 +504,6 @@ final class DependencyManager {
         return try JSONDecoder().decode(R.self, from: data).tagName
     }
 
-    /// Fetch the browser_download_url for the first asset whose name matches the predicate.
     private func fetchGitHubAssetURL(owner: String, repo: String, tag: String,
                                       matching predicate: (String) -> Bool) async throws -> URL {
         let url = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases/tags/\(tag)")!
@@ -525,7 +585,6 @@ final class DependencyManager {
         default:        flag = "--version"
         }
         let (stdout, stderr) = try await processRunner.run(binaryPath, arguments: [flag])
-        // sshpass writes version info to stderr
         let output = stdout.isEmpty ? stderr : stdout
         let first = output.components(separatedBy: .newlines).first ?? output
         if let r = first.range(of: #"(\d+\.\d+[\.\d]*)"#, options: .regularExpression) {
@@ -535,8 +594,6 @@ final class DependencyManager {
     }
 
     // MARK: - State
-
-    // MARK: - Dependency metadata catalogue
 
     private struct DepMeta {
         let purpose: String
@@ -595,91 +652,116 @@ final class DependencyManager {
     }
 
     private func buildInitialState(settings: AppSettings) {
-        if settings.dependencyMode == .custom {
-            let paths = settings.customPaths
-            func customDep(_ id: String, _ displayName: String, _ path: String, required: Bool) -> Dependency {
-                let p = path.isEmpty ? "" : path
-                let exists = !p.isEmpty && FileManager.default.fileExists(atPath: p)
-                let m = meta(for: id)
-                return Dependency(id: id, displayName: displayName,
-                                  purpose: m.purpose, icon: m.icon,
-                                  currentVersion: nil, latestVersion: nil,
-                                  binaryPath: URL(fileURLWithPath: p.isEmpty ? depsDirectory.appendingPathComponent(id).path : p),
-                                  isRequired: required, requiredForLaunch: m.requiredForLaunch,
-                                  installURL: m.installURL, systemBinaryPath: nil,
-                                  status: exists ? .installed : .notInstalled)
-            }
-            dependencies = [
-                customDep("tart",               "tart",               paths.tart,       required: true),
-                customDep("packer",             "packer",             paths.packer,     required: true),
-                customDep("mist-cli",           "mist-cli",           paths.mistCli,    required: false),
-                customDep("tart-packer-plugin", "packer-plugin-tart", "",               required: true),
-                customDep("jq",                 "jq",                 paths.jq,         required: true),
-                customDep("sshpass",            "sshpass",            paths.sshpass,    required: false),
-            ]
-            return
+        // Preserve detection results across rebuilds
+        let prevDetected: [String: URL] = dependencies.reduce(into: [:]) { dict, dep in
+            if let p = dep.detectedSystemPath { dict[dep.id] = p }
         }
 
-        let m = loadManifest()
-        func st(_ id: String, _ ver: String?) -> Dependency.Status {
-            ver != nil && fileExists(id) ? .installed : .notInstalled
-        }
         func pluginInstalled() -> Dependency.Status {
             let dir = FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent(".packer.d/plugins/github.com/cirruslabs/tart")
             let files = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
             return files.contains(where: { $0.hasPrefix("packer-plugin-tart") }) ? .installed : .notInstalled
         }
-        func dep(_ id: String, _ displayName: String, currentVersion: String?,
-                 binaryPath: URL, isRequired: Bool, status: Dependency.Status) -> Dependency {
+
+        let m = loadManifest()
+
+        func st(_ id: String, _ ver: String?) -> Dependency.Status {
+            ver != nil && fileExists(id) ? .installed : .notInstalled
+        }
+
+        /// Build a Dependency, overlaying the per-dep install setting from AppSettings.
+        func makeDep(_ id: String, _ displayName: String, currentVersion: String?,
+                     binaryPath: URL, isRequired: Bool,
+                     managedStatus: Dependency.Status) -> Dependency {
             let info = meta(for: id)
+            let depSetting = settings.setting(for: id)
+
+            var status: Dependency.Status
+            var version: String? = currentVersion
+            switch depSetting.method {
+            case .custom:
+                let exists = !depSetting.customPath.isEmpty && FileManager.default.fileExists(atPath: depSetting.customPath)
+                status = exists ? .installed : .notInstalled
+                if !exists { version = nil }
+            case .managed:
+                status = managedStatus
+            }
+
             return Dependency(id: id, displayName: displayName,
                               purpose: info.purpose, icon: info.icon,
-                              currentVersion: currentVersion, latestVersion: nil,
+                              currentVersion: version, latestVersion: nil,
                               binaryPath: binaryPath,
                               isRequired: isRequired, requiredForLaunch: info.requiredForLaunch,
-                              installURL: info.installURL, systemBinaryPath: nil,
+                              installURL: info.installURL,
+                              installMethod: depSetting.method,
+                              customPath: depSetting.customPath,
+                              detectedSystemPath: nil,
                               status: status)
         }
-        // sshpass is not auto-downloaded; detect from known homebrew/system paths
+
+        // sshpass: in managed mode, check known system locations (not auto-downloaded)
         let sshpassCandidates = ["/opt/homebrew/bin/sshpass", "/usr/local/bin/sshpass", "/opt/local/bin/sshpass",
                                   depsDirectory.appendingPathComponent("sshpass").path]
         let sshpassFoundAt = sshpassCandidates.first { FileManager.default.fileExists(atPath: $0) }
         let sshpassBinaryURL = sshpassFoundAt.map { URL(fileURLWithPath: $0) }
             ?? depsDirectory.appendingPathComponent("sshpass")
-        let sshpassStatus: Dependency.Status = sshpassFoundAt != nil ? .installed : .notInstalled
+        let sshpassManagedStatus: Dependency.Status = sshpassFoundAt != nil ? .installed : .notInstalled
+
+        // packer-plugin-tart: always installed at fixed location; custom path optional
+        let pluginInfo = meta(for: "tart-packer-plugin")
+        let pluginSetting = settings.setting(for: "tart-packer-plugin")
+        let pluginStatus: Dependency.Status
+        if pluginSetting.method == .custom, !pluginSetting.customPath.isEmpty {
+            pluginStatus = FileManager.default.fileExists(atPath: pluginSetting.customPath) ? .installed : .notInstalled
+        } else {
+            pluginStatus = pluginInstalled()
+        }
 
         dependencies = [
-            dep("tart",               "tart",
-                currentVersion: m.tart,
-                binaryPath: depsDirectory.appendingPathComponent("tart.app/Contents/MacOS/tart"),
-                isRequired: true, status: st("tart", m.tart)),
-            dep("packer",             "packer",
-                currentVersion: m.packer,
-                binaryPath: depsDirectory.appendingPathComponent("packer"),
-                isRequired: true, status: st("packer", m.packer)),
-            dep("mist-cli",           "mist-cli",
-                currentVersion: m.mistCLI,
-                binaryPath: depsDirectory.appendingPathComponent("mist-cli"),
-                isRequired: false, status: st("mist-cli", m.mistCLI)),
-            dep("tart-packer-plugin", "packer-plugin-tart",
-                currentVersion: m.tartPackerPlugin,
-                binaryPath: depsDirectory.appendingPathComponent("tart-packer-plugin"),
-                isRequired: true, status: pluginInstalled()),
-            dep("jq",                 "jq",
-                currentVersion: m.jq,
-                binaryPath: depsDirectory.appendingPathComponent("jq"),
-                isRequired: true, status: st("jq", m.jq)),
-            dep("sshpass",            "sshpass",
-                currentVersion: m.sshpass,
-                binaryPath: sshpassBinaryURL,
-                isRequired: false, status: sshpassStatus),
+            makeDep("tart", "tart", currentVersion: m.tart,
+                    binaryPath: depsDirectory.appendingPathComponent("tart.app/Contents/MacOS/tart"),
+                    isRequired: true, managedStatus: st("tart", m.tart)),
+            makeDep("packer", "packer", currentVersion: m.packer,
+                    binaryPath: depsDirectory.appendingPathComponent("packer"),
+                    isRequired: true, managedStatus: st("packer", m.packer)),
+            makeDep("mist-cli", "mist-cli", currentVersion: m.mistCLI,
+                    binaryPath: depsDirectory.appendingPathComponent("mist-cli"),
+                    isRequired: false, managedStatus: st("mist-cli", m.mistCLI)),
+            Dependency(id: "tart-packer-plugin", displayName: "packer-plugin-tart",
+                       purpose: pluginInfo.purpose, icon: pluginInfo.icon,
+                       currentVersion: m.tartPackerPlugin, latestVersion: nil,
+                       binaryPath: depsDirectory.appendingPathComponent("tart-packer-plugin"),
+                       isRequired: true, requiredForLaunch: pluginInfo.requiredForLaunch,
+                       installURL: pluginInfo.installURL,
+                       installMethod: pluginSetting.method,
+                       customPath: pluginSetting.customPath,
+                       detectedSystemPath: nil,
+                       status: pluginStatus),
+            makeDep("jq", "jq", currentVersion: m.jq,
+                    binaryPath: depsDirectory.appendingPathComponent("jq"),
+                    isRequired: true, managedStatus: st("jq", m.jq)),
+            makeDep("sshpass", "sshpass", currentVersion: m.sshpass,
+                    binaryPath: sshpassBinaryURL,
+                    isRequired: false, managedStatus: sshpassManagedStatus),
         ]
+
+        for i in dependencies.indices {
+            dependencies[i].detectedSystemPath = prevDetected[dependencies[i].id]
+        }
     }
 
-    private func refreshStatuses(checkLatest: Bool = false) async {
+    private func refreshStatuses() async {
         for dep in dependencies where dep.isReady {
-            let version = try? await readVersion(binaryPath: dep.binaryPath.path, id: dep.id)
+            let binaryPath: String
+            switch dep.installMethod {
+            case .managed:
+                binaryPath = dep.binaryPath.path
+            case .custom:
+                guard !dep.customPath.isEmpty else { continue }
+                binaryPath = dep.customPath
+            }
+            let version = try? await readVersion(binaryPath: binaryPath, id: dep.id)
             updateInstalledVersion(id: dep.id, version: version)
         }
     }
@@ -730,7 +812,4 @@ final class DependencyManager {
         }
         if let data = try? JSONEncoder().encode(m) { try? data.write(to: manifestURL) }
     }
-
-    // MARK: - Platform
-
 }
