@@ -691,7 +691,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4000;
+				CURRENT_PROJECT_VERSION = 10000;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = V4RT59UVJJ;
 				ENABLE_APP_SANDBOX = NO;
@@ -701,7 +701,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Oven - macOS VM Manager powered by Tart";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.9;
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hooleahn.oven;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -816,7 +816,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4000;
+				CURRENT_PROJECT_VERSION = 10000;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -825,7 +825,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Oven - macOS VM Manager powered by Tart";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.9;
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hooleahn.oven;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
