@@ -167,10 +167,11 @@ final class VMListViewModel {
                 .last { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
                 ?? "tart exited with code \(result.exitCode)"
             AppLogger.shared.error("Failed to start \"\(label)\": \(errLine)", source: "VMStore")
-        } else {
-            await NotificationService.shared.notifyVMStopped(vmName: label)
         }
 
+        // `tart run` stays attached for the VM's lifetime; the stream ending here
+        // means the VM has stopped. The sync() below reconciles that transition
+        // and VMStore fires the "VM stopped" notification for every stop path.
         await vmStore.sync()
     }
 }

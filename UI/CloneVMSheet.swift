@@ -20,7 +20,7 @@ struct CloneVMSheet: View {
     private var sanitisedName: String {
         let base = displayName.trimmingCharacters(in: .whitespaces)
             .lowercased()
-            .replacingOccurrences(of: " ", with: "-")
+            .replacing(" ", with: "-")
             .filter { $0.isLetter || $0.isNumber || $0 == "-" }
         let suffix = String(UUID().uuidString.prefix(6).lowercased())
         return base.isEmpty ? "\(vm.name)-clone-\(suffix)" : "\(base)-\(suffix)"

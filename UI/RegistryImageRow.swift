@@ -77,6 +77,7 @@ struct RegistryImageRow: View {
                 }
                 .buttonStyle(.bordered).controlSize(.small)
                 .help("More actions")
+                .accessibilityLabel("More actions")
             } else {
                 Button(action: onPull) {
                     Label("Pull", systemImage: "arrow.down.circle")
@@ -89,6 +90,7 @@ struct RegistryImageRow: View {
                 }
                 .buttonStyle(.bordered).controlSize(.small)
                 .help("More actions")
+                .accessibilityLabel("More actions")
             }
         }
         .padding(.vertical, 4)

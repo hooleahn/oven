@@ -155,7 +155,11 @@ struct LiveBuildLogPanel: View {
             // Transform vnc://host:port → vnc://:password@host:port
             if url.hasPrefix("vnc://") {
                 let host = String(url.dropFirst("vnc://".count))
-                urlWithCreds = "vnc://:" + pw + "@" + host
+                // Percent-encode the password for the URL userinfo component —
+                // an unescaped @, :, or / would break the URL or get parsed as
+                // part of the host instead of the credential.
+                let encodedPW = pw.addingPercentEncoding(withAllowedCharacters: .urlUserAllowed) ?? pw
+                urlWithCreds = "vnc://:" + encodedPW + "@" + host
             }
             // Also copy to clipboard as a fallback
             NSPasteboard.general.clearContents()

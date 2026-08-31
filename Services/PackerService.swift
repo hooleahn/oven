@@ -151,6 +151,7 @@ actor PackerService {
                 do {
                     try credContent.write(to: credVarsURL, atomically: true, encoding: .utf8)
                 } catch {
+                    continuation.yield(.stderr("Failed to write credentials file: \(error.localizedDescription)"))
                     continuation.yield(.exit(1)); continuation.finish(); return
                 }
                 defer { try? FileManager.default.removeItem(at: credVarsURL) }
@@ -205,12 +206,7 @@ actor PackerService {
                     "USER":   parentEnv["USER"]   ?? "unknown",
                 ]
                 let debug = UserDefaults.standard.bool(forKey: "debugModeEnabled")
-                // Capture output to parse errors
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: resolvedPackerPath)
-                process.arguments = ["validate", "-syntax-only", url.path]
-                process.environment = env
-                
+
                 continuation.yield("> Running packer validate for template at \(url.path)...")
                 if debug {
                     continuation.yield("[debug] Binary: \(resolvedPackerPath)")
@@ -218,40 +214,31 @@ actor PackerService {
                     continuation.yield("[debug] Plugin dir: \(pluginDir)")
                     continuation.yield("[debug] PATH prefix: \(depsDir)")
                 }
-                
-                // Capture output to parse errors
-                let errorPipe = Pipe()
-                let outputPipe = Pipe()
-                process.standardOutput = outputPipe
-                process.standardError = errorPipe
-                
+
+                // Route through ProcessRunner (reads stdout/stderr concurrently via
+                // readabilityHandler) instead of a hand-rolled Process — waiting on
+                // waitUntilExit() before draining the pipes can deadlock if packer
+                // writes enough output to fill the pipe buffer before exiting.
                 do {
-                    try process.run()
-                    process.waitUntilExit()
-                    
-                    if process.terminationStatus == 0 {
-                        continuation.yield("✓ Template is valid")
-                        continuation.finish()
-                        return true
-                    } else {
-                        if debug {
-                            continuation.yield("[debug] Exit Code: \(process.terminationStatus)")
-                            continuation.yield("[debug] Command Arguments: \(process.arguments?.joined(separator: " ") ?? "")")
-                        }
-                        // Print stdio
-                        let stdoutData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-                        let standardOutput = String(data: stdoutData, encoding: .utf8)
-                        continuation.yield("✗ Template validation failed (Exit code: \(process.terminationStatus))")
-                        continuation.yield(standardOutput ?? "Unknown Error")
-                        print("Validation failed (Exit code: \(process.terminationStatus)), Error Details: \( standardOutput ?? "Unknown Error")")
-                        continuation.finish()
-                        return false
+                    let (stdout, _) = try await runner.run(
+                        resolvedPackerPath,
+                        arguments: ["validate", "-syntax-only", url.path],
+                        environment: env
+                    )
+                    if debug, !stdout.isEmpty {
+                        continuation.yield("[debug] Output: \(stdout)")
                     }
+                    continuation.yield("✓ Template is valid")
+                } catch ProcessError.nonZeroExit(let code, let stderr) {
+                    if debug {
+                        continuation.yield("[debug] Exit Code: \(code)")
+                    }
+                    continuation.yield("✗ Template validation failed (Exit code: \(code))")
+                    continuation.yield(stderr.isEmpty ? "Unknown Error" : stderr)
                 } catch {
-                    print("Error running packer: \(error)")
-                    continuation.finish()
-                    return false
+                    continuation.yield("✗ Failed to run packer validate: \(error.localizedDescription)")
                 }
+                continuation.finish()
             }
         }
     }

@@ -53,115 +53,6 @@ struct VMDetailPane: View {
         }
         .background(.windowBackground)
         .background(.bar, in: Rectangle())
-        // ── Toolbar ─────────────────────────────────────────────────────────
-        .toolbar {
-            // Primary action: context-sensitive main CTA
-            ToolbarItem(placement: .primaryAction) {
-                if vm.status == .running {
-                    Button {
-                        if !vm.isStopping { confirmStop = vm }
-                    } label: {
-                        if vm.isStopping {
-                            Label("Stopping…", systemImage: "stop.fill")
-                        } else {
-                            Label("Stop", systemImage: "stop.fill")
-                        }
-                    }
-                    .tint(.red)
-                    .disabled(vm.isStopping)
-                } else if vm.status == .suspended {
-                    Button {
-                        if !vm.isStopping { confirmStop = vm }
-                    } label: {
-                        Label("Stop", systemImage: "stop.fill")
-                    }
-                    .tint(.red)
-                    .disabled(vm.isStopping)
-                } else {
-                    Button(action: onStart) {
-                        Label("Start", systemImage: "play.fill")
-                    }
-                    .keyboardShortcut(.defaultAction)
-                }
-            }
-
-            // "…" menu: secondary actions
-            ToolbarItem(placement: .automatic) {
-                Menu {
-                    // SSH — only when running with IP
-                    if vm.status == .running {
-                        Button {
-                            openSSH(vm: vm)
-                        } label: {
-                            Label("Open SSH in Terminal", systemImage: "terminal")
-                        }
-                        .disabled(vm.ipAddress == nil)
-
-                        Button {
-                            execInitialMethod = .ssh
-                            isPresentingExecSheet = true
-                        } label: {
-                            Label("Execute command via SSH…", systemImage: "terminal")
-                        }
-                        .disabled(vm.ipAddress == nil)
-
-                        if vm.supportsGuestAgent {
-                            Button {
-                                execInitialMethod = .guestAgent
-                                isPresentingExecSheet = true
-                            } label: {
-                                Label("Execute command via Tart Guest Agent…", systemImage: "bolt.horizontal.circle")
-                            }
-                        }
-
-                        Button {
-                            Task { await vmStore.refreshIP(for: vm) }
-                        } label: {
-                            Label(vm.ipAddress.map { $0.isEmpty ? "Resolving IP…" : "Refresh IP" } ?? "Resolve IP",
-                                  systemImage: "arrow.clockwise")
-                        }
-                        .disabled(vm.isResolvingIP)
-
-                        Divider()
-                    }
-
-                    // Push to registry (stopped only)
-                    if vm.status == .stopped {
-                        Button { isPresentingPushSheet = true } label: {
-                            Label("Push to Registry…", systemImage: "arrow.up.circle")
-                        }
-                        .disabled(pushProgress != nil)
-                        Divider()
-                    }
-
-                    Button {
-                        logInspectorOpen.toggle()
-                    } label: {
-                        Label(logInspectorOpen ? "Hide Build Log" : "Show Build Log",
-                              systemImage: "terminal")
-                    }
-                    .disabled(vm.buildLog.isEmpty)
-
-                    Button {
-                        vmStore.update(id: vm.id) { $0.isPinned.toggle() }
-                    } label: {
-                        Label(vm.isPinned ? "Unpin from Menu Bar" : "Pin to Menu Bar",
-                              systemImage: vm.isPinned ? "pin.slash" : "pin")
-                    }
-
-                    Divider()
-                    Button(role: .destructive) {
-                        // Surface deletion through the parent (VMListView holds confirmDelete)
-                        onDismiss()
-                    } label: {
-                        Label("Delete…", systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .help("More actions")
-            }
-        }
         // ── Trailing inspector: build log ────────────────────────────────────
         .inspector(isPresented: $logInspectorOpen) {
             if vm.buildLog.isEmpty {
@@ -202,7 +93,14 @@ struct VMDetailPane: View {
         ) {
             Button("Stop", role: .destructive) {
                 confirmStop = nil
-                Task { try? await vmStore.stop(vm: vm) }
+                let label = vm.displayName.isEmpty ? vm.name : vm.displayName
+                Task {
+                    do {
+                        try await vmStore.stop(vm: vm)
+                    } catch {
+                        AppLogger.shared.error("Failed to stop \"\(label)\": \(error.localizedDescription)", source: "VMStore")
+                    }
+                }
             }
             Button("Cancel", role: .cancel) { confirmStop = nil }
         } message: {
@@ -222,7 +120,7 @@ struct VMDetailPane: View {
             if canLookUpEnrollment {
                 let isStale: Bool = {
                     guard let fetched = vm.enrollmentStatusFetchedAt else { return true }
-                    return Date().timeIntervalSince(fetched) > 24 * 3600
+                    return Date.now.timeIntervalSince(fetched) > 24 * 3600
                 }()
                 if isStale { await lookUpEnrollment() }
             }
@@ -507,24 +405,128 @@ struct VMDetailPane: View {
     }
 
     // MARK: - Header
+    // Actions live in the pane itself (not the window toolbar) — this pane and
+    // VMListView both sit in the same NavigationSplitView, and two competing
+    // .primaryAction toolbar items caused the whole toolbar to swap contents
+    // depending on selection. Matches the pattern already used by
+    // TemplateDetailPane / VarsFileDetailPane.
 
     @ViewBuilder private var headerSection: some View {
-        VStack(spacing: 4) {
-//            Image(systemName: "desktopcomputer")
-//                .font(.system(.title, weight: .light))
-//                .foregroundStyle(.secondary)
-            Text(vm.displayName.isEmpty ? vm.name : vm.displayName)
-                .font(.headline).lineLimit(2).multilineTextAlignment(.center)
-            if !vm.displayName.isEmpty && vm.displayName != vm.name {
-                Text(vm.name)
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(.tertiary).lineLimit(1)
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(vm.displayName.isEmpty ? vm.name : vm.displayName)
+                    .font(.title3).fontWeight(.semibold).lineLimit(2)
+                if !vm.displayName.isEmpty && vm.displayName != vm.name {
+                    Text(vm.name)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.tertiary).lineLimit(1)
+                }
+                StatusPill(status: vm.status)
             }
-            StatusPill(status: vm.status)
+            Spacer()
+            primaryActionButton
+            moreActionsMenu
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 16).padding(.vertical, 12)
         .background(.bar)
+    }
+
+    @ViewBuilder private var primaryActionButton: some View {
+        if vm.status == .running || vm.status == .suspended {
+            Button {
+                if !vm.isStopping { confirmStop = vm }
+            } label: {
+                Label(vm.isStopping ? "Stopping…" : "Stop", systemImage: "stop.fill")
+            }
+            .buttonStyle(.bordered)
+            .tint(.red)
+            .disabled(vm.isStopping)
+        } else {
+            Button(action: onStart) {
+                Label("Start", systemImage: "play.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
+        }
+    }
+
+    @ViewBuilder private var moreActionsMenu: some View {
+        Menu {
+            // SSH — only when running with IP
+            if vm.status == .running {
+                Button {
+                    openSSH(vm: vm)
+                } label: {
+                    Label("Open SSH in Terminal", systemImage: "terminal")
+                }
+                .disabled(vm.ipAddress == nil)
+
+                Button {
+                    execInitialMethod = .ssh
+                    isPresentingExecSheet = true
+                } label: {
+                    Label("Execute command via SSH…", systemImage: "terminal")
+                }
+                .disabled(vm.ipAddress == nil)
+
+                if vm.supportsGuestAgent {
+                    Button {
+                        execInitialMethod = .guestAgent
+                        isPresentingExecSheet = true
+                    } label: {
+                        Label("Execute command via Tart Guest Agent…", systemImage: "bolt.horizontal.circle")
+                    }
+                }
+
+                Button {
+                    Task { await vmStore.refreshIP(for: vm) }
+                } label: {
+                    Label(vm.ipAddress.map { $0.isEmpty ? "Resolving IP…" : "Refresh IP" } ?? "Resolve IP",
+                          systemImage: "arrow.clockwise")
+                }
+                .disabled(vm.isResolvingIP)
+
+                Divider()
+            }
+
+            // Push to registry (stopped only)
+            if vm.status == .stopped {
+                Button { isPresentingPushSheet = true } label: {
+                    Label("Push to Registry…", systemImage: "arrow.up.circle")
+                }
+                .disabled(pushProgress != nil)
+                Divider()
+            }
+
+            Button {
+                logInspectorOpen.toggle()
+            } label: {
+                Label(logInspectorOpen ? "Hide Build Log" : "Show Build Log",
+                      systemImage: "terminal")
+            }
+            .disabled(vm.buildLog.isEmpty)
+
+            Button {
+                vmStore.update(id: vm.id) { $0.isPinned.toggle() }
+            } label: {
+                Label(vm.isPinned ? "Unpin from Menu Bar" : "Pin to Menu Bar",
+                      systemImage: vm.isPinned ? "pin.slash" : "pin")
+            }
+
+            Divider()
+            Button(role: .destructive) {
+                // Surface deletion through the parent (VMListView holds confirmDelete)
+                onDismiss()
+            } label: {
+                Label("Delete…", systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("More actions")
+        .accessibilityLabel("More actions")
     }
 
     // MARK: - Helpers
@@ -585,6 +587,7 @@ struct VMDetailPane: View {
                 pushTask = nil
                 if code == 0 {
                     AppLogger.shared.success("Push complete: \(imageRef)", source: "VMDetailPane")
+                    await NotificationService.shared.notifyImagePushCompleted(imageRef: imageRef)
                 } else if !Task.isCancelled {
                     let raw = errorLines.joined(separator: "\n")
                     AppLogger.shared.error("Push failed (exit \(code)): \(raw)", source: "VMDetailPane")
@@ -643,21 +646,16 @@ struct VMDetailPane: View {
     }
 
     private func checkPort(ip: String, port: Int) async -> Bool {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global().async {
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
-                process.arguments = ["-z", "-w", "2", ip, "\(port)"]
-                process.standardOutput = Pipe()
-                process.standardError = Pipe()
-                guard (try? process.run()) != nil else {
-                    continuation.resume(returning: false)
-                    return
-                }
-                process.waitUntilExit()
-                continuation.resume(returning: process.terminationStatus == 0)
-            }
-        }
+        await Task.detached(priority: .utility) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
+            process.arguments = ["-z", "-w", "2", ip, "\(port)"]
+            process.standardOutput = Pipe()
+            process.standardError = Pipe()
+            guard (try? process.run()) != nil else { return false }
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        }.value
     }
 
     @MainActor
@@ -672,7 +670,7 @@ struct VMDetailPane: View {
             // Persist in the VM model so it survives navigation and re-launches
             vmStore.updateMetadata(id: vm.id) {
                 $0.cachedEnrollmentStatus = status
-                $0.enrollmentStatusFetchedAt = Date()
+                $0.enrollmentStatusFetchedAt = Date.now
             }
             if status == nil {
                 enrollmentError = "Not found in \(server.friendlyName)"
@@ -680,7 +678,7 @@ struct VMDetailPane: View {
         } catch {
             enrollmentError = error.localizedDescription
             // Still record the fetch time so we don't hammer the server on every view
-            vmStore.updateMetadata(id: vm.id) { $0.enrollmentStatusFetchedAt = Date() }
+            vmStore.updateMetadata(id: vm.id) { $0.enrollmentStatusFetchedAt = Date.now }
         }
         isLookingUpEnrollment = false
     }

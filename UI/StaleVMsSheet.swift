@@ -13,9 +13,10 @@ struct StaleVMsSheet: View {
     @State private var removeFromMDM: Set<UUID> = []
     @State private var isDeleting = false
     @State private var sizeByID: [UUID: Int64] = [:]
+    @State private var isPresentingDeleteConfirm = false
 
     private var cutoff: Date {
-        Calendar.current.date(byAdding: .day, value: -thresholdDays, to: Date()) ?? Date()
+        Calendar.current.date(byAdding: .day, value: -thresholdDays, to: Date.now) ?? Date.now
     }
 
     // MARK: - Stale VM computation
@@ -96,7 +97,7 @@ struct StaleVMsSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(role: .destructive) {
-                        Task { await deleteSelected() }
+                        isPresentingDeleteConfirm = true
                     } label: {
                         if isDeleting {
                             ProgressView().controlSize(.small)
@@ -111,6 +112,16 @@ struct StaleVMsSheet: View {
                     .disabled(selectedIDs.isEmpty || isDeleting)
                     .tint(.red)
                 }
+            }
+            .confirmationDialog(
+                "Delete \(selectedIDs.count) VM\(selectedIDs.count == 1 ? "" : "s")?",
+                isPresented: $isPresentingDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) { Task { await deleteSelected() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently removes the selected VM images from disk. This cannot be undone.")
             }
             .task { await computeSizes() }
         }
@@ -140,7 +151,7 @@ struct StaleVMsSheet: View {
 
                 HStack(spacing: 12) {
                     if let date = lastUsed {
-                        Label(RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date()),
+                        Label(RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date.now),
                               systemImage: "clock")
                             .font(.caption).foregroundStyle(.secondary)
                     }
@@ -188,11 +199,19 @@ struct StaleVMsSheet: View {
 
     private func deleteSelected() async {
         isDeleting = true
+        var failed: Set<UUID> = []
         for vm in allStale where selectedIDs.contains(vm.id) {
             let mdmServer = removeFromMDM.contains(vm.id) ? jamfServer(for: vm) : nil
-            try? await vmStore.delete(vm: vm, mdmServer: mdmServer)
+            do {
+                try await vmStore.delete(vm: vm, mdmServer: mdmServer)
+            } catch {
+                failed.insert(vm.id)
+                let label = vm.displayName.isEmpty ? vm.name : vm.displayName
+                AppLogger.shared.error("Failed to delete \"\(label)\": \(error.localizedDescription)", source: "StaleVMsSheet")
+            }
         }
-        selectedIDs = []
+        // Leave failed deletions selected so the user can see what's left and retry.
+        selectedIDs = failed
         removeFromMDM = []
         isDeleting = false
         if allStale.isEmpty { dismiss() }

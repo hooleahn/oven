@@ -59,6 +59,7 @@ final class PushManager {
                 active[baseVM.name] = nil
                 if code == 0 {
                     AppLogger.shared.success("Push complete: \(imageRef)", source: "PushManager")
+                    await NotificationService.shared.notifyImagePushCompleted(imageRef: imageRef)
                 } else {
                     let raw = errorLines.joined(separator: "\n")
                     AppLogger.shared.error("Push failed (exit \(code)): \(raw)", source: "PushManager")

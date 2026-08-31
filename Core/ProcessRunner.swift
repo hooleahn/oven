@@ -48,7 +48,7 @@ actor ProcessRunner {
         let cmdString = ([executablePath] + arguments)
             .map { $0.contains(" ") ? "\"\($0)\"" : $0 }
             .joined(separator: " ")
-        Task { await AppLogger.shared.log("$ \(cmdString)", source: "ProcessRunner") }
+        Task { await AppLogger.shared.debug("$ \(cmdString)", source: "ProcessRunner") }
 
         return AsyncStream { continuation in
             Task {
@@ -162,15 +162,13 @@ actor ProcessRunner {
         let stdout = stdoutLines.joined(separator: "\n")
         let stderr = stderrLines.joined(separator: "\n")
 
-        if UserDefaults.standard.bool(forKey: "debugModeEnabled") {
-            if !stdout.isEmpty {
-                Task { await AppLogger.shared.log("[debug] stdout: \(stdout)", source: "ProcessRunner") }
-            }
-            if !stderr.isEmpty {
-                Task { await AppLogger.shared.log("[debug] stderr: \(stderr)", source: "ProcessRunner") }
-            }
-            Task { await AppLogger.shared.log("[debug] exit: \(exitCode)", source: "ProcessRunner") }
+        if !stdout.isEmpty {
+            Task { await AppLogger.shared.debug("stdout: \(stdout)", source: "ProcessRunner") }
         }
+        if !stderr.isEmpty {
+            Task { await AppLogger.shared.debug("stderr: \(stderr)", source: "ProcessRunner") }
+        }
+        Task { await AppLogger.shared.debug("exit: \(exitCode)", source: "ProcessRunner") }
 
         guard exitCode == 0 else {
             throw ProcessError.nonZeroExit(exitCode, stderr)

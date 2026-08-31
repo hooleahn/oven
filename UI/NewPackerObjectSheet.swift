@@ -195,7 +195,7 @@ private struct FullTemplateCreationForm: View {
     private var filename: String {
         let base = displayName.trimmingCharacters(in: .whitespaces)
             .lowercased()
-            .replacingOccurrences(of: " ", with: "-")
+            .replacing(" ", with: "-")
             .filter { $0.isLetter || $0.isNumber || $0 == "-" }
         return base.isEmpty ? "template.pkr.hcl" : "\(base).pkr.hcl"
     }
@@ -382,7 +382,7 @@ private struct VarsFileCreationForm: View {
     private var filename: String {
         let base = displayName.trimmingCharacters(in: .whitespaces)
             .lowercased()
-            .replacingOccurrences(of: " ", with: "-")
+            .replacing(" ", with: "-")
             .filter { $0.isLetter || $0.isNumber || $0 == "-" }
         return base.isEmpty ? "variables.pkrvars.hcl" : "\(base).pkrvars.hcl"
     }

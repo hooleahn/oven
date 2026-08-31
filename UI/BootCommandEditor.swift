@@ -74,6 +74,17 @@ struct BootCommandEditor: NSViewRepresentable {
 
     // MARK: - Syntax highlighting
 
+    // Compiled once and reused — applyHighlighting runs on every keystroke,
+    // so recompiling these patterns per call/per line was measurable overhead
+    // on a hot path.
+    private static let outerQuotesRegex   = try! NSRegularExpression(pattern: #"^"|"$"#, options: [.anchorsMatchLines])
+    private static let varRefRegex        = try! NSRegularExpression(pattern: #"\$\{[^}]+\}"#)
+    private static let waitTokenRegex     = try! NSRegularExpression(pattern: #"<wait\d+s?>"#)
+    private static let modifierPairRegex  = try! NSRegularExpression(pattern: #"<[a-zA-Z]+(?:On|Off)>"#)
+    private static let clickRegex         = try! NSRegularExpression(pattern: #"<click '[^']*'>"#)
+    private static let singleKeyRegex     = try! NSRegularExpression(
+        pattern: #"<(?:tab|enter|return|spacebar|esc|escape|up|down|left|right|delete|bs|home|end|pageUp|pageDown|f\d{1,2})>"#)
+
     static func applyHighlighting(to tv: NSTextView) {
         guard let storage = tv.textStorage else { return }
         let src = tv.string
@@ -85,38 +96,30 @@ struct BootCommandEditor: NSViewRepresentable {
             value: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular), range: full)
 
         // Outer quotes (the " that wrap each HCL string entry)
-        applyPattern(#"^"|"$"#, options: [.anchorsMatchLines],
-                     color: .secondaryLabelColor, storage: storage, src: src)
+        applyPattern(outerQuotesRegex, color: .secondaryLabelColor, storage: storage, src: src)
 
         // Variable refs: ${var.X}
-        applyPattern(#"\$\{[^}]+\}"#,
-                     color: .systemTeal, storage: storage, src: src)
+        applyPattern(varRefRegex, color: .systemTeal, storage: storage, src: src)
 
         // Wait tokens: <wait10s>, <wait5s>, <wait120s>, <wait1s>, <waitNNN>
-        applyPattern(#"<wait\d+s?>"#,
-                     color: .systemPurple, storage: storage, src: src)
+        applyPattern(waitTokenRegex, color: .systemPurple, storage: storage, src: src)
 
         // Modifier On/Off pairs: <leftShiftOn>, <leftAltOff>, etc.
-        applyPattern(#"<[a-zA-Z]+(?:On|Off)>"#,
-                     color: .systemOrange, storage: storage, src: src)
+        applyPattern(modifierPairRegex, color: .systemOrange, storage: storage, src: src)
 
         // click with argument: <click '...'>
-        applyPattern(#"<click '[^']*'>"#,
-                     color: .systemBlue, storage: storage, src: src)
+        applyPattern(clickRegex, color: .systemBlue, storage: storage, src: src)
 
         // Single key tokens: <tab>, <enter>, <spacebar>, <esc>, <up>, <down>, <left>, <right>,
         // <f1>–<f20>, <delete>, <return>, <home>, <end>, <pageUp>, <pageDown>, <bs>
-        applyPattern(#"<(?:tab|enter|return|spacebar|esc|escape|up|down|left|right|delete|bs|home|end|pageUp|pageDown|f\d{1,2})>"#,
-                     color: .systemBlue, storage: storage, src: src)
+        applyPattern(singleKeyRegex, color: .systemBlue, storage: storage, src: src)
 
         storage.endEditing()
     }
 
     private static func applyPattern(
-        _ pattern: String, options: NSRegularExpression.Options = [],
-        color: NSColor, storage: NSTextStorage, src: String
+        _ regex: NSRegularExpression, color: NSColor, storage: NSTextStorage, src: String
     ) {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return }
         let nsStr = src as NSString
         regex.enumerateMatches(in: src, range: NSRange(location: 0, length: nsStr.length)) { m, _, _ in
             if let r = m?.range { storage.addAttribute(.foregroundColor, value: color, range: r) }
@@ -150,7 +153,14 @@ struct BootCommandEditor: NSViewRepresentable {
 private class BootCommandTextView: NSTextView {
     private let gutterWidth: CGFloat = 44
     private let gutterPadding: CGFloat = 6
-    private static let focusedBackground = NSColor(red: 49/255, green: 52/255, blue: 69/255, alpha: 1.0)
+    // Adaptive — a fixed dark-navy color looked correct in Dark Mode but broke
+    // Light Mode (background stayed dark navy while the syntax-highlight colors
+    // above stay adaptive/legible-on-light, since they use semantic NSColors).
+    private static let focusedBackground = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(red: 49/255, green: 52/255, blue: 69/255, alpha: 1.0)
+            : NSColor(red: 235/255, green: 240/255, blue: 250/255, alpha: 1.0)
+    }
     weak var owningScrollView: NSScrollView?
 
     override func becomeFirstResponder() -> Bool {
@@ -270,6 +280,8 @@ struct BootCommandLinter {
         "f11","f12","f13","f14","f15","f16","f17","f18","f19","f20",
     ]
 
+    private static let tokenPattern = try! NSRegularExpression(pattern: #"<([^>]+)>"#)
+
     static func lint(lines: [String]) -> [Diagnostic] {
         var diagnostics: [Diagnostic] = []
 
@@ -293,7 +305,6 @@ struct BootCommandLinter {
             let inner = String(trimmed.dropFirst().dropLast())
 
             // Extract all <...> tokens
-            let tokenPattern = try! NSRegularExpression(pattern: #"<([^>]+)>"#)
             let nsInner = inner as NSString
             let matches = tokenPattern.matches(in: inner, range: NSRange(location: 0, length: nsInner.length))
 

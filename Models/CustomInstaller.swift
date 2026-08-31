@@ -1,7 +1,9 @@
 import Foundation
 
-/// A user-registered local .ipsw file with OS metadata.
-/// Used for betas and other firmwares not available via ipsw.me or mist-cli.
+/// Legacy on-disk shape for a user-registered local .ipsw file, superseded by
+/// `Installer` (which bridges OS identity through the shared `OSMetadata` type
+/// instead of duplicating it). Kept only so `InstallerStore.load()` can decode
+/// and migrate old `.customInstallers` records via `Installer(migrating:)`.
 struct CustomInstaller: Identifiable, Codable, Hashable, Sendable {
     let id: UUID
     var displayName: String           // user-provided label, e.g. "macOS 26 Beta 2"
@@ -26,7 +28,7 @@ struct CustomInstaller: Identifiable, Codable, Hashable, Sendable {
         betaLabel: String = "",
         localPath: String,
         isManagedCopy: Bool = false,
-        addedAt: Date = Date()
+        addedAt: Date = Date.now
     ) {
         self.id = id
         self.displayName = displayName
@@ -41,23 +43,4 @@ struct CustomInstaller: Identifiable, Codable, Hashable, Sendable {
         self.addedAt = addedAt
     }
 
-    var fileURL: URL { URL(fileURLWithPath: localPath) }
-
-    var fileExists: Bool { FileManager.default.fileExists(atPath: localPath) }
-
-    var osDisplayLabel: String {
-        let betaSuffix = isBeta ? (betaLabel.isEmpty ? " β" : " \(betaLabel)") : ""
-        switch osName {
-        case .custom:
-            let name = customOSReleaseName
-            let vers = osVersion.isEmpty ? customOSMajorVersion : osVersion
-            if !name.isEmpty && !vers.isEmpty { return "\(name) \(vers)\(betaSuffix)" }
-            if !name.isEmpty { return name + betaSuffix }
-            if !vers.isEmpty { return vers + betaSuffix }
-            return "Custom OS\(betaSuffix)"
-        default:
-            if osVersion.isEmpty { return osName.rawValue + betaSuffix }
-            return "\(osName.rawValue) \(osVersion)\(betaSuffix)"
-        }
-    }
 }

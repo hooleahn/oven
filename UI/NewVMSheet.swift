@@ -59,10 +59,10 @@ struct NewVMSheet: View {
             let imagePart = base.name
                 .components(separatedBy: "/").last?
                 .components(separatedBy: ":").first?
-                .replacingOccurrences(of: "macos-", with: "")
+                .replacing("macos-", with: "")
                 ?? base.name
             let mdm = selectedMDMServer?.friendlyName
-                .lowercased().replacingOccurrences(of: " ", with: "-")
+                .lowercased().replacing(" ", with: "-")
                 .filter { $0.isLetter || $0.isNumber || $0 == "-" }
                 ?? "nomdm"
             return "\(imagePart)-\(mdm)-\(shortID)"
@@ -71,7 +71,7 @@ struct NewVMSheet: View {
         let ver = base.osVersion
         let mdm = selectedMDMServer?.friendlyName
             .lowercased()
-            .replacingOccurrences(of: " ", with: "-")
+            .replacing(" ", with: "-")
             .filter { $0.isLetter || $0.isNumber || $0 == "-" }
             ?? "nomdm"
         return "\(os)-\(ver)-\(mdm)-\(shortID)"

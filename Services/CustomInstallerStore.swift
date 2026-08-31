@@ -51,7 +51,9 @@ final class CustomInstallerStore {
                 try FileManager.default.createDirectory(
                     at: ipswRoot, withIntermediateDirectories: true)
                 if !FileManager.default.fileExists(atPath: destURL.path) {
-                    try FileManager.default.copyItem(at: sourceURL, to: destURL)
+                    try await Task.detached(priority: .userInitiated) {
+                        try FileManager.default.copyItem(at: sourceURL, to: destURL)
+                    }.value
                 }
                 localPath = destURL.path
                 isManagedCopy = true

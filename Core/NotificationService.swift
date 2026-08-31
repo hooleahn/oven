@@ -11,17 +11,11 @@ final class NotificationService {
     static let shared = NotificationService()
 
     private init() {
-        // Register fallback defaults for scheduled VM event toggles.
-        // UserDefaults.standard.bool(forKey:) returns false for any key that has
-        // never been written — the @AppStorage default in AppTheme only applies
-        // when the property wrapper reads the value. Registering here ensures
-        // these events fire on a fresh install without needing a prefs visit.
-        UserDefaults.standard.register(defaults: [
-            "notif.system.vmStarted":      true,
-            "notif.system.vmStartFailed":  true,
-            "notif.pushover.vmStarted":    true,
-            "notif.pushover.vmStartFailed": true,
-        ])
+        // Every per-event toggle is opt-in: it defaults to OFF in both AppTheme
+        // (plain UserDefaults.bool, which is false until the user flips it) and
+        // here (dispatch() reads the same key). The only fallback default is the
+        // system-notification sound preference, which is on unless suppressed.
+        UserDefaults.standard.register(defaults: ["notif.system.soundEnabled": true])
     }
 
     // MARK: - Keychain keys
@@ -89,147 +83,116 @@ final class NotificationService {
         await UNUserNotificationCenter.current().notificationSettings()
     }
 
-    // MARK: - Send build notification
+    // MARK: - Event dispatch
 
-    func notifyBuildComplete(vmName: String, success: Bool, detail: String? = nil) async {
+    /// Single fan-out path for every notification event.
+    ///
+    /// Always delivers to matching custom webhooks, then to each built-in channel
+    /// (Pushover / Slack / Teams / System) that has both its master toggle and its
+    /// `notif.<channel>.<event>` per-event toggle enabled. Every per-event toggle
+    /// is opt-in — a channel stays silent for an event until the user enables it in
+    /// prefs. `success` tints the Slack/Teams card (true green, false red, nil amber).
+    private func dispatch(_ event: NotificationEvent, vmName: String,
+                          title: String, message: String, success: Bool?) async {
+        await sendWebhooks(eventType: event.rawValue, vmName: vmName)
+
         let pushEnabled   = UserDefaults.standard.bool(forKey: "pushoverEnabled")
         let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
         let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
         let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
-        let webhookEvent = success ? "baseVMBuildSucceeded" : "baseVMBuildFailed"
-        await sendWebhooks(eventType: webhookEvent, vmName: vmName)
         guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
 
-        let title   = success ? "✅ Oven: Build Complete" : "❌ Oven: Build Failed"
-        let message = success
-            ? "Base VM '\(vmName)' was built successfully."
-            : "Base VM '\(vmName)' failed to build.\(detail.map { " \($0)" } ?? "")"
-
-        let eventKey = success ? "notif.%@.baseVMBuildSucceeded" : "notif.%@.baseVMBuildFailed"
+        func wants(_ channel: String) -> Bool {
+            UserDefaults.standard.bool(forKey: event.storageKey(for: channel))
+        }
 
         await withTaskGroup(of: Void.self) { group in
-            if pushEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "pushover")) {
+            if pushEnabled && wants("pushover") {
                 group.addTask { await self.sendPushover(title: title, message: message) }
             }
-            if slackEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "slack")) {
+            if slackEnabled && wants("slack") {
                 group.addTask { await self.sendSlack(title: title, message: message, success: success) }
             }
-            if teamsEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "teams")) {
+            if teamsEnabled && wants("teams") {
                 group.addTask { await self.sendTeams(title: title, message: message, success: success) }
             }
-            if systemEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "system")) {
+            if systemEnabled && wants("system") {
                 group.addTask { await self.sendSystemNotification(title: title, message: message, success: success) }
             }
         }
     }
 
+    // MARK: - Build events
+
+    func notifyBuildStarted(vmName: String) async {
+        await dispatch(.baseVMBuildStarted, vmName: vmName,
+                       title: "🔨 Oven: Build Started",
+                       message: "Building base VM '\(vmName)'…",
+                       success: nil)
+    }
+
+    func notifyBuildComplete(vmName: String, success: Bool, detail: String? = nil) async {
+        if success {
+            await dispatch(.baseVMBuildSucceeded, vmName: vmName,
+                           title: "✅ Oven: Build Complete",
+                           message: "Base VM '\(vmName)' was built successfully.",
+                           success: true)
+        } else {
+            await dispatch(.baseVMBuildFailed, vmName: vmName,
+                           title: "❌ Oven: Build Failed",
+                           message: "Base VM '\(vmName)' failed to build.\(detail.map { " \($0)" } ?? "")",
+                           success: false)
+        }
+    }
+
+    // MARK: - VM lifecycle events
+
     func notifyVMStopped(vmName: String) async {
         AppLogger.shared.log("VM stopped: \(vmName)", source: "NotificationService")
-
-        let pushEnabled   = UserDefaults.standard.bool(forKey: "pushoverEnabled")
-        let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
-        let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
-        let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
-        await sendWebhooks(eventType: "vmStopped", vmName: vmName)
-        guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
-
-        let title   = "🛑 Oven: VM Stopped"
-        let message = "VM '\(vmName)' has stopped."
-        let eventKey = "notif.%@.vmStopped"
-
-        await withTaskGroup(of: Void.self) { group in
-            if pushEnabled   && UserDefaults.standard.bool(forKey: String(format: eventKey, "pushover")) {
-                group.addTask { await self.sendPushover(title: title, message: message) }
-            }
-            if slackEnabled  && UserDefaults.standard.bool(forKey: String(format: eventKey, "slack")) {
-                group.addTask { await self.sendSlack(title: title, message: message, success: nil) }
-            }
-            if teamsEnabled  && UserDefaults.standard.bool(forKey: String(format: eventKey, "teams")) {
-                group.addTask { await self.sendTeams(title: title, message: message, success: nil) }
-            }
-            if systemEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "system")) {
-                group.addTask { await self.sendSystemNotification(title: title, message: message, success: nil) }
-            }
-        }
+        await dispatch(.vmStopped, vmName: vmName,
+                       title: "🛑 Oven: VM Stopped",
+                       message: "VM '\(vmName)' has stopped.",
+                       success: nil)
     }
 
     func notifyVMStarted(vmName: String) async {
         AppLogger.shared.success("VM started on schedule: \(vmName)", source: "NotificationService")
-
-        let pushEnabled   = UserDefaults.standard.bool(forKey: "pushoverEnabled")
-        let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
-        let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
-        let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
-        await sendWebhooks(eventType: "vmStarted", vmName: vmName)
-        guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
-
-        let title   = "▶️ Oven: VM Started"
-        let message = "VM '\(vmName)' started on schedule."
-        let eventKey = "notif.%@.vmStarted"
-
-        await withTaskGroup(of: Void.self) { group in
-            if pushEnabled   && UserDefaults.standard.bool(forKey: String(format: eventKey, "pushover")) {
-                group.addTask { await self.sendPushover(title: title, message: message) }
-            }
-            if slackEnabled  && UserDefaults.standard.bool(forKey: String(format: eventKey, "slack")) {
-                group.addTask { await self.sendSlack(title: title, message: message, success: true) }
-            }
-            if teamsEnabled  && UserDefaults.standard.bool(forKey: String(format: eventKey, "teams")) {
-                group.addTask { await self.sendTeams(title: title, message: message, success: true) }
-            }
-            if systemEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "system")) {
-                group.addTask { await self.sendSystemNotification(title: title, message: message, success: true) }
-            }
-        }
+        await dispatch(.vmStarted, vmName: vmName,
+                       title: "▶️ Oven: VM Started",
+                       message: "VM '\(vmName)' started on schedule.",
+                       success: true)
     }
 
     func notifyVMStartFailed(vmName: String, reason: String) async {
         AppLogger.shared.warning("VM start failed (scheduled): \(vmName) — \(reason)", source: "NotificationService")
-
-        let pushEnabled   = UserDefaults.standard.bool(forKey: "pushoverEnabled")
-        let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
-        let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
-        let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
-        await sendWebhooks(eventType: "vmStartFailed", vmName: vmName)
-        guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
-
-        let title   = "⚠️ Oven: VM Start Failed"
-        let message = "VM '\(vmName)' failed to start. \(reason)"
-        let eventKey = "notif.%@.vmStartFailed"
-
-        await withTaskGroup(of: Void.self) { group in
-            if pushEnabled   && UserDefaults.standard.bool(forKey: String(format: eventKey, "pushover")) {
-                group.addTask { await self.sendPushover(title: title, message: message) }
-            }
-            if slackEnabled  && UserDefaults.standard.bool(forKey: String(format: eventKey, "slack")) {
-                group.addTask { await self.sendSlack(title: title, message: message, success: false) }
-            }
-            if teamsEnabled  && UserDefaults.standard.bool(forKey: String(format: eventKey, "teams")) {
-                group.addTask { await self.sendTeams(title: title, message: message, success: false) }
-            }
-            if systemEnabled && UserDefaults.standard.bool(forKey: String(format: eventKey, "system")) {
-                group.addTask { await self.sendSystemNotification(title: title, message: message, success: false) }
-            }
-        }
+        await dispatch(.vmStartFailed, vmName: vmName,
+                       title: "⚠️ Oven: VM Start Failed",
+                       message: "VM '\(vmName)' failed to start. \(reason)",
+                       success: false)
     }
 
-    func notifyBuildStarted(vmName: String) async {
-        let pushEnabled   = UserDefaults.standard.bool(forKey: "pushoverEnabled")
-        let slackEnabled  = UserDefaults.standard.bool(forKey: "slackEnabled")
-        let teamsEnabled  = UserDefaults.standard.bool(forKey: "teamsEnabled")
-        let systemEnabled = UserDefaults.standard.bool(forKey: "systemNotificationsEnabled")
-        await sendWebhooks(eventType: "baseVMBuildStarted", vmName: vmName)
-        guard pushEnabled || slackEnabled || teamsEnabled || systemEnabled else { return }
+    // MARK: - Installer & registry events
 
-        let title   = "🔨 Oven: Build Started"
-        let message = "Building base VM '\(vmName)'…"
+    func notifyIPSWDownloaded(name: String) async {
+        AppLogger.shared.success("IPSW downloaded: \(name)", source: "NotificationService")
+        await dispatch(.ipswDownloaded, vmName: name,
+                       title: "⬇️ Oven: IPSW Downloaded",
+                       message: "'\(name)' finished downloading.",
+                       success: true)
+    }
 
-        await withTaskGroup(of: Void.self) { group in
-            if pushEnabled  { group.addTask { await self.sendPushover(title: title, message: message) } }
-            if slackEnabled { group.addTask { await self.sendSlack(title: title, message: message, success: nil) } }
-            if teamsEnabled { group.addTask { await self.sendTeams(title: title, message: message, success: nil) } }
-            if systemEnabled { group.addTask { await self.sendSystemNotification(title: title, message: message, success: nil) } }
-        }
+    func notifyImagePullCompleted(imageRef: String) async {
+        await dispatch(.imagePullCompleted, vmName: imageRef,
+                       title: "⬇️ Oven: Registry Pull Complete",
+                       message: "Pulled '\(imageRef)' from the registry.",
+                       success: true)
+    }
+
+    func notifyImagePushCompleted(imageRef: String) async {
+        await dispatch(.imagePushCompleted, vmName: imageRef,
+                       title: "⬆️ Oven: Registry Push Complete",
+                       message: "Pushed '\(imageRef)' to the registry.",
+                       success: true)
     }
 
     // MARK: - Pushover
@@ -288,7 +251,7 @@ final class NotificationService {
                 "title": title,
                 "text":  message,
                 "footer": "Oven · macOS VM Manager",
-                "ts":     Int(Date().timeIntervalSince1970),
+                "ts":     Int(Date.now.timeIntervalSince1970),
             ]]
         ]
 
@@ -419,7 +382,7 @@ final class NotificationService {
             return .failure(.notConfigured("Invalid URL"))
         }
 
-        let now = Date()
+        let now = Date.now
         let body = applyWebhookTemplate(webhook.jsonPayload, vmName: vmName, eventType: eventType, timestamp: now, datetimeFormat: webhook.datetimeFormat)
 
         var request = URLRequest(url: url)
@@ -476,10 +439,10 @@ final class NotificationService {
         let eventLabel = NotificationEvent(rawValue: eventType)?.label ?? eventType
         let datetime = formatWebhookDatetime(timestamp, format: datetimeFormat)
         return template
-            .replacingOccurrences(of: "%%VMNAME%%", with: vmName)
-            .replacingOccurrences(of: "%%EVENTTYPE%%", with: eventLabel)
-            .replacingOccurrences(of: "%%TIMESTAMP%%", with: unix)
-            .replacingOccurrences(of: "%%DATETIME%%", with: datetime)
+            .replacing("%%VMNAME%%", with: vmName)
+            .replacing("%%EVENTTYPE%%", with: eventLabel)
+            .replacing("%%TIMESTAMP%%", with: unix)
+            .replacing("%%DATETIME%%", with: datetime)
     }
 
     private func formatWebhookDatetime(_ date: Date, format: String) -> String {
@@ -504,7 +467,7 @@ final class NotificationService {
             ("%p", "a"),    ("%e", "d"),
         ]
         for (from, to) in replacements {
-            result = result.replacingOccurrences(of: from, with: to)
+            result = result.replacing(from, with: to)
         }
         return result
     }
@@ -594,13 +557,8 @@ final class NotificationService {
             return
         }
 
-        let themeColor: String
-        switch success {
-        case true:  themeColor = "36a64f"
-        case false: themeColor = "d32f2f"
-        case nil:   themeColor = "f0a500"
-        }
-
+        // Adaptive Cards carry status via the title TextBlock's `color` below —
+        // there's no top-level theme colour to set as on Slack attachments.
         let payload: [String: Any] = [
             "type": "message",
             "attachments": [[

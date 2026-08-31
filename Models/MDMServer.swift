@@ -91,7 +91,7 @@ struct MDMServer: Identifiable, Codable, Hashable , Sendable {
         guard let pwd = serverPassword else {
             AppLogger.shared.error("No password for server: \(serverURL.absoluteString)", source: "MDMServer")
             return nil }
-        AppLogger.shared.log("[debug] Using username '\(serverUsername)' and password 'REDACTED' for server: \(serverURL.absoluteString)", source: "MDMServer")
+        AppLogger.shared.debug("Using username '\(serverUsername)' and password 'REDACTED' for server: \(serverURL.absoluteString)", source: "MDMServer")
         return JamfService(serverURL: serverURL, username: serverUsername, password: pwd, credentialType: serverAuthType)
     }
 }

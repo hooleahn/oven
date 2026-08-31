@@ -5,9 +5,9 @@ import UserNotifications
 
 /// All notification events the user can subscribe to per-service.
 enum NotificationEvent: String, CaseIterable, Identifiable {
+    case baseVMBuildStarted   = "baseVMBuildStarted"
     case baseVMBuildSucceeded = "baseVMBuildSucceeded"
     case baseVMBuildFailed    = "baseVMBuildFailed"
-    case baseVMBuildStarted   = "baseVMBuildStarted"
     case ipswDownloaded       = "ipswDownloaded"
     case imagePullCompleted   = "imagePullCompleted"
     case imagePushCompleted   = "imagePushCompleted"
@@ -19,9 +19,9 @@ enum NotificationEvent: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
+        case .baseVMBuildStarted:   return "Base VM build started"
         case .baseVMBuildSucceeded: return "Base VM build succeeded"
         case .baseVMBuildFailed:    return "Base VM build failed"
-        case .baseVMBuildStarted:   return "Base VM build started"
         case .ipswDownloaded:       return "IPSW downloaded"
         case .imagePullCompleted:   return "Registry pull completed"
         case .imagePushCompleted:   return "Registry push completed"
@@ -33,9 +33,9 @@ enum NotificationEvent: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
+        case .baseVMBuildStarted:   return "hammer"
         case .baseVMBuildSucceeded: return "checkmark.circle"
         case .baseVMBuildFailed:    return "xmark.circle"
-        case .baseVMBuildStarted:   return "hammer"
         case .ipswDownloaded:       return "arrow.down.circle"
         case .imagePullCompleted:   return "arrow.down.to.line"
         case .imagePushCompleted:   return "arrow.up.to.line"
@@ -78,6 +78,7 @@ struct NotificationPrefsTab: View {
     @State private var webhookSheetMode: WebhookSheetMode? = nil
     @State private var webhookTestResults: [UUID: TestResult] = [:]
     @State private var testingWebhookIDs: Set<UUID> = []
+    @State private var confirmDeleteWebhook: WebhookNotification?
 
     // Live OS authorization state
     @State private var osAuthStatus: UNAuthorizationStatus = .notDetermined
@@ -118,6 +119,24 @@ struct NotificationPrefsTab: View {
             case .edit(let wh):
                 WebhookEditSheet(existing: wh) { updated in addOrUpdateWebhook(updated) }
             }
+        }
+        .confirmationDialog(
+            confirmDeleteWebhook.map { "Delete \"\($0.displayName)\"?" } ?? "Delete webhook?",
+            isPresented: Binding(
+                get: { confirmDeleteWebhook != nil },
+                set: { if !$0 { confirmDeleteWebhook = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let webhook = confirmDeleteWebhook {
+                Button("Delete", role: .destructive) {
+                    deleteWebhook(webhook)
+                    confirmDeleteWebhook = nil
+                }
+                Button("Cancel", role: .cancel) { confirmDeleteWebhook = nil }
+            }
+        } message: {
+            Text("This removes the webhook and its stored URL from Keychain.")
         }
     }
 
@@ -340,7 +359,7 @@ struct NotificationPrefsTab: View {
         .contextMenu {
             Button("Edit…") { webhookSheetMode = .edit(wh) }
             Divider()
-            Button("Delete", role: .destructive) { deleteWebhook(wh) }
+            Button("Delete", role: .destructive) { confirmDeleteWebhook = wh }
         }
     }
 
@@ -451,6 +470,7 @@ struct NotificationPrefsTab: View {
     private var systemEventBindings: [(NotificationEvent, Binding<Bool>)] {
         @Bindable var theme = theme
         return [
+            (.baseVMBuildStarted,   $theme.systemNotifBaseVMBuildStarted),
             (.baseVMBuildSucceeded, $theme.systemNotifBaseVMBuildSucceeded),
             (.baseVMBuildFailed,    $theme.systemNotifBaseVMBuildFailed),
             (.ipswDownloaded,       $theme.systemNotifIPSWDownloaded),
@@ -465,6 +485,7 @@ struct NotificationPrefsTab: View {
     private var pushoverEventBindings: [(NotificationEvent, Binding<Bool>)] {
         @Bindable var theme = theme
         return [
+            (.baseVMBuildStarted,   $theme.pushoverNotifBaseVMBuildStarted),
             (.baseVMBuildSucceeded, $theme.pushoverNotifBaseVMBuildSucceeded),
             (.baseVMBuildFailed,    $theme.pushoverNotifBaseVMBuildFailed),
             (.ipswDownloaded,       $theme.pushoverNotifIPSWDownloaded),
@@ -479,6 +500,7 @@ struct NotificationPrefsTab: View {
     private var slackEventBindings: [(NotificationEvent, Binding<Bool>)] {
         @Bindable var theme = theme
         return [
+            (.baseVMBuildStarted,   $theme.slackNotifBaseVMBuildStarted),
             (.baseVMBuildSucceeded, $theme.slackNotifBaseVMBuildSucceeded),
             (.baseVMBuildFailed,    $theme.slackNotifBaseVMBuildFailed),
             (.ipswDownloaded,       $theme.slackNotifIPSWDownloaded),
@@ -493,6 +515,7 @@ struct NotificationPrefsTab: View {
     private var teamsEventBindings: [(NotificationEvent, Binding<Bool>)] {
         @Bindable var theme = theme
         return [
+            (.baseVMBuildStarted,   $theme.teamsNotifBaseVMBuildStarted),
             (.baseVMBuildSucceeded, $theme.teamsNotifBaseVMBuildSucceeded),
             (.baseVMBuildFailed,    $theme.teamsNotifBaseVMBuildFailed),
             (.ipswDownloaded,       $theme.teamsNotifIPSWDownloaded),

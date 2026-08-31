@@ -60,6 +60,9 @@ struct GeneralPrefsTab: View {
                             try SMAppService.mainApp.unregister()
                         }
                     } catch {
+                        AppLogger.shared.error(
+                            "Failed to \(newValue ? "enable" : "disable") Launch at Login: \(error.localizedDescription)",
+                            source: "GeneralPrefsTab")
                         launchAtLogin = !newValue
                     }
                 }

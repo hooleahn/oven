@@ -148,7 +148,11 @@ actor RegistryService {
     // MARK: - List remote tags (GHCR)
 
     func listGHCRTags(owner: String, package: String, token: String?) async throws -> [String] {
-        let url = URL(string: "https://api.github.com/users/\(owner)/packages/container/\(package)/versions")!
+        let encodedOwner = owner.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? owner
+        let encodedPackage = package.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? package
+        guard let url = URL(string: "https://api.github.com/users/\(encodedOwner)/packages/container/\(encodedPackage)/versions") else {
+            throw URLError(.badURL)
+        }
         var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }

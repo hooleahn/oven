@@ -175,7 +175,11 @@ struct SetupView: View {
             storageRoot = url
             var settings = AppSettings.load()
             settings.depsRoot = url.appendingPathComponent("deps", isDirectory: true)
-            try? settings.save()
+            do {
+                try settings.save()
+            } catch {
+                AppLogger.shared.error("Failed to save storage location: \(error.localizedDescription)", source: "SetupView")
+            }
         }
     }
 }
@@ -256,6 +260,8 @@ private struct DependencyRow: View {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
+                .help("More actions")
+                .accessibilityLabel("More actions for \(dep.displayName)")
             }
             .padding(.vertical, 10)
             .padding(.horizontal, 16)

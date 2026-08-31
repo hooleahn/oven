@@ -79,12 +79,12 @@ actor IPSWService {
         // 1. In-memory cache (fastest)
         if let cached = cachedFirmwares,
            let date = lastFetchDate,
-           Date().timeIntervalSince(date) < IPSWService.cacheTTL {
+           Date.now.timeIntervalSince(date) < IPSWService.cacheTTL {
             return cached
         }
         // 2. Disk cache — survives app restarts
         if let (diskFirmwares, diskDate) = loadDiskCache(),
-           Date().timeIntervalSince(diskDate) < IPSWService.cacheTTL {
+           Date.now.timeIntervalSince(diskDate) < IPSWService.cacheTTL {
             cachedFirmwares = diskFirmwares
             lastFetchDate = diskDate
             return diskFirmwares
@@ -120,7 +120,7 @@ actor IPSWService {
             }
 
         cachedFirmwares = firmwares
-        lastFetchDate = Date()
+        lastFetchDate = Date.now
         saveDiskCache(firmwares)
         return firmwares
     }
@@ -134,16 +134,16 @@ actor IPSWService {
 
     /// Returns true if cached data is still fresh (< 24h old).
     var isCacheFresh: Bool {
-        if let date = lastFetchDate, Date().timeIntervalSince(date) < IPSWService.cacheTTL { return true }
+        if let date = lastFetchDate, Date.now.timeIntervalSince(date) < IPSWService.cacheTTL { return true }
         if let (_, diskDate) = loadDiskCache(),
-           Date().timeIntervalSince(diskDate) < IPSWService.cacheTTL { return true }
+           Date.now.timeIntervalSince(diskDate) < IPSWService.cacheTTL { return true }
         return false
     }
 
     // MARK: - Disk persistence
 
     private func saveDiskCache(_ firmwares: [IPSWFirmware]) {
-        let payload = CachePayload(date: Date(), firmwares: firmwares)
+        let payload = CachePayload(date: Date.now, firmwares: firmwares)
         if let data = try? JSONEncoder().encode(payload) {
             try? FileManager.default.createDirectory(
                 at: AppSettings.defaultLocalStorageRoot, withIntermediateDirectories: true)
@@ -170,7 +170,7 @@ actor IPSWService {
                   to directory: URL) -> AsyncStream<IPSWDownloadEvent> {
         AsyncStream { continuation in
             let dest = directory.appendingPathComponent(firmware.suggestedFilename)
-            print("Downloading \(firmware.url) to \(dest.path)")
+            Task { await AppLogger.shared.debug("Downloading \(firmware.url) to \(dest.path)", source: "IPSWService") }
             // Already on disk — return immediately
             if FileManager.default.fileExists(atPath: dest.path) {
                 continuation.yield(.progress(1.0, firmware.filesize, firmware.filesize))
@@ -245,24 +245,23 @@ private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, @unc
         let dest = destination
         do {
             if FileManager.default.fileExists(atPath: dest.path) {
-                print("Removing previous IPSW: \(dest.path)")
+                Task { await AppLogger.shared.debug("Removing previous IPSW: \(dest.path)", source: "IPSWService") }
                 try FileManager.default.removeItem(at: dest)
             }
             try FileManager.default.moveItem(at: location, to: dest)
-            print("Downloaded IPSW: \(dest.path)")
+            Task { await AppLogger.shared.success("Downloaded IPSW: \(dest.path)", source: "IPSWService") }
             continuation.yield(.completed(dest))
         } catch {
-            print("Failed to move downloaded IPSW: \(error)")
+            Task { await AppLogger.shared.error("Failed to move downloaded IPSW: \(error.localizedDescription)", source: "IPSWService") }
             continuation.yield(.failed(error))
         }
-        print("Downloaded IPSW: \(dest.path)")
         continuation.finish()
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask,
                     didCompleteWithError error: Error?) {
         if let error {
-            print("Download failed: \(error)")
+            Task { await AppLogger.shared.error("Download failed: \(error.localizedDescription)", source: "IPSWService") }
             continuation.yield(.failed(error))
             continuation.finish()
         }

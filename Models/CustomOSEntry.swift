@@ -8,7 +8,7 @@ struct CustomOSEntry: Identifiable, Codable, Hashable, Sendable {
     var majorVersion: Int      // e.g. 27
     var addedAt: Date
 
-    init(id: UUID = UUID(), releaseName: String, majorVersion: Int, addedAt: Date = Date()) {
+    init(id: UUID = UUID(), releaseName: String, majorVersion: Int, addedAt: Date = Date.now) {
         self.id = id
         self.releaseName = releaseName
         self.majorVersion = majorVersion

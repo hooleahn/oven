@@ -77,7 +77,7 @@ struct RecipesView: View {
             Button { model.isPresentingNewSheet = true } label: {
                 Label("New…", systemImage: "plus")
             }
-            .keyboardShortcut("n", modifiers: .command)
+            // ⌘N is bound centrally in NewItemCommands (OvenApp.swift).
             .help("New template or building block (⌘N)")
         }
 
@@ -104,8 +104,13 @@ struct RecipesView: View {
                     refreshRotation = 360
                 }
                 templateStore.load()
-                isRefreshing = false
-                refreshRotation = 0
+                // Keep the spin visible for a beat — resetting in the same run-loop
+                // tick as starting it means the animation never gets a frame to render.
+                Task {
+                    try? await Task.sleep(for: .milliseconds(400))
+                    isRefreshing = false
+                    refreshRotation = 0
+                }
             } label: {
                 Image(systemName: "arrow.clockwise")
                     .rotationEffect(.degrees(isRefreshing ? refreshRotation : 0))
@@ -237,6 +242,10 @@ struct RecipesView: View {
                                     .tag(tmpl.id)
                                     .contextMenu {
                                         Button("Duplicate") { _ = templateStore.duplicate(id: tmpl.id) }
+                                        Button("Rename…") {
+                                            model.renameText = tmpl.filename
+                                            model.renamingTemplateID = tmpl.id
+                                        }
                                         Divider()
                                         Button("Copy to Clipboard") {
                                             if let content = try? String(contentsOf: tmpl.url, encoding: .utf8) {
@@ -298,6 +307,10 @@ struct RecipesView: View {
                                 .tag(tmpl.id)
                                 .contextMenu {
                                     Button("Duplicate") { _ = templateStore.duplicate(id: tmpl.id) }
+                                    Button("Rename…") {
+                                        model.renameText = tmpl.filename
+                                        model.renamingTemplateID = tmpl.id
+                                    }
                                     Divider()
                                     Button("Copy to Clipboard") {
                                         if let content = try? String(contentsOf: tmpl.url, encoding: .utf8) {
@@ -437,18 +450,7 @@ struct RecipesView: View {
             if tmpl.kind == .fullTemplate {
                 TemplateDetailPane(
                     template: tmpl,
-                    editedContent: bindableModel.editedContent,
-                    editedDisplayName: bindableModel.editedDisplayName,
-                    editedDescription: bindableModel.editedDescription,
-                    editedOSName: bindableModel.editedOSName,
-                    editedOSVersion: bindableModel.editedOSVersion,
-                    isDirty: bindableModel.isDirty,
-                    isMetadataDirty: bindableModel.isMetadataDirty,
-                    isSaving: bindableModel.isSaving,
-                    saveError: bindableModel.saveError,
-                    isValidating: bindableModel.isValidating,
-                    validationResult: bindableModel.validationResult,
-                    isLoadingContent: bindableModel.isLoadingContent,
+                    model: model,
                     onSave: { model.save(in: templateStore) },
                     onRevert: { model.revert(from: templateStore) },
                     onValidate: {

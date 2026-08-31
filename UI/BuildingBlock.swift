@@ -46,7 +46,7 @@ struct BuildingBlock: Identifiable, Codable, Hashable, Sendable {
 
     init(id: UUID = UUID(), displayName: String, blockDescription: String,
          provisioner: ProvisionerType, hclContent: String,
-         isBase: Bool = false, createdAt: Date = Date(),
+         isBase: Bool = false, createdAt: Date = Date.now,
          osName: String = "", osVersion: String = "") {
         self.id = id
         self.displayName = displayName
@@ -81,7 +81,7 @@ struct BootCommandBlock: Identifiable, Codable, Hashable, Sendable {
     var osVersion: String
 
     init(id: UUID = UUID(), displayName: String, blockDescription: String,
-         commandLines: [String], isBase: Bool = false, createdAt: Date = Date(),
+         commandLines: [String], isBase: Bool = false, createdAt: Date = Date.now,
          osName: String = "", osVersion: String = "") {
         self.id = id
         self.displayName = displayName

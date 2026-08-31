@@ -181,7 +181,7 @@ final class AppDatabase {
             osVersion: osVersion,
             durationSec: durationSec,
             success: success,
-            recordedAt: Date()
+            recordedAt: Date.now
         )
         var history: [BuildHistoryEntry] = readOrDefault(.buildHistory, default: [])
         history.append(entry)

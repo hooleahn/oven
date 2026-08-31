@@ -79,8 +79,6 @@ struct PushToRegistrySheet: View {
 
     private func loadCredentials() {
         let loaded = AppDatabase.shared.readOrDefault(.registryCredentials, default: [RegistryCredential]())
-        guard !loaded.isEmpty || true
-        else { return }
         credentials = loaded
         selectedCredential = loaded.first
         imageName = vmName

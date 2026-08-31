@@ -10,19 +10,6 @@ struct EmptyStateBaseVMs: View {
 
     @State private var showHelp = false
 
-    // Preset configurations — each opens NewBaseVMSheet with a suggested profile
-    private struct Preset: Identifiable {
-        let id = UUID()
-        let label: String
-        let description: String
-    }
-
-    private let presets: [Preset] = [
-        Preset(label: "Minimal", description: "Bare macOS with SSH"),
-        Preset(label: "Xcode Agent", description: "Xcode + CLI tools"),
-        Preset(label: "QA", description: "Safari + testing tools"),
-    ]
-
     var body: some View {
         EmptyStateView(
             theme.funModeEnabled ? "No Recipes Yet" : "No Base VMs",
@@ -49,34 +36,6 @@ struct EmptyStateBaseVMs: View {
             }
         } content: {
             VStack(spacing: 10) {
-                // Recent presets section
-                VStack(spacing: 6) {
-                    Text("Quick presets")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-
-                    HStack(spacing: 8) {
-                        ForEach(presets) { preset in
-                            Button {
-                                onBuildFromIPSW()
-                            } label: {
-                                VStack(spacing: 2) {
-                                    Text(preset.label)
-                                        .font(.caption)
-                                        .fontWeight(.medium)
-                                    Text(preset.description)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                        }
-                    }
-                }
-
                 // Help link
                 Button {
                     showHelp = true

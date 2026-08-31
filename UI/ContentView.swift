@@ -1,4 +1,38 @@
 import SwiftUI
+import AppKit
+
+// MARK: - Titlebar separator fix
+//
+// ContentView switches between two structurally different NavigationSplitView
+// instances (2-column vs 3-column, depending on the sidebar destination) via
+// if/else. SwiftUI's automatic titlebar/toolbar separator (shown only once
+// content has scrolled away from the top) tracks scroll state per split-view
+// instance, and can end up stuck "hidden" after the old instance is torn down
+// and a new one built in its place — leaving the toolbar's bottom divider
+// missing, so the column divider below visually cuts straight through the
+// toolbar buttons. Forcing `.line` sidesteps the automatic (and here,
+// unreliable) scroll-tracking behavior entirely.
+private final class SeparatorStyleView: NSView {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.titlebarSeparatorStyle = .line
+    }
+}
+
+private struct ForceTitlebarSeparator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { SeparatorStyleView(frame: .zero) }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        nsView.window?.titlebarSeparatorStyle = .line
+    }
+}
+
+extension View {
+    /// Always shows the window's titlebar/toolbar separator line instead of
+    /// leaving it to SwiftUI's automatic (scroll-position-based) behavior.
+    func forceTitlebarSeparator() -> some View {
+        background(ForceTitlebarSeparator().frame(width: 0, height: 0))
+    }
+}
 
 // MARK: - Sidebar destination
 
@@ -71,6 +105,27 @@ enum SidebarItem: String, Hashable, CaseIterable {
     }
 }
 
+// MARK: - File > New command wiring
+
+/// Describes the contextual "New" action for whichever sidebar section is selected.
+/// `NewItemCommands` (see OvenApp.swift) reads this via `@FocusedValue` to drive the
+/// File > New menu item without hard-coding per-section knowledge into the app scene.
+struct NewItemCommand {
+    let label: String
+    let action: () -> Void
+}
+
+private struct NewItemCommandKey: FocusedValueKey {
+    typealias Value = NewItemCommand
+}
+
+extension FocusedValues {
+    var newItemCommand: NewItemCommand? {
+        get { self[NewItemCommandKey.self] }
+        set { self[NewItemCommandKey.self] = newValue }
+    }
+}
+
 // MARK: - ContentView
 
 struct ContentView: View {
@@ -81,6 +136,7 @@ struct ContentView: View {
     @Environment(MDMServerStore.self) private var serverStore
     @Environment(PackerTemplateStore.self) private var templateStore
     @Environment(BuildingBlockStore.self) private var blockStore
+    @Environment(RecipesViewModel.self) private var recipesViewModel
 
     // SceneStorage persists the selected tab across relaunches within the same scene.
     @SceneStorage("oven.selectedTab") private var storedSelection: String = SidebarItem.virtualMachines.rawValue
@@ -101,88 +157,108 @@ struct ContentView: View {
         )
     }
 
+    /// The contextual File > New action for the given sidebar section, or nil where
+    /// there's nothing to create (Installers, Registry, Activity Log).
+    private func newItemCommand(for item: SidebarItem?) -> NewItemCommand? {
+        switch item {
+        case .virtualMachines:
+            return NewItemCommand(label: theme.newVM) { appState.isPresentingNewVM = true }
+        case .baseVMs:
+            return NewItemCommand(label: theme.newBaseVM) { baseVMModel.isPresentingNewSheet = true }
+        case .recipes:
+            return NewItemCommand(label: "New Template or Building Block…") { recipesViewModel.isPresentingNewSheet = true }
+        case .mdmServers:
+            return NewItemCommand(label: "Add Server") { mdmServersModel.isPresentingNewSheet = true }
+        case .mdmEnrollment:
+            return NewItemCommand(label: "New Profile") { mdmEnrollmentModel.isPresentingNewSheet = true }
+        case .installers, .registry, .activityLog, .none:
+            return nil
+        }
+    }
+
     var body: some View {
         let currentItem = SidebarItem(rawValue: storedSelection)
 
-        if currentItem?.hasDetailPane == true {
-            // ── 3-column layout: Sidebar | Content list | Detail pane ────────
-            NavigationSplitView(columnVisibility: $columnVisibility) {
-                SidebarView(selection: selection)
-                    .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 250)
-            } content: {
+        Group {
+            if currentItem?.hasDetailPane == true {
+                threeColumnLayout
+            } else {
+                twoColumnLayout
+            }
+        }
+        .forceTitlebarSeparator()
+        .focusedSceneValue(\.newItemCommand, newItemCommand(for: currentItem))
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToLog)) { _ in
+            storedSelection = SidebarItem.activityLog.rawValue
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuBarFocusVM)) { _ in
+            storedSelection = SidebarItem.virtualMachines.rawValue
+        }
+        .onChange(of: storedSelection) { _, raw in
+            appState.selectedVMID     = nil
+            appState.selectedBaseVMID = nil
+            guard let item = SidebarItem(rawValue: raw) else { return }
+            switch item {
+            case .installers:    appState.windowTitle = "macOS Installers"; appState.windowSubtitle = ""
+            case .mdmEnrollment: appState.windowTitle = "MDM Enrollment";   appState.windowSubtitle = ""
+            case .mdmServers:    appState.windowTitle = "MDM Servers";      appState.windowSubtitle = ""
+            default: break
+            }
+        }
+    }
+
+    // ── 3-column layout: Sidebar | Content list | Detail pane ────────────────
+    private var threeColumnLayout: some View {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            SidebarView(selection: selection)
+                .navigationSplitViewColumnWidth(min: 170, ideal: 200, max: 250)
+        } content: {
+            // No max — this is the column that should absorb extra width on a wide
+            // or maximized window (more cards/rows visible). Capping it at a fixed
+            // max previously left large stretches of the window empty once it grew
+            // past sidebar + content-max + detail-max.
+            ContentRouter(selection: selection.wrappedValue,
+                          vmListModel: vmListModel,
+                          baseVMModel: baseVMModel,
+                          mdmServersModel: mdmServersModel,
+                          mdmEnrollmentModel: mdmEnrollmentModel)
+                .navigationSplitViewColumnWidth(min: 180, ideal: 930)
+        } detail: {
+            ZStack(alignment: .top) {
+                DetailColumn(selection: selection.wrappedValue,
+                             vmListModel: vmListModel,
+                             baseVMModel: baseVMModel,
+                             mdmServersModel: mdmServersModel,
+                             mdmEnrollmentModel: mdmEnrollmentModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if !toastsDisabled {
+                    ToastStackView()
+                }
+            }
+            // Capped — this is an inspector-style config pane, not a place that
+            // should stretch to fill an ultrawide window.
+            .navigationSplitViewColumnWidth(min: 240, ideal: 320, max: 420)
+            .navigationTitle(appState.windowTitle)
+            .navigationSubtitle(appState.windowSubtitle)
+        }
+        .navigationSplitViewStyle(.balanced)
+    }
+
+    // ── 2-column layout: Sidebar | Full-width content ────────────────────────
+    private var twoColumnLayout: some View {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            SidebarView(selection: selection)
+                .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 250)
+        } detail: {
+            ZStack(alignment: .top) {
                 ContentRouter(selection: selection.wrappedValue,
                               vmListModel: vmListModel,
                               baseVMModel: baseVMModel,
                               mdmServersModel: mdmServersModel,
                               mdmEnrollmentModel: mdmEnrollmentModel)
-                    .navigationSplitViewColumnWidth(min: 180, ideal: 930, max: 1000)
-            } detail: {
-                ZStack(alignment: .top) {
-                    DetailColumn(selection: selection.wrappedValue,
-                                 vmListModel: vmListModel,
-                                 baseVMModel: baseVMModel,
-                                 mdmServersModel: mdmServersModel,
-                                 mdmEnrollmentModel: mdmEnrollmentModel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    if !toastsDisabled {
-                        ToastStackView()
-                    }
-                }
-                .navigationSplitViewColumnWidth(min: 240, ideal: 320)
-                .navigationTitle(appState.windowTitle)
-                .navigationSubtitle(appState.windowSubtitle)
-            }
-            .navigationSplitViewStyle(.balanced)
-            .onReceive(NotificationCenter.default.publisher(for: .navigateToLog)) { _ in
-                storedSelection = SidebarItem.activityLog.rawValue
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .menuBarFocusVM)) { _ in
-                storedSelection = SidebarItem.virtualMachines.rawValue
-            }
-            .onChange(of: storedSelection) { _, raw in
-                appState.selectedVMID     = nil
-                appState.selectedBaseVMID = nil
-                guard let item = SidebarItem(rawValue: raw) else { return }
-                switch item {
-                case .installers:    appState.windowTitle = "macOS Installers"; appState.windowSubtitle = ""
-                case .mdmEnrollment: appState.windowTitle = "MDM Enrollment";   appState.windowSubtitle = ""
-                case .mdmServers:    appState.windowTitle = "MDM Servers";      appState.windowSubtitle = ""
-                default: break
-                }
-            }
-        } else {
-            // ── 2-column layout: Sidebar | Full-width content ────────────────
-            NavigationSplitView(columnVisibility: $columnVisibility) {
-                SidebarView(selection: selection)
-                    .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 250)
-            } detail: {
-                ZStack(alignment: .top) {
-                    ContentRouter(selection: selection.wrappedValue,
-                                  vmListModel: vmListModel,
-                                  baseVMModel: baseVMModel,
-                                  mdmServersModel: mdmServersModel,
-                                  mdmEnrollmentModel: mdmEnrollmentModel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    if !toastsDisabled {
-                        ToastStackView()
-                    }
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .navigateToLog)) { _ in
-                storedSelection = SidebarItem.activityLog.rawValue
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .menuBarFocusVM)) { _ in
-                storedSelection = SidebarItem.virtualMachines.rawValue
-            }
-            .onChange(of: storedSelection) { _, raw in
-                appState.selectedVMID     = nil
-                appState.selectedBaseVMID = nil
-                guard let item = SidebarItem(rawValue: raw) else { return }
-                switch item {
-                case .installers:    appState.windowTitle = "macOS Installers"; appState.windowSubtitle = ""
-                case .mdmEnrollment: appState.windowTitle = "MDM Enrollment";   appState.windowSubtitle = ""
-                case .mdmServers:    appState.windowTitle = "MDM Servers";      appState.windowSubtitle = ""
-                default: break
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if !toastsDisabled {
+                    ToastStackView()
                 }
             }
         }
@@ -227,23 +303,18 @@ private struct DetailColumn: View {
         .sheet(isPresented: $mdmServersModel.isPresentingNewSheet) {
             MDMServerSheet(server: nil) { serverStore.add($0) }
         }
-        .sheet(isPresented: Binding(
-            get: { mdmServersModel.editingServer != nil },
-            set: { if !$0 { mdmServersModel.editingServer = nil } }
-        )) {
-            if let toEdit = mdmServersModel.editingServer {
-                MDMServerSheet(server: toEdit) { updated in
-                    serverStore.update(id: toEdit.id) { s in
-                        s.friendlyName   = updated.friendlyName
-                        s.serverURL      = updated.serverURL
-                        s.serverAuthType = updated.serverAuthType
-                        s.serverUsername = updated.serverUsername
-                        s.featureCheckEnrollment       = updated.featureCheckEnrollment
-                        s.featureDeleteFromJamf        = updated.featureDeleteFromJamf
-                        s.featureCheckInvitationStatus = updated.featureCheckInvitationStatus
-                    }
-                    mdmServersModel.editingServer = nil
+        .sheet(item: $mdmServersModel.editingServer) { toEdit in
+            MDMServerSheet(server: toEdit) { updated in
+                serverStore.update(id: toEdit.id) { s in
+                    s.friendlyName   = updated.friendlyName
+                    s.serverURL      = updated.serverURL
+                    s.serverAuthType = updated.serverAuthType
+                    s.serverUsername = updated.serverUsername
+                    s.featureCheckEnrollment       = updated.featureCheckEnrollment
+                    s.featureDeleteFromJamf        = updated.featureDeleteFromJamf
+                    s.featureCheckInvitationStatus = updated.featureCheckInvitationStatus
                 }
+                mdmServersModel.editingServer = nil
             }
         }
         .confirmationDialog(

@@ -15,7 +15,7 @@ struct BaseVMView: View {
     @State private var refreshRotation: Double = 0
 
     private func coarseAge(of date: Date) -> String {
-        let s = Int(Date().timeIntervalSince(date))
+        let s = Int(Date.now.timeIntervalSince(date))
         if s < 120     { return "just now" }
         if s < 3600    { return "\(s / 60) min ago" }
         if s < 86_400  { return "\(s / 3600) hr ago" }
@@ -78,7 +78,7 @@ struct BaseVMView: View {
                 Button { model.isPresentingNewSheet = true } label: {
                     Label(theme.newBaseVM, systemImage: "plus")
                 }
-                .keyboardShortcut("n", modifiers: .command)
+                // ⌘N is bound centrally in NewItemCommands (OvenApp.swift).
                 .help("\(theme.newBaseVM) (⌘N)")
             }
 
@@ -100,25 +100,28 @@ struct BaseVMView: View {
                     Button("Cancel") { baseVMStore.cancelBuild() }
                 }
 
-                // Clone selected Base VM as a Working VM (⌘D)
-                if let selected = model.selectedBaseVM(from: baseVMStore.baseVMs),
-                   selected.buildStatus == .ready {
-                    Button { model.createVMFromBase = selected } label: {
-                        Label("Clone as Working VM", systemImage: "doc.on.doc")
-                    }
-                    .keyboardShortcut("d", modifiers: .command)
-                    .help("Create a working VM from this base VM (⌘D)")
+                // Clone selected Base VM as a Working VM (⌘D) — always present,
+                // just disabled with nothing selected, so the toolbar doesn't
+                // reflow (add/remove buttons) when the selection changes.
+                let selected = model.selectedBaseVM(from: baseVMStore.baseVMs)
+                Button {
+                    if let selected { model.createVMFromBase = selected }
+                } label: {
+                    Label("Clone as Working VM", systemImage: "doc.on.doc")
                 }
+                .keyboardShortcut("d", modifiers: .command)
+                .help("Create a working VM from this base VM (⌘D)")
+                .disabled(selected?.buildStatus != .ready)
 
                 // Delete selected (⌘⌫)
-                if let selected = model.selectedBaseVM(from: baseVMStore.baseVMs) {
-                    Button(role: .destructive) { model.confirmDelete = selected } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                    .keyboardShortcut(.delete, modifiers: .command)
-                    .help("Delete selected base VM (⌘⌫)")
-                    .disabled(selected.status == .building)
+                Button(role: .destructive) {
+                    if let selected { model.confirmDelete = selected }
+                } label: {
+                    Label("Delete", systemImage: "trash")
                 }
+                .keyboardShortcut(.delete, modifiers: .command)
+                .help("Delete selected base VM (⌘⌫)")
+                .disabled(selected == nil || selected?.status == .building)
             }
 
             // 4. Flexible space
@@ -147,18 +150,23 @@ struct BaseVMView: View {
                     }
                     Task {
                         await baseVMStore.syncOCI()
-                        lastRefreshedAt = Date()
+                        lastRefreshedAt = Date.now
                         isRefreshing = false
                         refreshRotation = 0
                     }
                 } label: {
-                    Label("Refresh Base VMs", systemImage: "arrow.clockwise")
+                    Label {
+                        Text("Refresh Base VMs")
+                    } icon: {
+                        Image(systemName: "arrow.clockwise")
+                            .rotationEffect(.degrees(isRefreshing ? refreshRotation : 0))
+                    }
                 }
                 .keyboardShortcut("r", modifiers: .command)
                 .help("Refresh base VM list (⌘R)")
             }
         }
-        .task { await baseVMStore.syncOCI(); lastRefreshedAt = Date() }
+        .task { await baseVMStore.syncOCI(); lastRefreshedAt = Date.now }
         .overlay {
             if buildSession.isLocked {
                 InputLockedOverlay()
@@ -209,26 +217,16 @@ struct BaseVMView: View {
                 .environment(vmStore)
                 .environment(templateStore)
         }
-        .sheet(isPresented: Binding(
-            get: { model.pushToRegistryBaseVM != nil },
-            set: { if !$0 { model.pushToRegistryBaseVM = nil } }
-        )) {
-            if let vm = model.pushToRegistryBaseVM {
-                PushToRegistrySheet(vmName: vm.name) { imageRef, credentials in
-                    model.pushToRegistryBaseVM = nil
-                    let tartPath = AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps/tart").path
-                    Task { await pushManager.push(baseVM: vm, to: imageRef,
-                                                  credentials: credentials, tartPath: tartPath) }
-                }
+        .sheet(item: $model.pushToRegistryBaseVM) { vm in
+            PushToRegistrySheet(vmName: vm.name) { imageRef, credentials in
+                model.pushToRegistryBaseVM = nil
+                let tartPath = AppSettings.defaultLocalStorageRoot.appendingPathComponent("deps/tart").path
+                Task { await pushManager.push(baseVM: vm, to: imageRef,
+                                              credentials: credentials, tartPath: tartPath) }
             }
         }
-        .sheet(isPresented: Binding(
-            get: { model.showBuildLogForBaseVM != nil },
-            set: { if !$0 { model.showBuildLogForBaseVM = nil } }
-        )) {
-            if let vm = model.showBuildLogForBaseVM {
-                BuildLogWindow(baseVM: vm)
-            }
+        .sheet(item: $model.showBuildLogForBaseVM) { vm in
+            BuildLogWindow(baseVM: vm)
         }
     }
 

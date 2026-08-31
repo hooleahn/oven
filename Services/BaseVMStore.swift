@@ -37,7 +37,8 @@ final class BaseVMStore {
     /// Safe to call on every view appear — skips already-known VMs.
     func syncOCI() async {
         // 1. OCI-sourced VMs (tart list --source OCI), deduplicated
-        if let ociVMs = try? await tartService.listOCI() {
+        do {
+            let ociVMs = try await tartService.listOCI()
             var seen = Set<String>()
             let deduped = ociVMs.filter { info in
                 if info.name.contains("@sha256:"),
@@ -57,24 +58,29 @@ final class BaseVMStore {
                 vm.osName = inferOSName(from: info.name)
                 vm.vmSource = VirtualMachine.VMSource.registry
                 vm.buildStatus = VirtualMachine.BuildStatus.ready
-                vm.builtAt = Date()
+                vm.builtAt = Date.now
                 vm.sshUsername = "admin"
                 add(vm)
             }
+        } catch {
+            AppLogger.shared.error("Failed to sync OCI base VMs from tart: \(error.localizedDescription)", source: "BaseVMStore")
         }
 
         // 2. Locally-built base-* VMs (tart list --source local, filtered to base-*)
-        if let localVMs = try? await tartService.listLocal() {
+        do {
+            let localVMs = try await tartService.listLocal()
             for info in localVMs where info.name.hasPrefix("base-") {
                 guard !baseVMs.contains(where: { $0.name == info.name }) else { continue }
                 var vm = VirtualMachine(name: info.name, isBaseVM: true)
                 vm.osName = inferOSName(from: info.name)
                 vm.vmSource = VirtualMachine.VMSource.local
                 vm.buildStatus = VirtualMachine.BuildStatus.ready
-                vm.builtAt = Date()
+                vm.builtAt = Date.now
                 vm.sshUsername = "baker"
                 add(vm)
             }
+        } catch {
+            AppLogger.shared.error("Failed to sync local base VMs from tart: \(error.localizedDescription)", source: "BaseVMStore")
         }
 
         vmStore?.saveToDisk()
@@ -98,7 +104,14 @@ final class BaseVMStore {
     func delete(id: UUID) async {
         guard let vm = baseVMs.first(where: { $0.id == id }) else { return }
         if vm.buildStatus == .ready || vm.buildStatus == .error {
-            try? await tartService.delete(name: vm.name)
+            do {
+                try await tartService.delete(name: vm.name)
+            } catch {
+                AppLogger.shared.error(
+                    "Failed to delete base VM '\(vm.name)': \(error.localizedDescription)",
+                    source: "BaseVMStore")
+                return
+            }
         }
         KeychainService.delete(key: vm.keychainKey)
         vmStore?.vms.removeAll { $0.id == id }
@@ -286,7 +299,6 @@ final class BaseVMStore {
                     $0.packerVarsName = resolvedVarsName
                 }
 
-                let debug = UserDefaults.standard.bool(forKey: "debugModeEnabled")
                 AppLogger.shared.log("Starting build: \(baseVM.name)", source: "BaseVMStore")
                 await NotificationService.shared.notifyBuildStarted(vmName: baseVM.name)
                 update(id: baseVM.id) { $0.buildLog.append("==> IPSW: \(ipswPath)") }
@@ -295,15 +307,13 @@ final class BaseVMStore {
                 update(id: baseVM.id) { $0.buildLog.append("==> OS: macOS \(baseVM.osName.rawValue) \(baseVM.osVersion)") }
                 update(id: baseVM.id) { $0.buildLog.append("==> Hardware: \(baseVM.cpuCount) CPU · \(baseVM.memoryGB) GB RAM · \(baseVM.diskGB) GB disk") }
                 update(id: baseVM.id) { $0.buildLog.append("==> Username: \(baseVM.sshUsername)") }
-                if debug {
-                    AppLogger.shared.log("[debug] IPSW storage root: \(URL(fileURLWithPath: ipswPath).deletingLastPathComponent().path)", source: "BaseVMStore")
-                    AppLogger.shared.log("[debug] IPSW path: \(ipswPath)", source: "BaseVMStore")
-                    AppLogger.shared.log("[debug] Template: \(templateName)", source: "BaseVMStore")
-                    AppLogger.shared.log("[debug] Vars: \(resolvedVarsName)", source: "BaseVMStore")
-                    AppLogger.shared.log("[debug] Templates root: \(AppSettings.load().packerTemplatesRoot.path)", source: "BaseVMStore")
-                    AppLogger.shared.log("[debug] Install Rosetta: \(baseVM.installRosetta), Homebrew: \(baseVM.installHomebrew), SSH: \(baseVM.enableSSHDaemon)", source: "BaseVMStore")
-                    AppLogger.shared.log("[debug] MDM profile ID: \(baseVM.mdmProfileID?.uuidString ?? "none")", source: "BaseVMStore")
-                }
+                AppLogger.shared.debug("IPSW storage root: \(URL(fileURLWithPath: ipswPath).deletingLastPathComponent().path)", source: "BaseVMStore")
+                AppLogger.shared.debug("IPSW path: \(ipswPath)", source: "BaseVMStore")
+                AppLogger.shared.debug("Template: \(templateName)", source: "BaseVMStore")
+                AppLogger.shared.debug("Vars: \(resolvedVarsName)", source: "BaseVMStore")
+                AppLogger.shared.debug("Templates root: \(AppSettings.load().packerTemplatesRoot.path)", source: "BaseVMStore")
+                AppLogger.shared.debug("Install Rosetta: \(baseVM.installRosetta), Homebrew: \(baseVM.installHomebrew), SSH: \(baseVM.enableSSHDaemon)", source: "BaseVMStore")
+                AppLogger.shared.debug("MDM profile ID: \(baseVM.mdmProfileID?.uuidString ?? "none")", source: "BaseVMStore")
 
                 // packer init + build (combined stream)
                 // ── Template validation ─────────────────────────────────
@@ -358,7 +368,7 @@ final class BaseVMStore {
                 if buildResult.succeeded {
                     BuildMonitor.shared.recordCompletion(
                         osName: baseVM.osName.rawValue, osVersion: baseVM.osVersion, success: true)
-                    update(id: baseVM.id) { $0.buildStatus = .ready; $0.builtAt = Date() }
+                    update(id: baseVM.id) { $0.buildStatus = .ready; $0.builtAt = Date.now }
                     AppLogger.shared.success("Build complete: \(baseVM.name)", source: "PackerService")
                     await NotificationService.shared.notifyBuildComplete(vmName: baseVM.name, success: true)
                     BuildSessionManager.shared.performBuildCompletionAction()
@@ -409,7 +419,7 @@ final class BaseVMStore {
                 vm.osName = inferOSName(from: info.name)
                 vm.vmSource = VirtualMachine.VMSource.local
                 vm.buildStatus = VirtualMachine.BuildStatus.ready
-                vm.builtAt = Date()
+                vm.builtAt = Date.now
                 vm.sshUsername = "baker"
                 add(vm)
             }
@@ -581,10 +591,7 @@ extension BaseVMStore {
                         $0.packerVarsName = ""
                     }
 
-                    let debug = UserDefaults.standard.bool(forKey: "debugModeEnabled")
-                    if debug {
-                        AppLogger.shared.log("[debug] Generated HCL: \(hclURL.path)", source: "BaseVMStore")
-                    }
+                    AppLogger.shared.debug("Generated HCL: \(hclURL.path)", source: "BaseVMStore")
 
                     let stream = await packerService.buildWithInitURL(
                         templateURL: hclURL,
@@ -607,7 +614,7 @@ extension BaseVMStore {
                     osName: baseVM.osName.rawValue, osVersion: baseVM.osVersion, success: buildSucceeded)
 
                 if buildSucceeded {
-                    update(id: baseVM.id) { $0.buildStatus = .ready; $0.builtAt = Date() }
+                    update(id: baseVM.id) { $0.buildStatus = .ready; $0.builtAt = Date.now }
                     AppLogger.shared.success("Manual build complete: \(baseVM.name)", source: "BaseVMStore")
                     await NotificationService.shared.notifyBuildComplete(vmName: baseVM.name, success: true)
                     BuildSessionManager.shared.performBuildCompletionAction()
@@ -643,7 +650,7 @@ extension BaseVMStore {
                 let name = $0.lastPathComponent
                 return $0.pathExtension == "ipsw" && (
                     name == "macOS \(baseVM.osVersion).ipsw"
-                    || name.contains(baseVM.osVersion.replacingOccurrences(of: ".", with: "_"))
+                    || name.contains(baseVM.osVersion.replacing(".", with: "_"))
                     || name.contains(baseVM.osVersion)
                 )
             }
@@ -735,7 +742,7 @@ extension BaseVMStore {
                 let name = $0.lastPathComponent
                 return $0.pathExtension == "ipsw" && (
                     name == "macOS \(baseVM.osVersion).ipsw"
-                    || name.contains(baseVM.osVersion.replacingOccurrences(of: ".", with: "_"))
+                    || name.contains(baseVM.osVersion.replacing(".", with: "_"))
                     || name.contains(baseVM.osVersion)
                 )
             }

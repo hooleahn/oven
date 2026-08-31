@@ -125,25 +125,31 @@ final class MenuBarViewModel {
 
     // MARK: - Open Main Window
 
+    // The main window's title tracks the selected sidebar section (via
+    // ContentView's .navigationTitle), so it can't be matched by a fixed
+    // "Oven" string. Match on styleMask/level instead — the main content
+    // window is titled and at the normal window level; the MenuBarExtra's
+    // own window is not.
+    private var mainWindow: NSWindow? {
+        NSApp.windows.first { $0.styleMask.contains(.titled) && $0.level == .normal }
+    }
+
     func openMainWindow() {
         // Activate the app — this brings the existing window to front
         // without closing/reopening it (which corrupts the unified toolbar).
         NSApp.activate(ignoringOtherApps: true)
 
-        // If there's already a visible Oven window, bring it forward.
-        if let win = NSApp.windows.first(where: { $0.title == "Oven" && !$0.isMiniaturized }) {
-            win.makeKeyAndOrderFront(nil)
+        guard let win = mainWindow else {
+            // No window exists yet — trigger the app reopen handler.
+            _ = NSApp.delegate?.applicationShouldHandleReopen?(NSApp, hasVisibleWindows: false)
             return
         }
 
-        // Window is miniaturized — deminiaturize it.
-        if let win = NSApp.windows.first(where: { $0.title == "Oven" }) {
+        if win.isMiniaturized {
             win.deminiaturize(nil)
-            return
+        } else {
+            win.makeKeyAndOrderFront(nil)
         }
-
-        // No window exists yet — trigger the app reopen handler.
-        _ = NSApp.delegate?.applicationShouldHandleReopen?(NSApp, hasVisibleWindows: false)
     }
 
     /// Navigate the main window to a specific VM and select it in the list.
@@ -151,7 +157,8 @@ final class MenuBarViewModel {
         openMainWindow()
         // Post after a brief delay so VMListView is visible and observing
         // before the notification fires.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        Task {
+            try? await Task.sleep(for: .milliseconds(150))
             NotificationCenter.default.post(
                 name: .menuBarFocusVM, object: nil, userInfo: ["vmID": vm.id]
             )

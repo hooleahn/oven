@@ -37,24 +37,25 @@ struct BaseVMDetailPane: View {
     var body: some View {
         VStack(spacing: 0) {
             // ── Compact header ──────────────────────────────────────────────
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
+            // Actions live in the pane itself (not the window toolbar) — this pane
+            // and BaseVMView both sit in the same NavigationSplitView, and two
+            // competing .primaryAction toolbar items caused the whole toolbar to
+            // swap contents depending on selection. Matches the pattern already
+            // used by TemplateDetailPane / VarsFileDetailPane.
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(displayTitle).font(.title3).fontWeight(.semibold)
                     if shouldShowMonoName {
                         Text(baseVM.name)
                             .font(.system(.caption, design: .monospaced))
                             .foregroundStyle(.tertiary)
                     }
+                    buildStatusCapsule
                 }
                 Spacer()
-                let tint = capsuleTint(for: baseVM.buildStatus)
-                Text(baseVM.buildStatus.label)
-                    .font(.caption).fontWeight(.medium)
-                    .foregroundStyle(tint)
-                    .padding(.horizontal, 10).padding(.vertical, 4)
-                    .background(tint.opacity(0.12), in: Capsule())
-                    .background(.bar, in: Rectangle())
-                    .overlay { Capsule().strokeBorder(tint.opacity(0.25), lineWidth: 0.5) }
+                pushProgressIndicator
+                primaryActionButton
+                moreActionsMenu
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
 
@@ -153,75 +154,6 @@ struct BaseVMDetailPane: View {
             .formStyle(.grouped)
         }
         .background(.windowBackground)
-        // ── Toolbar ──────────────────────────────────────────────────────────
-        .toolbar {
-            // Primary action: context-sensitive main CTA
-            ToolbarItem(placement: .primaryAction) {
-                if baseVM.buildStatus == .ready {
-                    Button(action: onCreateVM) {
-                        Label("Create VM", systemImage: "plus.circle.fill")
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .help("Create a working VM from this base VM")
-                } else if baseVM.buildStatus == .building {
-                    Button(action: {}) {
-                        Label("Building…", systemImage: theme.buildIcon)
-                    }
-                    .disabled(true)
-                } else {
-                    Button(action: onBuild) {
-                        Label(theme.build, systemImage: theme.buildIcon)
-                    }
-                    .help(theme.build)
-                }
-            }
-
-            // Push in-flight indicator (shown between primary action and … menu)
-            ToolbarItem(placement: .automatic) {
-                if pushManager.active[baseVM.name] != nil {
-                    ProgressView()
-                        .controlSize(.small)
-                        .help("Pushing to registry…")
-                }
-            }
-
-            // "…" menu: secondary actions
-            ToolbarItem(placement: .automatic) {
-                Menu {
-                    if baseVM.buildStatus == .ready {
-                        Button { onBuild() } label: {
-                            Label("\(theme.build) Again", systemImage: theme.buildIcon)
-                        }
-                        if baseVM.vmSource == .local {
-                            Divider()
-                            Button { isPresentingPushSheet = true } label: {
-                                Label("Push to Registry…", systemImage: "arrow.up.circle")
-                            }
-                            .disabled(pushManager.active[baseVM.name] != nil)
-                        }
-                        Divider()
-                    }
-                    Button { isPresentingEditSheet = true } label: {
-                        Label("Edit…", systemImage: "pencil")
-                    }
-                    Divider()
-                    Button {
-                        isPresentingLogWindow = true
-                    } label: {
-                        Label("Show Build Log", systemImage: "terminal")
-                    }
-
-                    Divider()
-                    Button(role: .destructive, action: onDelete) {
-                        Label("Delete", systemImage: "trash")
-                    }
-                    .disabled(baseVM.buildStatus == .building)
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .help("More actions")
-            }
-        }
         // ── Build log modal window ────────────────────────────────────────
         .sheet(isPresented: $isPresentingLogWindow) {
             BuildLogWindow(baseVM: baseVM)
@@ -248,6 +180,88 @@ struct BaseVMDetailPane: View {
         )) {
             Button("OK") { pushManager.clearError(for: baseVM.name) }
         } message: { Text(pushManager.errors[baseVM.name] ?? "") }
+    }
+
+    // MARK: - Header actions
+
+    private var buildStatusCapsule: some View {
+        let tint = capsuleTint(for: baseVM.buildStatus)
+        return Text(baseVM.buildStatus.label)
+            .font(.caption).fontWeight(.medium)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(tint.opacity(0.12), in: Capsule())
+            .overlay { Capsule().strokeBorder(tint.opacity(0.25), lineWidth: 0.5) }
+    }
+
+    @ViewBuilder private var pushProgressIndicator: some View {
+        if pushManager.active[baseVM.name] != nil {
+            ProgressView()
+                .controlSize(.small)
+                .help("Pushing to registry…")
+        }
+    }
+
+    @ViewBuilder private var primaryActionButton: some View {
+        if baseVM.buildStatus == .ready {
+            Button(action: onCreateVM) {
+                Label("Create VM", systemImage: "plus.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
+            .help("Create a working VM from this base VM")
+        } else if baseVM.buildStatus == .building {
+            Button(action: {}) {
+                Label("Building…", systemImage: theme.buildIcon)
+            }
+            .buttonStyle(.bordered)
+            .disabled(true)
+        } else {
+            Button(action: onBuild) {
+                Label(theme.build, systemImage: theme.buildIcon)
+            }
+            .buttonStyle(.bordered)
+            .help(theme.build)
+        }
+    }
+
+    @ViewBuilder private var moreActionsMenu: some View {
+        Menu {
+            if baseVM.buildStatus == .ready {
+                Button { onBuild() } label: {
+                    Label("\(theme.build) Again", systemImage: theme.buildIcon)
+                }
+                if baseVM.vmSource == .local {
+                    Divider()
+                    Button { isPresentingPushSheet = true } label: {
+                        Label("Push to Registry…", systemImage: "arrow.up.circle")
+                    }
+                    .disabled(pushManager.active[baseVM.name] != nil)
+                }
+                Divider()
+            }
+            Button { isPresentingEditSheet = true } label: {
+                Label("Edit…", systemImage: "pencil")
+            }
+            Divider()
+            Button {
+                isPresentingLogWindow = true
+            } label: {
+                Label("Show Build Log", systemImage: "terminal")
+            }
+
+            Divider()
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete", systemImage: "trash")
+            }
+            .disabled(baseVM.buildStatus == .building)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("More actions")
+        .accessibilityLabel("More actions")
     }
 
     // MARK: - Helpers

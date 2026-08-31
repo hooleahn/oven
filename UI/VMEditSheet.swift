@@ -117,7 +117,7 @@ struct VMEditSheet: View {
 
     private static func defaultTime(hour: Int) -> Date {
         var c = DateComponents(); c.hour = hour; c.minute = 0
-        return Calendar.current.date(from: c) ?? Date()
+        return Calendar.current.date(from: c) ?? Date.now
     }
 
     private var allKnownTags: [String] {

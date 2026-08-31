@@ -185,6 +185,7 @@ struct TagsPrefsTab: View {
                     }
                     .buttonStyle(.plain)
                     .help("Click to cycle color; edit row for full palette")
+                    .accessibilityLabel("Change color for \(tag)")
 
                     HStack(spacing: 4) {
                         TagChip(tag: tag)
@@ -194,6 +195,7 @@ struct TagsPrefsTab: View {
                             Image(systemName: "pencil").frame(width: 24, height: 24)
                         }
                         .buttonStyle(.borderless).foregroundStyle(.secondary).help("Rename tag")
+                        .accessibilityLabel("Rename \(tag)")
                         Button(role: .destructive) {
                             let count = vmStore.vms.filter { $0.tags.contains(tag) }.count
                             if count > 0 { confirmDeleteTag = tag } else { deleteTag(tag) }
@@ -201,6 +203,7 @@ struct TagsPrefsTab: View {
                             Image(systemName: "trash").frame(width: 24, height: 24)
                         }
                         .buttonStyle(.borderless).foregroundStyle(.secondary).help("Delete tag")
+                        .accessibilityLabel("Delete \(tag)")
                     }
                     let count = vmStore.vms.filter { $0.tags.contains(tag) }.count
                     if count > 0 {

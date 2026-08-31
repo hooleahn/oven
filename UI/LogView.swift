@@ -26,7 +26,7 @@ struct LogView: View {
     }
 
     private func timeGroup(for entry: LogEntry) -> TimeGroup {
-        let now = Date()
+        let now = Date.now
         let cal = Calendar.current
         if now.timeIntervalSince(entry.timestamp) < 3600 { return .lastHour }
         if cal.isDateInToday(entry.timestamp)            { return .today }
@@ -112,6 +112,7 @@ struct LogView: View {
 
                     Picker(selection: $filterLevel) {
                         Text("All").tag(Optional<LogEntry.Level>.none)
+                        Text("Debug").tag(Optional(LogEntry.Level.debug))
                         Text("Info").tag(Optional(LogEntry.Level.info))
                         Text("OK").tag(Optional(LogEntry.Level.success))
                         Text("Warn").tag(Optional(LogEntry.Level.warning))
@@ -120,7 +121,7 @@ struct LogView: View {
                         EmptyView()
                     }
                     .pickerStyle(.segmented)
-                    .frame(maxWidth: 300)
+                    .frame(maxWidth: 360)
                     .labelsHidden()
                 }
             }
@@ -134,7 +135,8 @@ struct LogView: View {
                         refreshRotation = 360
                     }
                     // Brief animation then reset — log is always live
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(600))
                         isRefreshing = false
                         refreshRotation = 0
                     }
@@ -182,7 +184,7 @@ struct LogEntryRow: View {
     var isEven: Bool = false
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+        HStack(alignment: .top, spacing: 10) {
             // 3px colored accent bar on the left edge
             Rectangle()
                 .fill(accentBarColor)
@@ -193,23 +195,28 @@ struct LogEntryRow: View {
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary.opacity(0.5))
                 .frame(width: 60, alignment: .leading)
+                .padding(.top, 2)
 
             Image(systemName: levelIcon)
                 .font(.caption)
                 .foregroundStyle(levelColor)
                 .frame(width: 14)
+                .padding(.top, 2)
 
             Text(entry.source)
                 .font(.caption)
                 .foregroundStyle(.secondary.opacity(0.5))
                 .frame(width: 120, alignment: .leading)
                 .lineLimit(1)
+                .padding(.top, 2)
 
             Text(entry.message)
                 .font(.callout)
                 .fontWeight(entry.level == .error ? .medium : .regular)
                 .foregroundStyle(entry.level == .error ? .red : .primary)
                 .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 4)
         .padding(.leading, 12)
@@ -227,6 +234,7 @@ struct LogEntryRow: View {
 
     private var accentBarColor: Color {
         switch entry.level {
+        case .debug:   return .purple.opacity(0.6)
         case .success: return .green
         case .error:   return .red
         case .warning: return .orange
@@ -236,6 +244,7 @@ struct LogEntryRow: View {
 
     private var levelIcon: String {
         switch entry.level {
+        case .debug:   return "ladybug"
         case .info:    return "info.circle"
         case .success: return "checkmark.circle.fill"
         case .warning: return "exclamationmark.triangle.fill"
@@ -245,6 +254,7 @@ struct LogEntryRow: View {
 
     private var levelColor: Color {
         switch entry.level {
+        case .debug:   return .purple
         case .info:    return .secondary
         case .success: return .green
         case .warning: return .orange

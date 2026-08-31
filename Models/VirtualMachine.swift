@@ -103,7 +103,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
 
     // MARK: - Base VM naming helpers
     static func autoName(osName: MacOSRelease.Name, version: String) -> String {
-        let os = osName.rawValue.lowercased().replacingOccurrences(of: " ", with: "-")
+        let os = osName.rawValue.lowercased().replacing(" ", with: "-")
         guard !version.isEmpty else { return "base-\(os)-select-version" }
         return "base-\(os)-\(version)"
     }
@@ -210,7 +210,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         self.serialNumber     = ""
         self.macOSVersion     = ""
         self.ipAddress        = nil
-        self.createdAt        = Date()
+        self.createdAt        = Date.now
         self.lastStartedAt    = nil
         // Only set registryImageRef if the VM name itself is an OCI ref (contains "/").
         // info.source for local clones is the OCI origin — useful for provenance
@@ -221,6 +221,26 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
     // MARK: - Codable migration
     // Use decodeIfPresent for all fields added after v0.1.060 so that VMs
     // saved by older builds still decode correctly.
+    //
+    // Explicit CodingKeys — deliberately omits isResolvingIP, isStopping,
+    // ipAddressError, and ipPollingExhausted. Those are commented "transient"
+    // above and hard-reset to fixed defaults in init(from:) below; without this
+    // explicit (narrower) key list the auto-synthesized encode(to:) would still
+    // write their in-memory values to disk on every save.
+    enum CodingKeys: String, CodingKey {
+        case id, name, displayName, description, tags, status, baseVMID, mdmProfileID
+        case cpuCount, memoryGB, diskGB, macOSVersion, serialNumber, ipAddress
+        case createdAt, lastStartedAt, lastClonedAt, registryImageRef, isBaseVM
+        case osName, osVersion, isBetaOS, betaLabel, customOSMajorVersion, customOSReleaseName
+        case ipswLocalPath, ipswRemoteURL, installRosetta, installHomebrew, enableSSHDaemon
+        case enableAutoLogin, enablePasswordlessSudo, xcodeVersion, builtAt, buildLog
+        case packerTemplateName, packerVarsName, customTemplatePath, customTemplateID
+        case customVarsFileID, manualBuildConfig, vmSource, buildStatus, mdmServerID
+        case cachedEnrollmentStatus, enrollmentStatusFetchedAt, sharedFolders, sshUsername
+        case isPinned, actualDiskGB, supportsGuestAgent
+        case scheduleEnabled, scheduleStartTime, scheduleStartDays, scheduleStopTime
+        case scheduleStopDays, scheduleStartOnAppLaunch, scheduleLaunchMode, scheduleForceVMLaunch
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -238,7 +258,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         serialNumber     = try c.decodeIfPresent(String.self,        forKey: .serialNumber)     ?? ""
         macOSVersion     = try c.decodeIfPresent(String.self,        forKey: .macOSVersion)     ?? ""
         ipAddress        = try c.decodeIfPresent(String.self,        forKey: .ipAddress)
-        createdAt        = try c.decodeIfPresent(Date.self,           forKey: .createdAt)        ?? Date()
+        createdAt        = try c.decodeIfPresent(Date.self,           forKey: .createdAt)        ?? Date.now
         lastStartedAt    = try c.decodeIfPresent(Date.self,           forKey: .lastStartedAt)
         lastClonedAt     = try c.decodeIfPresent(Date.self,           forKey: .lastClonedAt)
         registryImageRef = try c.decodeIfPresent(String.self,        forKey: .registryImageRef)
@@ -303,7 +323,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         serialNumber: String = "",
         macOSVersion: String = "",
         ipAddress: String? = nil,
-        createdAt: Date = Date(),
+        createdAt: Date = Date.now,
         lastStartedAt: Date? = nil,
         registryImageRef: String? = nil,
         isBaseVM: Bool = false,

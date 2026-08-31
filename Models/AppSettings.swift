@@ -103,7 +103,9 @@ struct AppSettings: Codable {
         if let settings = try? JSONDecoder().decode(AppSettings.self, from: data) {
             return settings
         }
-        Task { await AppLogger.shared.log("app-settings.json could not be decoded — resetting to defaults", source: "AppSettings") }
+        Task { await AppLogger.shared.error(
+            "app-settings.json could not be read — storage locations were reset to defaults. Check Preferences → Storage and reconfigure any custom paths.",
+            source: "AppSettings") }
         return .default
     }
 

@@ -110,7 +110,7 @@ extension BootCommandBlock {
 
     static let tahoe = BootCommandBlock(
         // Stable ID — never change once shipped; used as foreign key in ManualBuildConfig
-        id: UUID(uuidString: "B1A2C3D4-E5F6-7890-ABCD-EF1234567890")!,
+        id: UUID(uuidString: "F6A7B8C9-D0E1-2345-FA01-456789012345")!,
         displayName: "Setup Assistant — Tahoe",
         blockDescription: "Automates the macOS 26 Tahoe Setup Assistant. Selects English, skips Apple ID, sets UTC timezone, enables SSH and Screen Sharing, and disables Gatekeeper.",
         commandLines: [

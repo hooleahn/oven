@@ -120,16 +120,16 @@ actor JamfService {
 
     // MARK: - Debug logging
 
-    /// Logs a message only when Debug Mode is enabled in Preferences.
+    /// Logs a message only when Debug Mode is enabled in Preferences (AppLogger.debug
+    /// itself gates on that setting).
     private func debugLog(_ message: String) async {
-        guard UserDefaults.standard.bool(forKey: "debugModeEnabled") else { return }
-        await AppLogger.shared.log("[debug] \(message)", source: "JamfService")
+        await AppLogger.shared.debug(message, source: "JamfService")
     }
 
     // MARK: - Authentication
 
     private func ensureToken() async throws -> String {
-        if let token = bearerToken, let expiry = tokenExpiry, expiry > Date().addingTimeInterval(60) {
+        if let token = bearerToken, let expiry = tokenExpiry, expiry > Date.now.addingTimeInterval(60) {
             return token
         }
         return try await refreshToken()
@@ -137,23 +137,30 @@ actor JamfService {
     
     func refreshToken() async throws -> String {
         if credentialType == "API Client" {
-            await AppLogger.shared.log("[debug] Authenticating with API Client", source: "JamfService")
+            await debugLog("Authenticating with API Client")
             return try await refreshTokenAPIClient()
         } else {
-            await AppLogger.shared.log("[debug] Authenticating with Basic credentials", source: "JamfService")
+            await debugLog("Authenticating with Basic credentials")
             return try await refreshTokenBasic()
         }
     }
     
     func refreshTokenAPIClient() async throws -> String {
         let url = serverURL.appendingPathComponent("api/v1/oauth/token")
-        await AppLogger.shared.log("[debug] URL: \(url.absoluteString)", source: "JamfService")
+        await debugLog("URL: \(url.absoluteString)")
         let parameters = [
           "client_id": username,
           "client_secret": password,
           "grant_type": "client_credentials",
         ]
-        let joinedParameters = parameters.map { "\($0.key)=\($0.value)" }.joined(separator: "&")
+        // Values (client_id/client_secret) can contain characters like &, =, or +
+        // that are meaningful in an x-www-form-urlencoded body, so percent-encode
+        // each value before joining — an unescaped secret would corrupt the request.
+        var formSafe = CharacterSet.urlQueryAllowed
+        formSafe.remove(charactersIn: "&=+")
+        let joinedParameters = parameters.map { key, value in
+            "\(key)=\(value.addingPercentEncoding(withAllowedCharacters: formSafe) ?? value)"
+        }.joined(separator: "&")
         let postData = Data(joinedParameters.utf8)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -166,31 +173,31 @@ actor JamfService {
                    
         let decoder = JSONDecoder()
     
-//        await AppLogger.shared.log("[debug] Response: \(response)", source: "JamfService")
+        await debugLog("Response: \(response)")
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw JamfError.authFailed
         }
-//        await AppLogger.shared.log("[debug] Data: \(data)", source: "JamfService")
+        await debugLog("Data: \(data.count) bytes")
         let tokenResp = try? decoder.decode(JamfAPITokenResponse.self, from: data)
         guard let decodedResponse = tokenResp else {
-            await AppLogger.shared.log("Unable to parse data from response", source: "JamfService")
-            return ""
+            await AppLogger.shared.error("Unable to parse OAuth token response from Jamf Pro", source: "JamfService")
+            throw JamfError.authFailed
         }
         bearerToken = decodedResponse.access_token
-        tokenExpiry = Date().addingTimeInterval(TimeInterval(decodedResponse.expires_in))
-        
-//        await AppLogger.shared.log("[debug] Bearer Token: \(bearerToken ?? "")", source: "JamfService")
-//        await AppLogger.shared.log("[debug] Token Expiry: \(tokenExpiry?.description ?? "")", source: "JamfService")
-        
+        tokenExpiry = Date.now.addingTimeInterval(TimeInterval(decodedResponse.expires_in))
+
+        // Bearer token itself is never logged, even at debug level — only its expiry.
+        await debugLog("Token acquired, expires \(tokenExpiry?.description ?? "")")
+
         return decodedResponse.access_token
     }
-    
+
     func refreshTokenBasic() async throws -> String {
         let url = serverURL.appendingPathComponent("api/v1/auth/token")
-//        await AppLogger.shared.log("[debug] URL: \(url.absoluteString)", source: "JamfService")
+        await debugLog("URL: \(url.absoluteString)")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-//        await AppLogger.shared.log("[debug] Username: \(username) Password: REDACTED", source: "JamfService")
+        await debugLog("Username: \(username) Password: REDACTED")
         guard let credData = "\(username):\(password)".data(using: .utf8) else {
             throw JamfError.authFailed
         }
@@ -199,18 +206,18 @@ actor JamfService {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         let (data, response) = try await URLSession.shared.data(for: request)
-                   
+
         let decoder = JSONDecoder()
-    
-//        await AppLogger.shared.log("[debug] Response: \(response)", source: "JamfService")
+
+        await debugLog("Response: \(response)")
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw JamfError.authFailed
         }
-//        await AppLogger.shared.log("[debug] Data: \(data)", source: "JamfService")
+        await debugLog("Data: \(data.count) bytes")
         let tokenResp = try? decoder.decode(JamfBasicTokenResponse.self, from: data)
         guard let decodedResponse = tokenResp else {
-            await AppLogger.shared.log("Unable to parse data from response", source: "JamfService")
-            return ""
+            await AppLogger.shared.error("Unable to parse Basic auth token response from Jamf Pro", source: "JamfService")
+            throw JamfError.authFailed
         }
         bearerToken = decodedResponse.token
         // Parse ISO8601 expiry
@@ -222,27 +229,26 @@ actor JamfService {
     // MARK: - Keep Token Alive
     
     func keepTokenAlive() async throws -> String {
-        let token = bearerToken
+        // Ensures we have a valid (refreshed if needed) token rather than
+        // trusting a possibly-nil cached bearerToken.
+        let token = try await ensureToken()
         let url = serverURL.appendingPathComponent("api/v1/auth/keep-alive")
-        await AppLogger.shared.log("[debug] URL: \(url.absoluteString)", source: "JamfService")
+        await debugLog("URL: \(url.absoluteString)")
         var request = URLRequest(url: url)
-        request.setValue("Bearer \(token ?? "NONE")", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.httpMethod = "POST"
-//        await AppLogger.shared.log("[debug] Token: \(token)", source: "JamfService")
         let (data, response) = try await URLSession.shared.data(for: request)
-                   
+
         let decoder = JSONDecoder()
-    
-//        await AppLogger.shared.log("[debug] Response: \(response)", source: "JamfService")
+
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw JamfError.authFailed
         }
-//        await AppLogger.shared.log("[debug] Data: \(data)", source: "JamfService")
         let tokenResp = try? decoder.decode(JamfTokenResponse.self, from: data)
         guard let decodedResponse = tokenResp else {
-            await AppLogger.shared.log("Unable to parse data from response", source: "JamfService")
-            return ""
+            await AppLogger.shared.error("Unable to parse keep-alive response from Jamf Pro", source: "JamfService")
+            throw JamfError.authFailed
         }
         bearerToken = decodedResponse.token
         // Parse ISO8601 expiry
@@ -406,7 +412,7 @@ actor JamfService {
         }
         let auth = try JSONDecoder().decode(JamfCurrentAuth.self, from: data)
         let privileges = auth.account?.allPrivileges ?? []
-        await AppLogger.shared.log("[debug] Current privileges (\(privileges.count)): \(privileges.joined(separator: ", "))", source: "JamfService")
+        await debugLog("Current privileges (\(privileges.count)): \(privileges.joined(separator: ", "))")
         return privileges
     }
 
@@ -449,7 +455,7 @@ actor JamfService {
     func testConnection() async throws -> String {
         let token = try await refreshToken()
         let url = serverURL.appendingPathComponent("api/v1/jamf-pro-version")
-//        await AppLogger.shared.log("[debug] Testing Jamf Pro connection to: \(url.absoluteString) with Token \(token)")
+        await debugLog("Testing Jamf Pro connection to: \(url.absoluteString)")
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -458,10 +464,10 @@ actor JamfService {
         struct Info: Decodable { let version: String }
         do {
             let info = try JSONDecoder().decode(Info.self, from: data)
-            await AppLogger.shared.log("Jamf Pro connection test successful: \(info.version)", source: "JamfService")
+            await AppLogger.shared.success("Jamf Pro connection test successful: \(info.version)", source: "JamfService")
             return info.version
         } catch {
-            await AppLogger.shared.log("Jamf Pro connection test failed: \(error.localizedDescription)", source: "JamfService")
+            await AppLogger.shared.error("Jamf Pro connection test failed: \(error.localizedDescription)", source: "JamfService")
         }
         return "Unknown"
         

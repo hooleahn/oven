@@ -103,31 +103,24 @@ final class AppTheme {
     }
 
     // Per-event toggles — System
-    var systemNotifBaseVMBuildSucceeded: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.system.baseVMBuildSucceeded") != nil ? ud.bool(forKey: "notif.system.baseVMBuildSucceeded") : true
-    }() {
+    // Every event is opt-in: default OFF until the user enables it in prefs.
+    var systemNotifBaseVMBuildStarted: Bool = UserDefaults.standard.bool(forKey: "notif.system.baseVMBuildStarted") {
+        didSet { UserDefaults.standard.set(systemNotifBaseVMBuildStarted, forKey: "notif.system.baseVMBuildStarted") }
+    }
+
+    var systemNotifBaseVMBuildSucceeded: Bool = UserDefaults.standard.bool(forKey: "notif.system.baseVMBuildSucceeded") {
         didSet { UserDefaults.standard.set(systemNotifBaseVMBuildSucceeded, forKey: "notif.system.baseVMBuildSucceeded") }
     }
 
-    var systemNotifBaseVMBuildFailed: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.system.baseVMBuildFailed") != nil ? ud.bool(forKey: "notif.system.baseVMBuildFailed") : true
-    }() {
+    var systemNotifBaseVMBuildFailed: Bool = UserDefaults.standard.bool(forKey: "notif.system.baseVMBuildFailed") {
         didSet { UserDefaults.standard.set(systemNotifBaseVMBuildFailed, forKey: "notif.system.baseVMBuildFailed") }
     }
 
-    var systemNotifIPSWDownloaded: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.system.ipswDownloaded") != nil ? ud.bool(forKey: "notif.system.ipswDownloaded") : true
-    }() {
+    var systemNotifIPSWDownloaded: Bool = UserDefaults.standard.bool(forKey: "notif.system.ipswDownloaded") {
         didSet { UserDefaults.standard.set(systemNotifIPSWDownloaded, forKey: "notif.system.ipswDownloaded") }
     }
 
-    var systemNotifImagePullCompleted: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.system.imagePullCompleted") != nil ? ud.bool(forKey: "notif.system.imagePullCompleted") : true
-    }() {
+    var systemNotifImagePullCompleted: Bool = UserDefaults.standard.bool(forKey: "notif.system.imagePullCompleted") {
         didSet { UserDefaults.standard.set(systemNotifImagePullCompleted, forKey: "notif.system.imagePullCompleted") }
     }
 
@@ -139,46 +132,32 @@ final class AppTheme {
         didSet { UserDefaults.standard.set(systemNotifVMStopped, forKey: "notif.system.vmStopped") }
     }
 
-    var systemNotifVMStarted: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.system.vmStarted") != nil ? ud.bool(forKey: "notif.system.vmStarted") : true
-    }() {
+    var systemNotifVMStarted: Bool = UserDefaults.standard.bool(forKey: "notif.system.vmStarted") {
         didSet { UserDefaults.standard.set(systemNotifVMStarted, forKey: "notif.system.vmStarted") }
     }
 
-    var systemNotifVMStartFailed: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.system.vmStartFailed") != nil ? ud.bool(forKey: "notif.system.vmStartFailed") : true
-    }() {
+    var systemNotifVMStartFailed: Bool = UserDefaults.standard.bool(forKey: "notif.system.vmStartFailed") {
         didSet { UserDefaults.standard.set(systemNotifVMStartFailed, forKey: "notif.system.vmStartFailed") }
     }
 
-    // Per-event toggles — Pushover
-    var pushoverNotifBaseVMBuildSucceeded: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.pushover.baseVMBuildSucceeded") != nil ? ud.bool(forKey: "notif.pushover.baseVMBuildSucceeded") : true
-    }() {
+    // Per-event toggles — Pushover (all opt-in: default OFF)
+    var pushoverNotifBaseVMBuildStarted: Bool = UserDefaults.standard.bool(forKey: "notif.pushover.baseVMBuildStarted") {
+        didSet { UserDefaults.standard.set(pushoverNotifBaseVMBuildStarted, forKey: "notif.pushover.baseVMBuildStarted") }
+    }
+
+    var pushoverNotifBaseVMBuildSucceeded: Bool = UserDefaults.standard.bool(forKey: "notif.pushover.baseVMBuildSucceeded") {
         didSet { UserDefaults.standard.set(pushoverNotifBaseVMBuildSucceeded, forKey: "notif.pushover.baseVMBuildSucceeded") }
     }
 
-    var pushoverNotifBaseVMBuildFailed: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.pushover.baseVMBuildFailed") != nil ? ud.bool(forKey: "notif.pushover.baseVMBuildFailed") : true
-    }() {
+    var pushoverNotifBaseVMBuildFailed: Bool = UserDefaults.standard.bool(forKey: "notif.pushover.baseVMBuildFailed") {
         didSet { UserDefaults.standard.set(pushoverNotifBaseVMBuildFailed, forKey: "notif.pushover.baseVMBuildFailed") }
     }
 
-    var pushoverNotifIPSWDownloaded: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.pushover.ipswDownloaded") != nil ? ud.bool(forKey: "notif.pushover.ipswDownloaded") : true
-    }() {
+    var pushoverNotifIPSWDownloaded: Bool = UserDefaults.standard.bool(forKey: "notif.pushover.ipswDownloaded") {
         didSet { UserDefaults.standard.set(pushoverNotifIPSWDownloaded, forKey: "notif.pushover.ipswDownloaded") }
     }
 
-    var pushoverNotifImagePullCompleted: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.pushover.imagePullCompleted") != nil ? ud.bool(forKey: "notif.pushover.imagePullCompleted") : true
-    }() {
+    var pushoverNotifImagePullCompleted: Bool = UserDefaults.standard.bool(forKey: "notif.pushover.imagePullCompleted") {
         didSet { UserDefaults.standard.set(pushoverNotifImagePullCompleted, forKey: "notif.pushover.imagePullCompleted") }
     }
 
@@ -190,46 +169,32 @@ final class AppTheme {
         didSet { UserDefaults.standard.set(pushoverNotifVMStopped, forKey: "notif.pushover.vmStopped") }
     }
 
-    var pushoverNotifVMStarted: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.pushover.vmStarted") != nil ? ud.bool(forKey: "notif.pushover.vmStarted") : true
-    }() {
+    var pushoverNotifVMStarted: Bool = UserDefaults.standard.bool(forKey: "notif.pushover.vmStarted") {
         didSet { UserDefaults.standard.set(pushoverNotifVMStarted, forKey: "notif.pushover.vmStarted") }
     }
 
-    var pushoverNotifVMStartFailed: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.pushover.vmStartFailed") != nil ? ud.bool(forKey: "notif.pushover.vmStartFailed") : true
-    }() {
+    var pushoverNotifVMStartFailed: Bool = UserDefaults.standard.bool(forKey: "notif.pushover.vmStartFailed") {
         didSet { UserDefaults.standard.set(pushoverNotifVMStartFailed, forKey: "notif.pushover.vmStartFailed") }
     }
 
-    // Per-event toggles — Slack
-    var slackNotifBaseVMBuildSucceeded: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.slack.baseVMBuildSucceeded") != nil ? ud.bool(forKey: "notif.slack.baseVMBuildSucceeded") : true
-    }() {
+    // Per-event toggles — Slack (all opt-in: default OFF)
+    var slackNotifBaseVMBuildStarted: Bool = UserDefaults.standard.bool(forKey: "notif.slack.baseVMBuildStarted") {
+        didSet { UserDefaults.standard.set(slackNotifBaseVMBuildStarted, forKey: "notif.slack.baseVMBuildStarted") }
+    }
+
+    var slackNotifBaseVMBuildSucceeded: Bool = UserDefaults.standard.bool(forKey: "notif.slack.baseVMBuildSucceeded") {
         didSet { UserDefaults.standard.set(slackNotifBaseVMBuildSucceeded, forKey: "notif.slack.baseVMBuildSucceeded") }
     }
 
-    var slackNotifBaseVMBuildFailed: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.slack.baseVMBuildFailed") != nil ? ud.bool(forKey: "notif.slack.baseVMBuildFailed") : true
-    }() {
+    var slackNotifBaseVMBuildFailed: Bool = UserDefaults.standard.bool(forKey: "notif.slack.baseVMBuildFailed") {
         didSet { UserDefaults.standard.set(slackNotifBaseVMBuildFailed, forKey: "notif.slack.baseVMBuildFailed") }
     }
 
-    var slackNotifIPSWDownloaded: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.slack.ipswDownloaded") != nil ? ud.bool(forKey: "notif.slack.ipswDownloaded") : true
-    }() {
+    var slackNotifIPSWDownloaded: Bool = UserDefaults.standard.bool(forKey: "notif.slack.ipswDownloaded") {
         didSet { UserDefaults.standard.set(slackNotifIPSWDownloaded, forKey: "notif.slack.ipswDownloaded") }
     }
 
-    var slackNotifImagePullCompleted: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.slack.imagePullCompleted") != nil ? ud.bool(forKey: "notif.slack.imagePullCompleted") : true
-    }() {
+    var slackNotifImagePullCompleted: Bool = UserDefaults.standard.bool(forKey: "notif.slack.imagePullCompleted") {
         didSet { UserDefaults.standard.set(slackNotifImagePullCompleted, forKey: "notif.slack.imagePullCompleted") }
     }
 
@@ -245,39 +210,28 @@ final class AppTheme {
         didSet { UserDefaults.standard.set(slackNotifVMStarted, forKey: "notif.slack.vmStarted") }
     }
 
-    var slackNotifVMStartFailed: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.slack.vmStartFailed") != nil ? ud.bool(forKey: "notif.slack.vmStartFailed") : true
-    }() {
+    var slackNotifVMStartFailed: Bool = UserDefaults.standard.bool(forKey: "notif.slack.vmStartFailed") {
         didSet { UserDefaults.standard.set(slackNotifVMStartFailed, forKey: "notif.slack.vmStartFailed") }
     }
 
-    // Per-event toggles — Teams
-    var teamsNotifBaseVMBuildSucceeded: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.teams.baseVMBuildSucceeded") != nil ? ud.bool(forKey: "notif.teams.baseVMBuildSucceeded") : true
-    }() {
+    // Per-event toggles — Teams (all opt-in: default OFF)
+    var teamsNotifBaseVMBuildStarted: Bool = UserDefaults.standard.bool(forKey: "notif.teams.baseVMBuildStarted") {
+        didSet { UserDefaults.standard.set(teamsNotifBaseVMBuildStarted, forKey: "notif.teams.baseVMBuildStarted") }
+    }
+
+    var teamsNotifBaseVMBuildSucceeded: Bool = UserDefaults.standard.bool(forKey: "notif.teams.baseVMBuildSucceeded") {
         didSet { UserDefaults.standard.set(teamsNotifBaseVMBuildSucceeded, forKey: "notif.teams.baseVMBuildSucceeded") }
     }
 
-    var teamsNotifBaseVMBuildFailed: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.teams.baseVMBuildFailed") != nil ? ud.bool(forKey: "notif.teams.baseVMBuildFailed") : true
-    }() {
+    var teamsNotifBaseVMBuildFailed: Bool = UserDefaults.standard.bool(forKey: "notif.teams.baseVMBuildFailed") {
         didSet { UserDefaults.standard.set(teamsNotifBaseVMBuildFailed, forKey: "notif.teams.baseVMBuildFailed") }
     }
 
-    var teamsNotifIPSWDownloaded: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.teams.ipswDownloaded") != nil ? ud.bool(forKey: "notif.teams.ipswDownloaded") : true
-    }() {
+    var teamsNotifIPSWDownloaded: Bool = UserDefaults.standard.bool(forKey: "notif.teams.ipswDownloaded") {
         didSet { UserDefaults.standard.set(teamsNotifIPSWDownloaded, forKey: "notif.teams.ipswDownloaded") }
     }
 
-    var teamsNotifImagePullCompleted: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.teams.imagePullCompleted") != nil ? ud.bool(forKey: "notif.teams.imagePullCompleted") : true
-    }() {
+    var teamsNotifImagePullCompleted: Bool = UserDefaults.standard.bool(forKey: "notif.teams.imagePullCompleted") {
         didSet { UserDefaults.standard.set(teamsNotifImagePullCompleted, forKey: "notif.teams.imagePullCompleted") }
     }
 
@@ -293,10 +247,7 @@ final class AppTheme {
         didSet { UserDefaults.standard.set(teamsNotifVMStarted, forKey: "notif.teams.vmStarted") }
     }
 
-    var teamsNotifVMStartFailed: Bool = {
-        let ud = UserDefaults.standard
-        return ud.object(forKey: "notif.teams.vmStartFailed") != nil ? ud.bool(forKey: "notif.teams.vmStartFailed") : true
-    }() {
+    var teamsNotifVMStartFailed: Bool = UserDefaults.standard.bool(forKey: "notif.teams.vmStartFailed") {
         didSet { UserDefaults.standard.set(teamsNotifVMStartFailed, forKey: "notif.teams.vmStartFailed") }
     }
 

@@ -5,19 +5,7 @@ import SwiftUI
 
 struct TemplateDetailPane: View {
     let template: PackerTemplate
-    @Binding var editedContent: String
-    @Binding var editedDisplayName: String
-    @Binding var editedDescription: String
-    @Binding var editedOSName: String
-    @Binding var editedOSVersion: String
-    @Binding var isDirty: Bool
-    @Binding var isMetadataDirty: Bool
-    @Binding var isSaving: Bool
-    @Binding var saveError: String?
-    @Binding var isValidating: Bool
-    @Binding var validationResult: String?
-
-    @Binding var isLoadingContent: Bool
+    @Bindable var model: RecipesViewModel
 
     let onSave: () -> Void
     let onRevert: () -> Void
@@ -32,11 +20,11 @@ struct TemplateDetailPane: View {
     @State private var isFetchingVersions = false
 
     private var canEdit: Bool { !template.isBase }
-    private var isAnyDirty: Bool { isDirty || isMetadataDirty }
+    private var isAnyDirty: Bool { model.isDirty || model.isMetadataDirty }
 
     private var versionList: [String] {
         sofaVersions.isEmpty
-            ? (MacOSRelease.Name(rawValue: editedOSName)?.fallbackVersions ?? [])
+            ? (MacOSRelease.Name(rawValue: model.editedOSName)?.fallbackVersions ?? [])
             : sofaVersions
     }
 
@@ -57,16 +45,16 @@ struct TemplateDetailPane: View {
             metadataHeader
             Divider()
             HCLEditor(
-                text: $editedContent,
+                text: $model.editedContent,
                 isEditable: canEdit,
-                onChange: { if !isLoadingContent { isDirty = true } }
+                onChange: { if !model.isLoadingContent { model.isDirty = true } }
             )
-            if let result = validationResult {
+            if let result = model.validationResult {
                 validationBanner(result)
             }
         }
-        .task { await loadVersions(for: editedOSName) }
-        .onChange(of: editedOSName) { _, newName in
+        .task { await loadVersions(for: model.editedOSName) }
+        .onChange(of: model.editedOSName) { _, newName in
             Task { await loadVersions(for: newName) }
         }
     }
@@ -77,7 +65,7 @@ struct TemplateDetailPane: View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
-                    Text(editedDisplayName.isEmpty ? template.filename : editedDisplayName).bold()
+                    Text(model.editedDisplayName.isEmpty ? template.filename : model.editedDisplayName).bold()
                     if template.isBase {
                         Text("Base Template")
                             .font(.caption).fontWeight(.medium)
@@ -102,19 +90,19 @@ struct TemplateDetailPane: View {
                 }
             }
             Spacer()
-            if let err = saveError {
+            if let err = model.saveError {
                 Label(err, systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(.red)
                     .lineLimit(1)
             }
-            if isSaving { ProgressView().controlSize(.small) }
+            if model.isSaving { ProgressView().controlSize(.small) }
 
             if template.isBase {
                 Button("Create Custom Copy", action: onFork)
                     .buttonStyle(.bordered)
                     .controlSize(.small)
             } else {
-                if isValidating {
+                if model.isValidating {
                     HStack(spacing: 4) {
                         ProgressView().controlSize(.mini)
                         Text("Validating…").font(.caption)
@@ -150,7 +138,7 @@ struct TemplateDetailPane: View {
         Menu {
             Button {
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(editedContent, forType: .string)
+                NSPasteboard.general.setString(model.editedContent, forType: .string)
                 copied = true
                 Task { try? await Task.sleep(for: .seconds(2)); copied = false }
             } label: {
@@ -182,9 +170,9 @@ struct TemplateDetailPane: View {
             GridRow {
                 Text("Display Name").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
                 if canEdit {
-                    TextField("", text: $editedDisplayName,
+                    TextField("", text: $model.editedDisplayName,
                               prompt: Text(template.filename).foregroundStyle(.tertiary))
-                        .onChange(of: editedDisplayName) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
+                        .onChange(of: model.editedDisplayName) { _, _ in if !model.isLoadingContent { model.isMetadataDirty = true } }
                 } else {
                     Text(template.displayName.isEmpty ? template.filename : template.displayName)
                 }
@@ -192,9 +180,9 @@ struct TemplateDetailPane: View {
             GridRow {
                 Text("Description").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
                 if canEdit {
-                    TextField("", text: $editedDescription, axis: .vertical)
+                    TextField("", text: $model.editedDescription, axis: .vertical)
                         .lineLimit(2...4)
-                        .onChange(of: editedDescription) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
+                        .onChange(of: model.editedDescription) { _, _ in if !model.isLoadingContent { model.isMetadataDirty = true } }
                 } else {
                     Text(template.templateDescription.isEmpty ? "—" : template.templateDescription)
                         .foregroundStyle(template.templateDescription.isEmpty ? .tertiary : .primary)
@@ -204,22 +192,22 @@ struct TemplateDetailPane: View {
                 Text("Target OS").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
                 if canEdit {
                     HStack(spacing: 8) {
-                        Picker("", selection: $editedOSName) {
+                        Picker("", selection: $model.editedOSName) {
                             Text("Any").tag("")
                             ForEach(MacOSRelease.Name.allCases, id: \.self) {
                                 Text($0.rawValue).tag($0.rawValue)
                             }
                         }
                         .labelsHidden().frame(width: 120)
-                        .onChange(of: editedOSName) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
+                        .onChange(of: model.editedOSName) { _, _ in if !model.isLoadingContent { model.isMetadataDirty = true } }
 
-                        if !editedOSName.isEmpty {
-                            Picker("", selection: $editedOSVersion) {
+                        if !model.editedOSName.isEmpty {
+                            Picker("", selection: $model.editedOSVersion) {
                                 Text("Any version").tag("")
                                 ForEach(versionList, id: \.self) { Text($0).tag($0) }
                             }
                             .labelsHidden().frame(width: 120)
-                            .onChange(of: editedOSVersion) { _, _ in if !isLoadingContent { isMetadataDirty = true } }
+                            .onChange(of: model.editedOSVersion) { _, _ in if !model.isLoadingContent { model.isMetadataDirty = true } }
                             if isFetchingVersions {
                                 ProgressView().controlSize(.mini)
                             }
@@ -259,7 +247,7 @@ struct TemplateDetailPane: View {
                 .foregroundStyle(isSuccess ? .green : .red)
                 .textSelection(.enabled)
             Spacer()
-            Button { validationResult = nil } label: {
+            Button { model.validationResult = nil } label: {
                 Image(systemName: "xmark").font(.caption2)
             }
             .buttonStyle(.borderless).foregroundStyle(.secondary)

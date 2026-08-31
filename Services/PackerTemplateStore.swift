@@ -59,13 +59,13 @@ final class PackerTemplateStore {
 
         return urls.compactMap { url -> PackerTemplate? in
             let mod = (try? url.resourceValues(forKeys: [.contentModificationDateKey])
-                .contentModificationDate) ?? Date()
+                .contentModificationDate) ?? Date.now
             let meta: PackerTemplateMetadata
             if let existing = PackerTemplateMetadata.load(for: url) {
                 meta = existing
             } else {
                 let stem = url.deletingPathExtension().lastPathComponent
-                let inferred = stem.replacingOccurrences(of: "-", with: " ").capitalized
+                let inferred = stem.replacing("-", with: " ").capitalized
                 meta = PackerTemplateMetadata(displayName: inferred, osName: "", osVersion: "")
                 try? meta.save(for: url)
             }
@@ -123,7 +123,7 @@ final class PackerTemplateStore {
         guard let tmpl = template(id: id) else { return }
         var meta = PackerTemplateMetadata.load(for: tmpl.url) ??
             PackerTemplateMetadata(id: id, displayName: tmpl.displayName)
-        meta.lastValidation = .init(date: Date(), succeeded: succeeded, output: output)
+        meta.lastValidation = .init(date: Date.now, succeeded: succeeded, output: output)
         try? meta.save(for: tmpl.url)
     }
 
@@ -163,7 +163,7 @@ final class PackerTemplateStore {
     func duplicate(id: UUID) -> UUID? {
         guard let tmpl = template(id: id) else { return nil }
         let base = tmpl.url.deletingPathExtension().lastPathComponent
-            .replacingOccurrences(of: "-copy", with: "")
+            .replacing("-copy", with: "")
         var newURL: URL; var counter = 2
         repeat {
             let suffix = counter == 2 ? "-copy" : "-copy-\(counter)"

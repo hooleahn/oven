@@ -48,6 +48,19 @@ struct InstallerView: View {
         }
     }
 
+    /// True if `filename` looks like it corresponds to `firmware` — by exact suggested
+    /// filename, an embedded build id, or an embedded version followed by a path-safe
+    /// separator (or end of string). Shared by every "is this firmware already on disk"
+    /// check below so the matching rules can't silently drift between call sites.
+    private func filenameMatches(_ filename: String, _ firmware: IPSWFirmware) -> Bool {
+        if filename == firmware.suggestedFilename { return true }
+        if filename.contains(firmware.buildid) { return true }
+        let stem = (filename as NSString).deletingPathExtension
+        guard let r = stem.range(of: firmware.version) else { return false }
+        let next = stem[r.upperBound...].first
+        return next == nil || next == "-" || next == "_"
+    }
+
     var filteredFirmwares: [IPSWFirmware] {
         let base = searchText.isEmpty ? firmwares : firmwares.filter {
             $0.displayName.localizedStandardContains(searchText)
@@ -148,27 +161,26 @@ struct InstallerView: View {
 
     private var firmwareList: some View {
         List {
-            // Custom Installers section
-            if !visibleCustomInstallers.isEmpty || true {
-                Section {
-                    ForEach(visibleCustomInstallers) { inst in
-                        CustomInstallerRow(
-                            installer: inst,
-                            onCreateBaseVM: {
-                                selectedCustomInstallerForBaseVM = inst
-                            },
-                            onDelete: { installerStore.delete(inst) }
-                        )
-                    }
-                    Button {
-                        isPresentingAddCustomInstaller = true
-                    } label: {
-                        Label("Add Custom Installer…", systemImage: "plus.circle")
-                    }
-                    .buttonStyle(.borderless)
-                } header: {
-                    Text("Custom Installers")
+            // Custom Installers section — always shown (even when empty) so the
+            // "Add Custom Installer…" affordance stays discoverable.
+            Section {
+                ForEach(visibleCustomInstallers) { inst in
+                    CustomInstallerRow(
+                        installer: inst,
+                        onCreateBaseVM: {
+                            selectedCustomInstallerForBaseVM = inst
+                        },
+                        onDelete: { installerStore.delete(inst) }
+                    )
                 }
+                Button {
+                    isPresentingAddCustomInstaller = true
+                } label: {
+                    Label("Add Custom Installer…", systemImage: "plus.circle")
+                }
+                .buttonStyle(.borderless)
+            } header: {
+                Text("Custom Installers")
             }
 
             if !visibleDownloadedInstallers.isEmpty {
@@ -195,16 +207,7 @@ struct InstallerView: View {
                             downloadProgress: appState.activeIPSWDownloads[fw.buildid],
                             isDownloaded: installerStore.downloadedInstallers.contains(where: { installer in
                                 guard let path = installer.localPath else { return false }
-                                let name = (path as NSString).lastPathComponent
-                                if name == fw.suggestedFilename { return true }
-                                if name.contains(fw.buildid) { return true }
-                                let stem = (path as NSString).deletingPathExtension.components(separatedBy: "/").last ?? ""
-                                let v = fw.version
-                                if let r = stem.range(of: v) {
-                                    let nextChar = stem[r.upperBound...].first
-                                    if nextChar == nil || nextChar == "-" || nextChar == "_" { return true }
-                                }
-                                return false
+                                return filenameMatches((path as NSString).lastPathComponent, fw)
                             }),
                             onDownload: {
                                 let task = Task { await downloadFirmware(fw) }
@@ -218,15 +221,7 @@ struct InstallerView: View {
                             onDelete: {
                                 if let installer = installerStore.downloadedInstallers.first(where: { inst in
                                     guard let path = inst.localPath else { return false }
-                                    let name = (path as NSString).lastPathComponent
-                                    if name == fw.suggestedFilename { return true }
-                                    if name.contains(fw.buildid) { return true }
-                                    let stem = (path as NSString).deletingPathExtension.components(separatedBy: "/").last ?? ""
-                                    if let r = stem.range(of: fw.version) {
-                                        let next = stem[r.upperBound...].first
-                                        return next == nil || next == "-" || next == "_"
-                                    }
-                                    return false
+                                    return filenameMatches((path as NSString).lastPathComponent, fw)
                                 }) {
                                     installerStore.delete(installer)
                                 }
@@ -234,15 +229,7 @@ struct InstallerView: View {
                             onCreateBaseVM: {
                                 if let installer = installerStore.downloadedInstallers.first(where: { inst in
                                     guard let path = inst.localPath else { return false }
-                                    let name = (path as NSString).lastPathComponent
-                                    if name == fw.suggestedFilename { return true }
-                                    if name.contains(fw.buildid) { return true }
-                                    let stem = (path as NSString).deletingPathExtension.components(separatedBy: "/").last ?? ""
-                                    if let r = stem.range(of: fw.version) {
-                                        let next = stem[r.upperBound...].first
-                                        return next == nil || next == "-" || next == "_"
-                                    }
-                                    return false
+                                    return filenameMatches((path as NSString).lastPathComponent, fw)
                                 }) {
                                     selectedCustomInstallerForBaseVM = installer
                                 }
@@ -267,7 +254,7 @@ struct InstallerView: View {
 
     /// Human-readable age rounded to the coarsest meaningful unit (no seconds).
     private func coarseAge(of date: Date) -> String {
-        let secs = Int(Date().timeIntervalSince(date))
+        let secs = Int(Date.now.timeIntervalSince(date))
         if secs < 120          { return "just now" }
         if secs < 3600         { return "\(secs / 60) min ago" }
         if secs < 86_400       { return "\(secs / 3600) hr ago" }
@@ -288,8 +275,8 @@ struct InstallerView: View {
             installerStore.importUntrackedFiles(in: ipswRoot, knownFirmwares: firmwares)
             loadedFromCache = wasFresh
             lastRefreshedAt = settings.ipswDownloadMode == .mistCli
-                ? mistCacheDate() ?? Date()
-                : await IPSWService.shared.lastFetchDate ?? Date()
+                ? mistCacheDate() ?? Date.now
+                : await IPSWService.shared.lastFetchDate ?? Date.now
             let source = loadedFromCache ? "cache" : (settings.ipswDownloadMode == .mistCli ? "mist-cli" : "ipsw.me")
             AppLogger.shared.success(
                 "Loaded \(firmwares.count) firmwares from \(source)",
@@ -307,7 +294,7 @@ struct InstallerView: View {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: cacheFile.path),
               let modified = attrs[.modificationDate] as? Date
         else { return false }
-        return Date().timeIntervalSince(modified) < 86_400
+        return Date.now.timeIntervalSince(modified) < 86_400
     }
 
     private func mistCacheDate() -> Date? {
@@ -388,6 +375,7 @@ struct InstallerView: View {
                 appState.activeIPSWDownloads.removeValue(forKey: fw.buildid)
                 installerStore.recordDownload(firmware: fw, localURL: url)
                 AppLogger.shared.success("Downloaded: \(url.lastPathComponent)", source: "InstallerView")
+                await NotificationService.shared.notifyIPSWDownloaded(name: fw.displayName)
             case .failed(let error):
                 appState.activeIPSWDownloads.removeValue(forKey: fw.buildid)
                 errorMessage = "Download failed: \(error.localizedDescription)"
@@ -422,20 +410,11 @@ struct InstallerView: View {
                 if code == 0 {
                     // Find the downloaded file in the directory and record it
                     let localFiles = await localIPSWFiles(in: directory)
-                    if let foundURL = localFiles.first(where: { url in
-                        let name = url.lastPathComponent
-                        if name == fw.suggestedFilename { return true }
-                        if name.contains(fw.buildid) { return true }
-                        let stem = url.deletingPathExtension().lastPathComponent
-                        if let r = stem.range(of: fw.version) {
-                            let next = stem[r.upperBound...].first
-                            return next == nil || next == "-" || next == "_"
-                        }
-                        return false
-                    }) {
+                    if let foundURL = localFiles.first(where: { filenameMatches($0.lastPathComponent, fw) }) {
                         installerStore.recordDownload(firmware: fw, localURL: foundURL)
                     }
                     AppLogger.shared.success("Downloaded: \(fw.displayName)", source: "InstallerView")
+                    await NotificationService.shared.notifyIPSWDownloaded(name: fw.displayName)
                 } else {
                     errorMessage = "mist-cli download failed for \(fw.displayName)"
                 }

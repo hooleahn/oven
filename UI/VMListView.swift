@@ -102,7 +102,8 @@ struct VMListView: View {
             } label: {
                 Label("New VM", systemImage: "plus")
             }
-            .keyboardShortcut("n", modifiers: .command)
+            // ⌘N is bound centrally in NewItemCommands (OvenApp.swift) so it also
+            // appears in the File menu; this button doesn't rebind it.
             .help("New VM (⌘N)")
         }
         ToolbarItem(placement: .automatic) {
@@ -113,24 +114,24 @@ struct VMListView: View {
                 Image(systemName: model.isListView ? "square.grid.2x2" : "list.bullet")
             }
             .help(model.isListView ? "Switch to grid view" : "Switch to list view")
+            .accessibilityLabel(model.isListView ? "Switch to grid view" : "Switch to list view")
         }
         ToolbarItem(placement: .automatic) {
             Button {
-                guard !isRefreshing else { return }
-                isRefreshing = true
-                withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
-                    refreshRotation = 360
-                }
-                Task {
-                    await vmStore.sync()
-                    isRefreshing = false
-                    refreshRotation = 0
-                }
             } label: {
-                Label("Refresh VMs", systemImage: "arrow.clockwise")
+                Label {
+                    Text("Refresh VMs")
+                } icon: {
+                    Image(systemName: "arrow.clockwise")
+                }
             }
             .keyboardShortcut("r", modifiers: .command)
             .help("Refresh VM list (⌘R)")
+        }
+        ToolbarItem(placement: .automatic) {
+            Spacer()
+            Spacer()
+            Spacer()
         }
     }
 
@@ -423,6 +424,7 @@ struct VMListView: View {
                                     .font(.caption2.weight(.bold))
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("Remove \(tag) filter")
                         }
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
@@ -702,7 +704,7 @@ private struct VMListSheets: ViewModifier {
     @Bindable var model: VMListViewModel
     let vmStore: VMStore
     let baseVMStore: BaseVMStore
-    let appState: AppState
+    @Bindable var appState: AppState
     let serverStore: MDMServerStore
 
     private var stopTitle: String {
@@ -755,7 +757,14 @@ private struct VMListSheets: ViewModifier {
                 Button("Stop", role: .destructive) {
                     if let vm = model.confirmStop {
                         model.confirmStop = nil
-                        Task { try? await vmStore.stop(vm: vm) }
+                        let label = vm.displayName.isEmpty ? vm.name : vm.displayName
+                        Task {
+                            do {
+                                try await vmStore.stop(vm: vm)
+                            } catch {
+                                AppLogger.shared.error("Failed to stop \"\(label)\": \(error.localizedDescription)", source: "VMStore")
+                            }
+                        }
                     }
                 }
                 Button("Cancel", role: .cancel) { model.confirmStop = nil }
@@ -847,7 +856,7 @@ private struct VMListSheets: ViewModifier {
             } message: {
                 Text("This permanently removes \(model.selectedIDs.count) VM images from disk. This cannot be undone.")
             }
-            .sheet(isPresented: Binding(get: { appState.isPresentingNewVM }, set: { appState.isPresentingNewVM = $0 })) {
+            .sheet(isPresented: $appState.isPresentingNewVM) {
                 NewVMSheet()
                     .environment(vmStore)
                     .environment(baseVMStore)
@@ -885,24 +894,14 @@ private struct VMListSheets: ViewModifier {
                 VMEditSheet(vm: vm)
                     .environment(vmStore)
             }
-            .sheet(isPresented: Binding(
-                get: { model.pushVM != nil },
-                set: { if !$0 { model.pushVM = nil } }
-            )) {
-                if let vm = model.pushVM {
-                    PushToRegistrySheet(vmName: vm.name) { imageRef, credentials in
-                        model.pushVM = nil
-                        Task { await pushVM(vm, to: imageRef, credentials: credentials) }
-                    }
+            .sheet(item: $model.pushVM) { vm in
+                PushToRegistrySheet(vmName: vm.name) { imageRef, credentials in
+                    model.pushVM = nil
+                    Task { await pushVM(vm, to: imageRef, credentials: credentials) }
                 }
             }
-            .sheet(isPresented: Binding(
-                get: { model.executeCommandVM != nil },
-                set: { if !$0 { model.executeCommandVM = nil } }
-            )) {
-                if let vm = model.executeCommandVM {
-                    ExecuteCommandSheet(vm: vm, initialMethod: model.executeCommandMethod)
-                }
+            .sheet(item: $model.executeCommandVM) { vm in
+                ExecuteCommandSheet(vm: vm, initialMethod: model.executeCommandMethod)
             }
             .alert(
                 ghostAlertTitle,
@@ -938,6 +937,7 @@ private struct VMListSheets: ViewModifier {
             if case .exit(let code) = event {
                 if code == 0 {
                     AppLogger.shared.success("Push complete: \(imageRef)", source: "VMListView")
+                    await NotificationService.shared.notifyImagePushCompleted(imageRef: imageRef)
                 } else {
                     AppLogger.shared.error("Push failed (exit \(code))", source: "VMListView")
                 }

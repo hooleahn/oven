@@ -59,7 +59,7 @@ final class InstallerStore {
 
     func markLastBuildDate(for installerID: UUID) {
         guard let idx = installers.firstIndex(where: { $0.id == installerID }) else { return }
-        installers[idx].lastBuildDate = Date()
+        installers[idx].lastBuildDate = Date.now
         save()
     }
 
@@ -72,7 +72,7 @@ final class InstallerStore {
             $0.type == .downloaded && ($0.buildNumber == firmware.buildid || $0.localPath == localURL.path)
         }) {
             installers[idx].localPath = localURL.path
-            installers[idx].downloadDate = Date()
+            installers[idx].downloadDate = Date.now
             save()
             return
         }
@@ -90,7 +90,7 @@ final class InstallerStore {
             sha256: firmware.sha256sum,
             downloadURL: URL(string: firmware.url),
             localPath: localURL.path,
-            downloadDate: Date(),
+            downloadDate: Date.now,
             type: .downloaded
         )
         add(installer)
@@ -125,7 +125,7 @@ final class InstallerStore {
             let ipswRoot = AppSettings.load().ipswStorageRoot
             let destName: String = {
                 let betaSuffix = osMetadata.isBeta
-                    ? (osMetadata.betaLabel.isEmpty ? "-beta" : "-\(osMetadata.betaLabel.replacingOccurrences(of: " ", with: "-"))")
+                    ? (osMetadata.betaLabel.isEmpty ? "-beta" : "-\(osMetadata.betaLabel.replacing(" ", with: "-"))")
                     : ""
                 let releaseName: String = {
                     switch osMetadata.osName {

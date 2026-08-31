@@ -246,7 +246,7 @@ final class VMStore {
 
             // Mark the source VM as recently cloned from
             if let srcIdx = vms.firstIndex(where: { $0.name == source }) {
-                vms[srcIdx].lastClonedAt = Date()
+                vms[srcIdx].lastClonedAt = Date.now
             }
 
             // Randomise serial number, MAC address and refit display — always,
@@ -275,19 +275,20 @@ final class VMStore {
     /// Stamps `lastClonedAt` on the OCI source VM so stale-detection works.
     func recordRegistryClone(sourceImageRef: String) {
         guard let idx = vms.firstIndex(where: { $0.registryImageRef == sourceImageRef }) else { return }
-        vms[idx].lastClonedAt = Date()
+        vms[idx].lastClonedAt = Date.now
         saveToDisk()
     }
 
     /// Start a VM. Returns an AsyncStream of log lines for the caller to display.
     func start(vm: VirtualMachine, mode: TartService.RunMode = .native) async -> AsyncStream<ProcessEvent> {
-        update(id: vm.id) { $0.status = .running; $0.lastStartedAt = Date() }
+        update(id: vm.id) { $0.status = .running; $0.lastStartedAt = Date.now }
         saveToDisk()
         return await tartService.run(name: vm.name, mode: mode, sharedFolders: vm.sharedFolders)
     }
 
     /// Stop a running VM.
     func stop(vm: VirtualMachine) async throws {
+        let previousStatus = vms.first(where: { $0.id == vm.id })?.status ?? vm.status
         update(id: vm.id) { $0.isStopping = true }
         defer { update(id: vm.id) { $0.isStopping = false } }
         try await tartService.stop(name: vm.name)
@@ -299,6 +300,23 @@ final class VMStore {
             $0.ipAddressError = nil
         }
         saveToDisk()
+        notifyIfStopped(previous: previousStatus, current: .stopped, vm: vm)
+    }
+
+    /// Fire a "VM stopped" notification when a VM moves from a live state
+    /// (running / suspended) to stopped. Centralised here so every stop path —
+    /// the Stop button, bulk actions, the scheduler, app termination, an
+    /// in-guest shutdown, or an external `tart stop` picked up by `sync()` —
+    /// is covered exactly once. Base VMs are excluded: their many boot/stop
+    /// cycles during a Packer build are noise, and build events cover them.
+    private func notifyIfStopped(previous: VirtualMachine.Status,
+                                 current: VirtualMachine.Status,
+                                 vm: VirtualMachine) {
+        guard current == .stopped,
+              previous == .running || previous == .suspended,
+              !vm.effectivelyBase else { return }
+        let label = vm.displayName.isEmpty ? vm.name : vm.displayName
+        Task { await NotificationService.shared.notifyVMStopped(vmName: label) }
     }
 
     /// Suspend a running VM.
@@ -334,7 +352,7 @@ final class VMStore {
                     try await jamf.removeDevice(id: device.id)
                     AppLogger.shared.success("Removed \(vm.name) from Jamf Pro", source: "VMStore")
                 } else {
-                    AppLogger.shared.log("Device not found in Jamf Pro for \(vm.name) (serial: \(vm.serialNumber))", source: "VMStore")
+                    AppLogger.shared.warning("Device not found in Jamf Pro for \(vm.name) (serial: \(vm.serialNumber))", source: "VMStore")
                 }
             } catch {
                 let msg = error.localizedDescription
@@ -440,7 +458,9 @@ final class VMStore {
                 if vms[idx].isBaseVM && vms[idx].buildStatus == .notBuilt {
                     vms[idx].buildStatus = .ready
                 }
+                let previousStatus = vms[idx].status
                 vms[idx].status = VirtualMachine.Status(tartState: info.state)
+                notifyIfStopped(previous: previousStatus, current: vms[idx].status, vm: vms[idx])
                 if let sz = info.size { vms[idx].actualDiskGB = sz }
                 if vms[idx].macOSVersion.isEmpty {
                     vms[idx].macOSVersion = inferMacOSVersion(from: info.name)
@@ -486,6 +506,7 @@ final class VMStore {
         for idx in vms.indices {
             if !tartNames.contains(vms[idx].name) && vms[idx].status == .running {
                 vms[idx].status = .stopped
+                notifyIfStopped(previous: .running, current: .stopped, vm: vms[idx])
             }
         }
     }
@@ -507,7 +528,7 @@ final class VMStore {
         else { return (.unknown, "") }
         let versionPattern = #"(\d+[-\.]\d+(?:[-\.]\d+)?)"#
         let ver = bare.range(of: versionPattern, options: .regularExpression)
-            .map { bare[$0].replacingOccurrences(of: "-", with: ".") } ?? ""
+            .map { String(bare[$0]).replacing("-", with: ".") } ?? ""
         return (osName, ver)
     }
 
@@ -522,7 +543,7 @@ final class VMStore {
         let vmDir = tartHome.appendingPathComponent("vms/\(name)")
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: vmDir.path),
               let created = attrs[.creationDate] as? Date
-        else { return Date() }
+        else { return Date.now }
         return created
     }
 

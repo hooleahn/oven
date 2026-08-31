@@ -32,6 +32,6 @@ struct MDMProfile: Identifiable, Codable, Hashable, Sendable {
     /// Returns true when the invitation is not yet expired (or has no expiration date set).
     var isValid: Bool {
         guard let exp = expirationDate else { return true }
-        return exp > Date()
+        return exp > Date.now
     }
 }

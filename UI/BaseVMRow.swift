@@ -15,9 +15,9 @@ struct BaseVMRow: View {
         let last = parts.last ?? vm.name
         let clean = last.components(separatedBy: ":").first ?? last
         return clean
-            .replacingOccurrences(of: "macos-", with: "")
-            .replacingOccurrences(of: "-base", with: " Base")
-            .replacingOccurrences(of: "-", with: " ")
+            .replacing("macos-", with: "")
+            .replacing("-base", with: " Base")
+            .replacing("-", with: " ")
             .capitalized
     }
 

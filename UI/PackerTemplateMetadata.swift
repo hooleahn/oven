@@ -29,7 +29,7 @@ struct PackerTemplateMetadata: Codable {
     var lastValidation: ValidationRecord? = nil
 
     init(id: UUID = UUID(), displayName: String, templateDescription: String = "",
-         osName: String = "", osVersion: String = "", createdAt: Date = Date(),
+         osName: String = "", osVersion: String = "", createdAt: Date = Date.now,
          lastValidation: ValidationRecord? = nil) {
         self.id = id
         self.displayName = displayName

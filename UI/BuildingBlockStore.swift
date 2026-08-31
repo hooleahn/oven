@@ -80,7 +80,7 @@ final class BuildingBlockStore {
             provisioner: block.provisioner,
             hclContent: block.hclContent,
             isBase: false,
-            createdAt: Date(),
+            createdAt: Date.now,
             osName: block.osName,
             osVersion: block.osVersion
         )
@@ -112,7 +112,7 @@ final class BuildingBlockStore {
             blockDescription: cmd.blockDescription,
             commandLines: cmd.commandLines,
             isBase: false,
-            createdAt: Date(),
+            createdAt: Date.now,
             osName: cmd.osName,
             osVersion: cmd.osVersion
         )

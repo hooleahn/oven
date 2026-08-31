@@ -40,7 +40,7 @@ struct TagChip: View {
         .foregroundStyle(tagStore.color(for: tag))
         .contentShape(Capsule())
         .accessibilityLabel("Tag: \(tag)")
-        .accessibilityHint("Double-tap to filter by this tag, option-double-tap to remove")
+        .accessibilityHint("Double-tap to filter by this tag; shift-double-tap to add it to the current filter")
         .ifLet(onTap != nil || onShiftTap != nil) { view in
             view
                 .onTapGesture {

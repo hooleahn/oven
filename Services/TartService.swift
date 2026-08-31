@@ -100,7 +100,7 @@ actor TartService {
                 return try JSONDecoder().decode([TartVMInfo].self, from: data)
             } catch {
                 await AppLogger.shared.error("tart list decode failed: \(error) — raw: \(trimmed.prefix(200))", source: "TartService")
-                return []
+                throw error
             }
         } catch ProcessError.nonZeroExit(let code, _) where code == 9 {
             return []
@@ -128,12 +128,17 @@ actor TartService {
     }
 
     func stop(name: String, timeout: Int = 30) async throws {
-        // Try graceful stop with timeout first, fall back to immediate stop
+        // Try graceful stop with timeout first, falling back to a plain stop
+        // if that fails for any reason. Log the first failure so it isn't
+        // silently lost if the fallback also fails.
         do {
             try await runner.run(resolvedTartPath,
                 arguments: ["stop", "--timeout", "\(timeout)", name],
                 environment: tartEnv)
         } catch {
+            await AppLogger.shared.warning(
+                "tart stop --timeout \(timeout) failed for \(name) (\(error.localizedDescription)); retrying with plain stop",
+                source: "TartService")
             try await runner.run(resolvedTartPath, arguments: ["stop", name], environment: tartEnv)
         }
     }

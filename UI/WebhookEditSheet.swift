@@ -223,10 +223,10 @@ struct WebhookEditSheet: View {
 
     private var isValidJSON: Bool {
         let dummy = webhook.jsonPayload
-            .replacingOccurrences(of: "%%VMNAME%%", with: "TestVM")
-            .replacingOccurrences(of: "%%EVENTTYPE%%", with: "test")
-            .replacingOccurrences(of: "%%TIMESTAMP%%", with: "1234567890")
-            .replacingOccurrences(of: "%%DATETIME%%", with: "2024-01-01T00:00:00Z")
+            .replacing("%%VMNAME%%", with: "TestVM")
+            .replacing("%%EVENTTYPE%%", with: "test")
+            .replacing("%%TIMESTAMP%%", with: "1234567890")
+            .replacing("%%DATETIME%%", with: "2024-01-01T00:00:00Z")
         guard let data = dummy.data(using: .utf8) else { return false }
         return (try? JSONSerialization.jsonObject(with: data)) != nil
     }

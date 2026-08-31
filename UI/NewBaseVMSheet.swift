@@ -112,9 +112,6 @@ struct NewBaseVMSheet: View {
             if !version.isEmpty {
                 _versionPickerSel = State(initialValue: version)
             }
-            print("[NewBaseVM] init — osName=\(m.osName) osVersion='\(m.osVersion)' customMajorVersion='\(m.customMajorVersion)' → seeding versionPickerSel='\(version)'")
-        } else {
-            print("[NewBaseVM] init — no preselectedInstaller")
         }
     }
 
@@ -213,9 +210,7 @@ struct NewBaseVMSheet: View {
             manualPassword = KeychainService.retrieve(key: "defaults.packer.password") ?? "admin"
             tmplPassword   = KeychainService.retrieve(key: "defaults.packer.password") ?? "admin"
             loadMDMData()
-            print("[NewBaseVM] task — before fetchLiveVersions, preselectedInstaller=\(preselectedInstaller != nil ? "present" : "nil") versionPickerSel='\(versionPickerSel)'")
             await fetchLiveVersions()
-            print("[NewBaseVM] task — after fetchLiveVersions, preselectedInstaller=\(preselectedInstaller != nil ? "present" : "nil") versionPickerSel='\(versionPickerSel)' liveFirmwares.count=\(liveFirmwares.count)")
             if let installer = preselectedInstaller {
                 // onChange(of: liveFirmwares) already ran while fetching; call again to
                 // ensure the version is confirmed against the now-complete live list.
@@ -233,16 +228,12 @@ struct NewBaseVMSheet: View {
         }
         .onChange(of: liveFirmwares) { _, _ in
             if let installer = preselectedInstaller {
-                print("[NewBaseVM] onChange(liveFirmwares) — preselectedInstaller present, calling applyVersionFromInstaller. versionPickerSel before='\(versionPickerSel)'")
                 // Live list just arrived; confirm the preselected version against it.
                 applyVersionFromInstaller(installer)
-                print("[NewBaseVM] onChange(liveFirmwares) — versionPickerSel after='\(versionPickerSel)'")
             } else {
-                print("[NewBaseVM] onChange(liveFirmwares) — NO preselectedInstaller, versionPickerSel='\(versionPickerSel)' versionList=\(versionList.prefix(3))")
                 let versions = versionList
                 if !versions.isEmpty && !versions.contains(versionPickerSel) && versionPickerSel != Self.customVersionSentinel {
                     versionPickerSel = versions[0]
-                    print("[NewBaseVM] onChange(liveFirmwares) — set versionPickerSel='\(versionPickerSel)'")
                 }
             }
         }
@@ -324,8 +315,7 @@ struct NewBaseVMSheet: View {
                     Text($0.displayLabel).tag($0)
                 }
             }
-            .onChange(of: osName) { old, new in
-                print("[NewBaseVM] onChange(osName) — \(old) → \(new), resetting versionPickerSel")
+            .onChange(of: osName) { _, _ in
                 versionPickerSel = ""; customVersionText = ""
                 customOSMajorVersion = ""; customOSReleaseName = ""
                 customIPSWPath = ""; customIPSWURL = ""
@@ -974,11 +964,9 @@ struct NewBaseVMSheet: View {
         let m = installer.osMetadata
         let version = m.osVersion.isEmpty ? m.customMajorVersion : m.osVersion
         let list = versionList
-        print("[NewBaseVM] applyVersionFromInstaller — version='\(version)' versionList.count=\(list.count) first='\(list.first ?? "nil")' contains=\(list.contains(version))")
         guard !version.isEmpty else {
             if let first = list.first {
                 versionPickerSel = first
-                print("[NewBaseVM] applyVersionFromInstaller — empty version, set first='\(first)'")
             }
             return
         }

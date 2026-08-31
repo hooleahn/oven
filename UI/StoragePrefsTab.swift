@@ -160,7 +160,8 @@ struct StoragePrefsTab: View {
                 proc.executableURL = URL(fileURLWithPath: "/usr/bin/open")
                 proc.arguments = ["-n", Bundle.main.bundlePath]
                 try? proc.run()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                Task {
+                    try? await Task.sleep(for: .milliseconds(500))
                     SharedStores.skipQuitGuard = true
                     NSApplication.shared.terminate(nil)
                 }

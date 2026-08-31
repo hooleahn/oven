@@ -352,7 +352,7 @@ struct BuildingBlockEditSheet: View {
             provisioner: provisioner,
             hclContent: hclContent,
             isBase: false,
-            createdAt: block?.createdAt ?? Date()
+            createdAt: block?.createdAt ?? Date.now
         )
         onSave(b)
         dismiss()
@@ -488,7 +488,7 @@ struct BootCommandEditSheet: View {
             blockDescription: description,
             commandLines: lines,
             isBase: false,
-            createdAt: cmd?.createdAt ?? Date(),
+            createdAt: cmd?.createdAt ?? Date.now,
             osName: osName.rawValue,
             osVersion: osVersion.trimmingCharacters(in: .whitespaces)
         )

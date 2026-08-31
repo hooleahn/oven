@@ -12,9 +12,10 @@ struct StaleInstallersSheet: View {
     @State private var selectedIDs: Set<UUID> = []
     @State private var fileSizes: [UUID: Int64] = [:]
     @State private var isDeleting = false
+    @State private var isPresentingDeleteConfirm = false
 
     private var cutoff: Date {
-        Calendar.current.date(byAdding: .day, value: -thresholdDays, to: Date()) ?? Date()
+        Calendar.current.date(byAdding: .day, value: -thresholdDays, to: Date.now) ?? Date.now
     }
 
     // MARK: - Derived last-used date per installer
@@ -77,7 +78,7 @@ struct StaleInstallersSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(role: .destructive) {
-                        Task { await deleteSelected() }
+                        isPresentingDeleteConfirm = true
                     } label: {
                         if isDeleting {
                             ProgressView().controlSize(.small)
@@ -94,6 +95,16 @@ struct StaleInstallersSheet: View {
                     .tint(.red)
                 }
             }
+            .confirmationDialog(
+                "Delete \(selectedIDs.count) installer\(selectedIDs.count == 1 ? "" : "s")?",
+                isPresented: $isPresentingDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) { Task { await deleteSelected() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently removes the selected installer files from disk. This cannot be undone.")
+            }
             .task { await computeFileSizes() }
         }
         .frame(minWidth: 520, minHeight: 360)
@@ -109,7 +120,7 @@ struct StaleInstallersSheet: View {
                     .fontWeight(.medium)
 
                 HStack(spacing: 12) {
-                    Label(RelativeDateTimeFormatter().localizedString(for: item.lastUsed, relativeTo: Date()),
+                    Label(RelativeDateTimeFormatter().localizedString(for: item.lastUsed, relativeTo: Date.now),
                           systemImage: "clock")
                         .font(.caption).foregroundStyle(.secondary)
 

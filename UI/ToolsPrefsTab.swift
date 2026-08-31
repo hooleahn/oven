@@ -131,6 +131,7 @@ private struct ToolDepRow: View {
                         Image(systemName: "folder")
                     }
                     .help("Browse for the \(dep.displayName) binary")
+                    .accessibilityLabel("Browse for \(dep.displayName)")
 
                     if !editingPath.isEmpty {
                         let exists = FileManager.default.fileExists(atPath: editingPath)

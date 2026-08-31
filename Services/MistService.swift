@@ -63,7 +63,7 @@ actor MistService {
 
     var isCacheFresh: Bool {
         guard let date = lastFetchDate else { return false }
-        return Date().timeIntervalSince(date) < MistService.cacheTTL
+        return Date.now.timeIntervalSince(date) < MistService.cacheTTL
     }
 
     func invalidateCache() {
@@ -86,12 +86,12 @@ actor MistService {
         // 1. In-memory cache
         if let cached = cachedFirmwares,
            let date = lastFetchDate,
-           Date().timeIntervalSince(date) < MistService.cacheTTL {
+           Date.now.timeIntervalSince(date) < MistService.cacheTTL {
             return cached
         }
         // 2. Disk cache
         if let (diskFirmwares, diskDate) = loadDiskCache(),
-           Date().timeIntervalSince(diskDate) < MistService.cacheTTL {
+           Date.now.timeIntervalSince(diskDate) < MistService.cacheTTL {
             cachedFirmwares = diskFirmwares
             lastFetchDate = diskDate
             return diskFirmwares
@@ -135,7 +135,7 @@ actor MistService {
         }
         // Write cache
         cachedFirmwares = results
-        lastFetchDate = Date()
+        lastFetchDate = Date.now
         saveDiskCache(results)
         return results
     }

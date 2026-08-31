@@ -118,7 +118,7 @@ final class DependencyManager {
                 }
             }
         }
-        lastUpdateCheck = Date()
+        lastUpdateCheck = Date.now
         isCheckingForUpdates = false
         AppLogger.shared.log("Dependency update check complete", source: "DependencyManager")
     }
@@ -369,11 +369,13 @@ final class DependencyManager {
         // ── tart ──────────────────────────────────────────────────────────────
         case "tart":
             let tag = try await fetchLatestGitHubTag(owner: "cirruslabs", repo: "tart")
-            let url = URL(string: "https://github.com/cirruslabs/tart/releases/download/\(tag)/tart.tar.gz")!
+            guard let url = URL(string: "https://github.com/cirruslabs/tart/releases/download/\(tag)/tart.tar.gz") else {
+                throw ProcessError.launchFailed("Could not build download URL for tart release tag \"\(tag)\"")
+            }
             log("  Downloading tart \(tag)…")
             let downloaded = try await download(from: url)
             let extractDir = makeTempDir()
-            try runSync("/usr/bin/tar", args: ["-xzf", downloaded.path, "-C", extractDir.path])
+            try await runSync("/usr/bin/tar", args: ["-xzf", downloaded.path, "-C", extractDir.path])
             let binary = extractDir.appendingPathComponent("tart.app/Contents/MacOS/tart")
             guard FileManager.default.fileExists(atPath: binary.path) else {
                 throw ProcessError.launchFailed("tart binary not found inside tar.gz at expected path")
@@ -393,11 +395,13 @@ final class DependencyManager {
         case "packer":
             let tag = try await fetchLatestGitHubTag(owner: "hashicorp", repo: "packer")
             let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
-            let url = URL(string: "https://releases.hashicorp.com/packer/\(version)/packer_\(version)_darwin_arm64.zip")!
+            guard let url = URL(string: "https://releases.hashicorp.com/packer/\(version)/packer_\(version)_darwin_arm64.zip") else {
+                throw ProcessError.launchFailed("Could not build download URL for packer version \"\(version)\"")
+            }
             log("  Downloading packer \(version)…")
             let downloaded = try await download(from: url)
             let extractDir = makeTempDir()
-            try runSync("/usr/bin/unzip", args: ["-o", downloaded.path, "-d", extractDir.path])
+            try await runSync("/usr/bin/unzip", args: ["-o", downloaded.path, "-d", extractDir.path])
             let binary = try findFile(named: "packer", in: extractDir, exact: true)
             let dest = depsDirectory.appendingPathComponent("packer")
             try? FileManager.default.removeItem(at: dest)
@@ -416,30 +420,34 @@ final class DependencyManager {
             let downloaded = try await download(from: pkgURL)
 
             let expandDir = makeTempDir()
-            try runSync("/usr/bin/xar", args: ["-xf", downloaded.path, "-C", expandDir.path])
+            try await runSync("/usr/bin/xar", args: ["-xf", downloaded.path, "-C", expandDir.path])
 
             let payloadURL = try findFile(named: "Payload", in: expandDir, exact: true)
             let cpioDir = makeTempDir()
-            let gunzip = Process()
-            gunzip.executableURL = URL(fileURLWithPath: "/usr/bin/gunzip")
-            gunzip.arguments = ["-c", payloadURL.path]
-            let cpio = Process()
-            cpio.executableURL = URL(fileURLWithPath: "/usr/bin/cpio")
-            cpio.arguments = ["-id"]
-            cpio.currentDirectoryURL = cpioDir
-            let pipe = Pipe()
-            gunzip.standardOutput = pipe
-            cpio.standardInput = pipe
-            try gunzip.run()
-            try cpio.run()
-            gunzip.waitUntilExit()
-            cpio.waitUntilExit()
-            guard gunzip.terminationStatus == 0 else {
-                throw ProcessError.nonZeroExit(gunzip.terminationStatus, "gunzip failed — mist-cli download may be corrupt")
-            }
-            guard cpio.terminationStatus == 0 else {
-                throw ProcessError.nonZeroExit(cpio.terminationStatus, "cpio extraction failed")
-            }
+            // Run the gunzip | cpio pipeline off the main actor — waitUntilExit()
+            // blocks the calling thread, and this class is @MainActor.
+            try await Task.detached(priority: .userInitiated) {
+                let gunzip = Process()
+                gunzip.executableURL = URL(fileURLWithPath: "/usr/bin/gunzip")
+                gunzip.arguments = ["-c", payloadURL.path]
+                let cpio = Process()
+                cpio.executableURL = URL(fileURLWithPath: "/usr/bin/cpio")
+                cpio.arguments = ["-id"]
+                cpio.currentDirectoryURL = cpioDir
+                let pipe = Pipe()
+                gunzip.standardOutput = pipe
+                cpio.standardInput = pipe
+                try gunzip.run()
+                try cpio.run()
+                gunzip.waitUntilExit()
+                cpio.waitUntilExit()
+                guard gunzip.terminationStatus == 0 else {
+                    throw ProcessError.nonZeroExit(gunzip.terminationStatus, "gunzip failed — mist-cli download may be corrupt")
+                }
+                guard cpio.terminationStatus == 0 else {
+                    throw ProcessError.nonZeroExit(cpio.terminationStatus, "cpio extraction failed")
+                }
+            }.value
 
             let binary = try findFile(named: "mist", in: cpioDir, exact: true)
             let dest = depsDirectory.appendingPathComponent("mist-cli")
@@ -462,7 +470,7 @@ final class DependencyManager {
             )
             let downloaded = try await download(from: assetURL)
             let extractDir = makeTempDir()
-            try runSync("/usr/bin/unzip", args: ["-o", downloaded.path, "-d", extractDir.path])
+            try await runSync("/usr/bin/unzip", args: ["-o", downloaded.path, "-d", extractDir.path])
             let binary = try findFile(named: binaryName, in: extractDir, exact: true)
 
             let pluginDir = FileManager.default.homeDirectoryForCurrentUser
@@ -478,7 +486,9 @@ final class DependencyManager {
         // ── jq ────────────────────────────────────────────────────────────────
         case "jq":
             let tag = try await fetchLatestGitHubTag(owner: "jqlang", repo: "jq")
-            let url = URL(string: "https://github.com/jqlang/jq/releases/download/\(tag)/jq-macos-arm64")!
+            guard let url = URL(string: "https://github.com/jqlang/jq/releases/download/\(tag)/jq-macos-arm64") else {
+                throw ProcessError.launchFailed("Could not build download URL for jq release tag \"\(tag)\"")
+            }
             log("  Downloading jq \(tag)…")
             let downloaded = try await download(from: url)
             let dest = depsDirectory.appendingPathComponent("jq")
@@ -524,21 +534,26 @@ final class DependencyManager {
 
     // MARK: - Process helpers
 
-    private func runSync(_ executable: String, args: [String], env: [String: String]? = nil) throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = args
-        if let env = env {
-            var merged = ProcessInfo.processInfo.environment
-            env.forEach { merged[$0] = $1 }
-            process.environment = merged
-        }
-        try process.run()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            throw ProcessError.nonZeroExit(process.terminationStatus,
-                                           "\(URL(fileURLWithPath: executable).lastPathComponent) exited \(process.terminationStatus)")
-        }
+    /// Runs a quick extraction tool (tar, unzip, xar) to completion off the main actor —
+    /// this class is @MainActor, so a blocking waitUntilExit() called directly here would
+    /// freeze the whole UI for the duration of the extraction.
+    private func runSync(_ executable: String, args: [String], env: [String: String]? = nil) async throws {
+        try await Task.detached(priority: .userInitiated) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = args
+            if let env = env {
+                var merged = ProcessInfo.processInfo.environment
+                env.forEach { merged[$0] = $1 }
+                process.environment = merged
+            }
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                throw ProcessError.nonZeroExit(process.terminationStatus,
+                                               "\(URL(fileURLWithPath: executable).lastPathComponent) exited \(process.terminationStatus)")
+            }
+        }.value
     }
 
     private func download(from url: URL) async throws -> URL {

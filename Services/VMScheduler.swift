@@ -13,8 +13,9 @@ final class VMScheduler {
     private var timer: Timer?
     private var vmStore: VMStore?
 
-    // Tracks "vmID-start" / "vmID-stop" → DateComponents at last fire to avoid double-firing.
-    private var lastTrigger: [String: DateComponents] = [:]
+    // Tracks "vmID-start" / "vmID-stop" → Date at last fire, to avoid double-firing within
+    // the same day while still allowing the schedule to fire again next week.
+    private var lastTrigger: [String: Date] = [:]
 
     // MARK: - Lifecycle
 
@@ -40,19 +41,19 @@ final class VMScheduler {
     private func tick() {
         guard let vmStore else { return }
         let calendar = Calendar.current
-        let now = Date()
+        let now = Date.now
         let comps = calendar.dateComponents([.weekday, .hour, .minute], from: now)
         guard let rawWeekday = comps.weekday else { return }
         let dayIndex = rawWeekday - 1  // Calendar.weekday is 1-based (1=Sun); convert to 0-based
 
         for vm in vmStore.vms where !vm.effectivelyBase && vm.scheduleEnabled {
-            checkStart(vm: vm, dayIndex: dayIndex, comps: comps, calendar: calendar)
-            checkStop(vm: vm, dayIndex: dayIndex, comps: comps, calendar: calendar)
+            checkStart(vm: vm, dayIndex: dayIndex, comps: comps, now: now, calendar: calendar)
+            checkStop(vm: vm, dayIndex: dayIndex, comps: comps, now: now, calendar: calendar)
         }
     }
 
     private func checkStart(vm: VirtualMachine, dayIndex: Int,
-                            comps: DateComponents, calendar: Calendar) {
+                            comps: DateComponents, now: Date, calendar: Calendar) {
         guard let startTime = vm.scheduleStartTime,
               !vm.scheduleStartDays.isEmpty,
               vm.scheduleStartDays.contains(dayIndex),
@@ -62,13 +63,13 @@ final class VMScheduler {
         guard sc.hour == comps.hour, sc.minute == comps.minute else { return }
 
         let key = "\(vm.id.uuidString)-start"
-        guard !alreadyFired(key: key, comps: comps) else { return }
-        lastTrigger[key] = comps
+        guard !alreadyFired(key: key, now: now, calendar: calendar) else { return }
+        lastTrigger[key] = now
         Task { await self.launch(vm: vm) }
     }
 
     private func checkStop(vm: VirtualMachine, dayIndex: Int,
-                           comps: DateComponents, calendar: Calendar) {
+                           comps: DateComponents, now: Date, calendar: Calendar) {
         guard let stopTime = vm.scheduleStopTime,
               !vm.scheduleStopDays.isEmpty,
               vm.scheduleStopDays.contains(dayIndex),
@@ -78,16 +79,16 @@ final class VMScheduler {
         guard sc.hour == comps.hour, sc.minute == comps.minute else { return }
 
         let key = "\(vm.id.uuidString)-stop"
-        guard !alreadyFired(key: key, comps: comps) else { return }
-        lastTrigger[key] = comps
+        guard !alreadyFired(key: key, now: now, calendar: calendar) else { return }
+        lastTrigger[key] = now
         Task { await self.scheduledStop(vm: vm) }
     }
 
-    private func alreadyFired(key: String, comps: DateComponents) -> Bool {
+    /// True if this key already fired earlier today. Once the day rolls over,
+    /// the same weekday/hour/minute match is allowed to fire again next week.
+    private func alreadyFired(key: String, now: Date, calendar: Calendar) -> Bool {
         guard let last = lastTrigger[key] else { return false }
-        return last.weekday == comps.weekday
-            && last.hour == comps.hour
-            && last.minute == comps.minute
+        return calendar.isDate(last, inSameDayAs: now)
     }
 
     // MARK: - Actions

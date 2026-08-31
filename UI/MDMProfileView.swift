@@ -98,7 +98,7 @@ struct MDMEnrollmentView: View {
                 Button { model.isPresentingNewSheet = true } label: {
                     Label("New Profile", systemImage: "plus")
                 }
-                .keyboardShortcut("n", modifiers: .command)
+                // ⌘N is bound centrally in NewItemCommands (OvenApp.swift).
                 .help("Create a new enrollment profile (⌘N)")
             }
         }
@@ -369,7 +369,7 @@ struct MDMProfileSheet: View {
                     Toggle("Set expiration date manually", isOn: $hasExpiration)
                     if hasExpiration {
                         DatePicker("Expiration Date", selection: Binding(
-                            get: { expirationDate ?? Date() },
+                            get: { expirationDate ?? Date.now },
                             set: { expirationDate = $0 }
                         ), displayedComponents: .date)
                     }

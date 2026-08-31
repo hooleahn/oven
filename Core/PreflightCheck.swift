@@ -246,7 +246,7 @@ final class PreflightCheck {
             )
             let output = [stdout, stderr].filter { !$0.isEmpty }.joined(separator: "\n")
             if !output.isEmpty {
-                AppLogger.shared.log("[validate] \(output)", source: "PreflightCheck")
+                AppLogger.shared.debug(output, source: "PreflightCheck")
             }
             return .success(())
         } catch let error as ProcessError {

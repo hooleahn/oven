@@ -93,7 +93,7 @@ struct MDMServersView: View {
                 Button { model.isPresentingNewSheet = true } label: {
                     Label("Add Server", systemImage: "plus")
                 }
-                .keyboardShortcut("n", modifiers: .command)
+                // ⌘N is bound centrally in NewItemCommands (OvenApp.swift).
                 .help("Add a new MDM server (⌘N)")
             }
         }
@@ -339,7 +339,7 @@ struct MDMServerDetailPane: View {
             serverStore.update(id: serverID) {
                 $0.connectionState = .failed("No password stored in Keychain")
                 $0.lastTestResult = msg
-                $0.lastTestedAt = Date()
+                $0.lastTestedAt = Date.now
             }
             return
         }
@@ -355,14 +355,14 @@ struct MDMServerDetailPane: View {
                 $0.connectionState = .connected
                 $0.storedPrivileges = privileges.sorted()
                 $0.lastTestResult = result
-                $0.lastTestedAt = Date()
+                $0.lastTestedAt = Date.now
             }
         } catch {
             let msg = "✗ \(error.localizedDescription)"
             serverStore.update(id: serverID) {
                 $0.connectionState = .failed(error.localizedDescription)
                 $0.lastTestResult = msg
-                $0.lastTestedAt = Date()
+                $0.lastTestedAt = Date.now
             }
         }
         isTesting = false

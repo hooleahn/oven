@@ -34,6 +34,7 @@ struct BuildLogView: View {
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
                 .help("Copy full build log to clipboard")
+                .accessibilityLabel("Copy build log")
                 .disabled(baseVM.buildLog.isEmpty)
             }
             .padding(.horizontal, 10)

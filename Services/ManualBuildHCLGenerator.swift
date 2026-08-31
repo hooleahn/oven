@@ -39,6 +39,17 @@ struct ManualBuildHCLGenerator {
         return parts.joined(separator: "\n\n")
     }
 
+    // MARK: - Escaping
+
+    /// Escapes a value for safe interpolation into an HCL double-quoted string
+    /// literal. Without this, a name/URL/path containing a `"` or `\` produces
+    /// invalid HCL and a confusing packer failure downstream.
+    private static func hclEscape(_ value: String) -> String {
+        value
+            .replacing("\\", with: "\\\\")
+            .replacing("\"", with: "\\\"")
+    }
+
     // MARK: - Plugin block
 
     private static func pluginBlock() -> String {
@@ -61,12 +72,12 @@ struct ManualBuildHCLGenerator {
         var lines = [
             "variable \"vm_name\" {",
             "  type    = string",
-            "  default = \"\(config.tartName)\"",
+            "  default = \"\(hclEscape(config.tartName))\"",
             "}",
             "",
             "variable \"ipsw_url\" {",
             "  type    = string",
-            "  default = \"\(ipswURL)\"",
+            "  default = \"\(hclEscape(ipswURL))\"",
             "}",
         ]
 
@@ -75,7 +86,7 @@ struct ManualBuildHCLGenerator {
                 "",
                 "variable \"account_userName\" {",
                 "  type    = string",
-                "  default = \"\(config.credentials.username)\"",
+                "  default = \"\(hclEscape(config.credentials.username))\"",
                 "}",
                 "",
                 "variable \"account_password\" {",
@@ -92,13 +103,13 @@ struct ManualBuildHCLGenerator {
                     "",
                     "variable \"jamf_url\" {",
                     "  type    = string",
-                    "  default = \"\(jamfURLValue)\"",
+                    "  default = \"\(hclEscape(jamfURLValue))\"",
                     "  description = \"MDM server URL\"",
                     "}",
                     "",
                     "variable \"mdm_invitation_id\" {",
                     "  type    = string",
-                    "  default = \"\(invitationIDValue)\"",
+                    "  default = \"\(hclEscape(invitationIDValue))\"",
                     "  description = \"MDM enrollment invitation ID\"",
                     "}",
                 ]
@@ -353,8 +364,8 @@ struct ManualBuildHCLGenerator {
             guard !upload.sourcePath.isEmpty, !upload.destinationPath.isEmpty else { return [] }
             return [
                 "  provisioner \"file\" {",
-                "    source      = \"\(upload.sourcePath)\"",
-                "    destination = \"\(upload.destinationPath)\"",
+                "    source      = \"\(hclEscape(upload.sourcePath))\"",
+                "    destination = \"\(hclEscape(upload.destinationPath))\"",
                 "  }",
             ]
         }

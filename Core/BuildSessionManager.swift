@@ -117,6 +117,18 @@ final class BuildSessionManager {
     func enableInputLock() {
         guard !isLocked else { return }
 
+        // A locked event tap suppresses ALL keyboard/mouse input system-wide, including
+        // VoiceOver and Switch Control commands — the only way out is a sighted, two-handed
+        // ⌘⇧⎋ chord. That's an accessibility trap for anyone relying on assistive tech, so
+        // skip the lock entirely rather than risk stranding them with no way to interact.
+        if NSWorkspace.shared.isVoiceOverEnabled {
+            AppLogger.shared.warning(
+                "Input lock skipped — VoiceOver is running, and locking input would block it too with no accessible way to unlock.",
+                source: "BuildSessionManager"
+            )
+            return
+        }
+
         // AXIsProcessTrustedWithOptions triggers the system permission prompt if not granted.
         // CGPreflightPostEventAccess only checks silently — never prompts.
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
@@ -254,7 +266,7 @@ final class BuildSessionManager {
 
     func disableInputLock() {
         guard isLocked else {
-            AppLogger.shared.log("disableInputLock: already unlocked (isLocked=false)", source: "BuildSessionManager")
+            AppLogger.shared.debug("disableInputLock: already unlocked (isLocked=false)", source: "BuildSessionManager")
             return
         }
         guard let tap = eventTap else {

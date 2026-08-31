@@ -99,7 +99,10 @@ struct DetailRow: View {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(value, forType: .string)
                     copied = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(1500))
+                        copied = false
+                    }
                 } label: {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc")
                         .foregroundStyle(copied ? .green : .secondary)

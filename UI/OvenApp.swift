@@ -284,7 +284,7 @@ struct OvenApp: App {
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1160, height: 720)
         .commands {
-            CommandGroup(replacing: .newItem) {}
+            NewItemCommands()
             CommandGroup(after: .help) {
                 Button("Show Welcome Guide") {
                     NotificationCenter.default.post(name: .showOnboarding, object: nil)
@@ -323,6 +323,24 @@ struct OvenApp: App {
             menuBarLabel
         }
         .menuBarExtraStyle(.menu)
+    }
+}
+
+// MARK: - File > New command
+
+/// Drives the File > New menu item from whichever sidebar section is currently
+/// selected. ContentView publishes the contextual action via `.focusedSceneValue(\.newItemCommand, ...)`.
+struct NewItemCommands: Commands {
+    @FocusedValue(\.newItemCommand) private var newItemCommand: NewItemCommand?
+
+    var body: some Commands {
+        CommandGroup(replacing: .newItem) {
+            Button(newItemCommand?.label ?? "New") {
+                newItemCommand?.action()
+            }
+            .keyboardShortcut("n", modifiers: .command)
+            .disabled(newItemCommand == nil)
+        }
     }
 }
 

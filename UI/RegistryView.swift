@@ -15,7 +15,7 @@ struct RegistryView: View {
     @FocusState private var newImageRefFocused: Bool
 
     private func coarseAge(of date: Date) -> String {
-        let s = Int(Date().timeIntervalSince(date))
+        let s = Int(Date.now.timeIntervalSince(date))
         if s < 120     { return "just now" }
         if s < 3600    { return "\(s / 60) min ago" }
         if s < 86_400  { return "\(s / 3600) hr ago" }
@@ -226,12 +226,17 @@ struct RegistryView: View {
                         .appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
                     Task {
                         await rvm.syncFromTart(tartPath: tartPath)
-                        lastRefreshedAt = Date()
+                        lastRefreshedAt = Date.now
                         isRefreshing = false
                         refreshRotation = 0
                     }
                 } label: {
-                    Label("Sync from Tart", systemImage: "arrow.clockwise")
+                    Label {
+                        Text("Sync from Tart")
+                    } icon: {
+                        Image(systemName: "arrow.clockwise")
+                            .rotationEffect(.degrees(isRefreshing ? refreshRotation : 0))
+                    }
                 }
                 .keyboardShortcut("r", modifiers: .command)
                 .help("Sync registry images from local tart (⌘R)")
@@ -244,7 +249,7 @@ struct RegistryView: View {
             let tartPath = AppSettings.defaultLocalStorageRoot
                 .appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
             await rvm.syncFromTart(tartPath: tartPath)
-            lastRefreshedAt = Date()
+            lastRefreshedAt = Date.now
         }
         .sheet(isPresented: $rvm.showCirrusCatalogue) {
             CirrusCatalogueSheet(
@@ -282,7 +287,7 @@ struct RegistryView: View {
                 rvm.pendingPullPassword = password
                 let rawLocal = image.imageRef
                     .components(separatedBy: "/").last?
-                    .replacingOccurrences(of: ":", with: "-") ?? "pulled-vm"
+                    .replacing(":", with: "-") ?? "pulled-vm"
                 pullLocalNames[image.imageRef] = asBase ? image.imageRef : rawLocal
                 let task = Task { await pullImage(image, asBaseVM: asBase) }
                 pullTasks[image.imageRef] = task
@@ -419,7 +424,7 @@ struct RegistryView: View {
         guard let svc = registryService else { return }
         let rawLocal = image.imageRef
             .components(separatedBy: "/").last?
-            .replacingOccurrences(of: ":", with: "-") ?? "pulled-vm"
+            .replacing(":", with: "-") ?? "pulled-vm"
         let localName = asBaseVM ? image.imageRef : rawLocal
 
         appState.registryDownloads[image.imageRef] = 0.0
@@ -449,10 +454,11 @@ struct RegistryView: View {
             if let idx = rvm.images.firstIndex(where: { $0.id == image.id }) {
                 rvm.images[idx].isPulled  = true
                 rvm.images[idx].localName = localName
-                rvm.images[idx].pulledAt  = Date()
+                rvm.images[idx].pulledAt  = Date.now
             }
             rvm.saveImages()
             await vmStore.sync()
+            await NotificationService.shared.notifyImagePullCompleted(imageRef: image.imageRef)
             if let idx = rvm.images.firstIndex(where: { $0.id == image.id }) {
                 await routePulledImage(rvm.images[idx], asBaseVM: asBaseVM)
             }
@@ -481,7 +487,7 @@ struct RegistryView: View {
             namedBaseVM.diskGB       = 80
             namedBaseVM.buildStatus  = VirtualMachine.BuildStatus.ready
             namedBaseVM.vmSource     = VirtualMachine.VMSource.registry
-            namedBaseVM.builtAt      = Date()
+            namedBaseVM.builtAt      = Date.now
             if !password.isEmpty { namedBaseVM.sshPassword = password }
             baseVMStore.add(namedBaseVM)
             AppLogger.shared.success(
@@ -625,8 +631,8 @@ func parseTartError(_ raw: String) -> String? {
             let parts = matched.components(separatedBy: ":")
             if parts.count >= 2 {
                 let raw = parts.dropFirst().joined(separator: ":").trimmingCharacters(in: .init(charactersIn: "\"\\{} "))
-                let val = raw.replacingOccurrences(of: "\\\"", with: "")
-                              .replacingOccurrences(of: "_", with: " ")
+                let val = raw.replacing("\\\"", with: "")
+                              .replacing("_", with: " ")
                               .trimmingCharacters(in: .whitespacesAndNewlines as CharacterSet)
                 if !val.isEmpty {
                     let pretty = val.prefix(1).uppercased() + val.dropFirst()
@@ -655,7 +661,7 @@ func parseTartError(_ raw: String) -> String? {
             let sub = parts[1].components(separatedBy: sep)
             if sub.count >= 2, let end = sub[1].firstIndex(of: "\"") {
                 let val = String(sub[1][..<end])
-                    .replacingOccurrences(of: "_", with: " ").trimmingCharacters(in: .whitespacesAndNewlines as CharacterSet)
+                    .replacing("_", with: " ").trimmingCharacters(in: .whitespacesAndNewlines as CharacterSet)
                 if !val.isEmpty {
                     let pretty = val.prefix(1).uppercased() + val.dropFirst()
                     if let code = httpCode() { return "\(code) — \(pretty)" }

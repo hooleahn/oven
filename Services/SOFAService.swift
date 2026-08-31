@@ -51,12 +51,12 @@ actor SOFAService {
     func versions() async -> [MacOSRelease.Name: [String]] {
         // In-memory cache
         if let cached, let date = lastFetchDate,
-           Date().timeIntervalSince(date) < SOFAService.cacheTTL {
+           Date.now.timeIntervalSince(date) < SOFAService.cacheTTL {
             return cached
         }
         // Disk cache
         if let (diskData, diskDate) = loadDiskCache(),
-           Date().timeIntervalSince(diskDate) < SOFAService.cacheTTL {
+           Date.now.timeIntervalSince(diskDate) < SOFAService.cacheTTL {
             cached = diskData
             lastFetchDate = diskDate
             return diskData
@@ -65,12 +65,16 @@ actor SOFAService {
         do {
             let result = try await fetch()
             cached = result
-            lastFetchDate = Date()
+            lastFetchDate = Date.now
             saveDiskCache(result)
             return result
         } catch {
             // Network failed — return disk cache if any, else hardcoded fallbacks
-            if let (diskData, _) = loadDiskCache() { return diskData }
+            if let (diskData, _) = loadDiskCache() {
+                await AppLogger.shared.warning("SOFA feed unreachable (\(error.localizedDescription)); using cached macOS version list", source: "SOFAService")
+                return diskData
+            }
+            await AppLogger.shared.warning("SOFA feed unreachable (\(error.localizedDescription)); using built-in fallback macOS version list", source: "SOFAService")
             return fallbackVersions()
         }
     }
@@ -87,9 +91,9 @@ actor SOFAService {
     }
 
     var isCacheFresh: Bool {
-        if let date = lastFetchDate, Date().timeIntervalSince(date) < SOFAService.cacheTTL { return true }
+        if let date = lastFetchDate, Date.now.timeIntervalSince(date) < SOFAService.cacheTTL { return true }
         if let (_, diskDate) = loadDiskCache(),
-           Date().timeIntervalSince(diskDate) < SOFAService.cacheTTL { return true }
+           Date.now.timeIntervalSince(diskDate) < SOFAService.cacheTTL { return true }
         return false
     }
 
@@ -165,7 +169,7 @@ actor SOFAService {
 
     private func saveDiskCache(_ data: [MacOSRelease.Name: [String]]) {
         let entries = Dictionary(uniqueKeysWithValues: data.map { ($0.key.rawValue, $0.value) })
-        let payload = CachePayload(date: Date(), entries: entries)
+        let payload = CachePayload(date: Date.now, entries: entries)
         guard let encoded = try? JSONEncoder().encode(payload) else { return }
         try? FileManager.default.createDirectory(
             at: AppSettings.defaultLocalStorageRoot, withIntermediateDirectories: true)
