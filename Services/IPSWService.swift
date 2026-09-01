@@ -2,6 +2,13 @@ import Foundation
 
 // MARK: - IPSW.me API response types
 
+/// Where a firmware entry came from — drives which downloader `InstallerView` uses,
+/// since a mist-cli-listed build can't be fetched by re-invoking mist with an
+/// AppleDB-only buildid, and vice versa.
+enum FirmwareSource: String, Codable, Sendable {
+    case ipswMe, mistCli, appleDB
+}
+
 struct IPSWFirmware: Codable, Identifiable, Sendable, Equatable {
     let identifier: String
     let version: String
@@ -11,11 +18,18 @@ struct IPSWFirmware: Codable, Identifiable, Sendable, Equatable {
     let url: String
     let releasedate: String
     let signed: Bool
+    // Neither ipsw.me nor mist-cli ever list beta/RC builds — these carry that
+    // status for entries sourced from appledb.dev.
+    var isBeta: Bool = false
+    var betaLabel: String = ""
+    var source: FirmwareSource = .ipswMe
 
     var id: String { buildid }
 
-    /// Human-friendly file size, e.g. "15.7 GB"
+    /// Human-friendly file size, e.g. "15.7 GB" — AppleDB doesn't report a size
+    /// up front, so it's left unknown until the download actually starts.
     var formattedSize: String {
+        guard filesize > 0 else { return "Unknown size" }
         let gb = Double(filesize) / 1_000_000_000
         return String(format: "%.1f GB", gb)
     }
@@ -25,7 +39,7 @@ struct IPSWFirmware: Codable, Identifiable, Sendable, Equatable {
         Int(version.split(separator: ".").first ?? "") ?? 0
     }
 
-    /// Friendly OS name, e.g. "macOS Sequoia 15.6.1"
+    /// Friendly OS name, e.g. "macOS Sequoia 15.6.1" or "macOS Golden Gate 27.0 Beta 8"
     var displayName: String {
         let name: String
         switch majorVersion {
@@ -37,7 +51,8 @@ struct IPSWFirmware: Codable, Identifiable, Sendable, Equatable {
         case 12: name = "macOS Monterey"
         default: name = "macOS"
         }
-        return "\(name) \(version)"
+        let betaSuffix = isBeta ? " \(betaLabel.isEmpty ? "Beta" : betaLabel)" : ""
+        return "\(name) \(version)\(betaSuffix)"
     }
 
     /// Suggested local filename
@@ -47,7 +62,34 @@ struct IPSWFirmware: Codable, Identifiable, Sendable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case identifier, version, buildid, sha256sum, filesize, url
-        case releasedate, signed
+        case releasedate, signed, isBeta, betaLabel, source
+    }
+}
+
+// A property's `= default` only satisfies the *memberwise* initializer —
+// synthesized `Decodable.init(from:)` still uses plain `decode(forKey:)` for
+// every key regardless, so it throws if a key is absent. Since ipsw.me's own
+// JSON obviously never carries isBeta/betaLabel/source (those only exist for
+// appledb.dev-sourced entries Oven constructs itself), every real ipsw.me
+// response decoded as `[IPSWFirmware]` failed outright until this was added.
+// Declared in an extension (rather than the main struct body) so the
+// compiler-synthesized memberwise initializer — used when constructing an
+// IPSWFirmware directly, e.g. from AppleDBService or the mist-cli bridge —
+// is left intact.
+extension IPSWFirmware {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        identifier  = try c.decode(String.self, forKey: .identifier)
+        version     = try c.decode(String.self, forKey: .version)
+        buildid     = try c.decode(String.self, forKey: .buildid)
+        sha256sum   = try c.decodeIfPresent(String.self, forKey: .sha256sum) ?? ""
+        filesize    = try c.decodeIfPresent(Int64.self, forKey: .filesize) ?? 0
+        url         = try c.decodeIfPresent(String.self, forKey: .url) ?? ""
+        releasedate = try c.decodeIfPresent(String.self, forKey: .releasedate) ?? ""
+        signed      = try c.decodeIfPresent(Bool.self, forKey: .signed) ?? false
+        isBeta      = try c.decodeIfPresent(Bool.self, forKey: .isBeta) ?? false
+        betaLabel   = try c.decodeIfPresent(String.self, forKey: .betaLabel) ?? ""
+        source      = try c.decodeIfPresent(FirmwareSource.self, forKey: .source) ?? .ipswMe
     }
 }
 

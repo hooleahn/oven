@@ -138,7 +138,7 @@ struct RegistryView: View {
                                 let localName = pullLocalNames.removeValue(forKey: image.imageRef)
                                 Task { await cleanupCancelledPull(imageRef: image.imageRef, localName: localName) }
                             },
-                            onCreateVM: { Task { await createVMFromImage(image) } },
+                            onCreateVM: { Task { await requestCreateVM(from: image) } },
                             onDelete: { Task { await deleteImage(image) } }
                         )
                     }
@@ -280,16 +280,12 @@ struct RegistryView: View {
             }
         }
         .sheet(item: $rvm.pendingPull) { image in
-            PullDestinationSheet(image: image) { asBase, username, password in
+            let inferred = rvm.inferOSFromRef(image.imageRef)
+            PullDestinationSheet(image: image, initialOSVersion: inferred.1) { destination, osVersion, displayName in
                 rvm.pendingPull = nil
-                rvm.pendingPullIsBase = asBase
-                rvm.pendingPullUsername = username
-                rvm.pendingPullPassword = password
-                let rawLocal = image.imageRef
-                    .components(separatedBy: "/").last?
-                    .replacing(":", with: "-") ?? "pulled-vm"
-                pullLocalNames[image.imageRef] = asBase ? image.imageRef : rawLocal
-                let task = Task { await pullImage(image, asBaseVM: asBase) }
+                let task = Task {
+                    await pullImage(image, destination: destination, osVersion: osVersion, displayName: displayName)
+                }
                 pullTasks[image.imageRef] = task
             }
             .environment(vmStore)
@@ -420,14 +416,24 @@ struct RegistryView: View {
 
     // MARK: Actions
 
-    @MainActor private func pullImage(_ image: RegistryImage, asBaseVM: Bool = false) async {
+    private var registryTartPath: String {
+        AppSettings.defaultLocalStorageRoot
+            .appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
+    }
+
+    @MainActor private func pullImage(_ image: RegistryImage, destination: RegistryPullDestination,
+                                      osVersion: String = "", displayName: String = "") async {
         guard let svc = registryService else { return }
-        let rawLocal = image.imageRef
-            .components(separatedBy: "/").last?
-            .replacing(":", with: "-") ?? "pulled-vm"
-        let localName = asBaseVM ? image.imageRef : rawLocal
+        // Base VM / Just Pull both land straight in tart's OCI cache, identified by
+        // the image ref itself — only materialising a distinct Virtual Machine
+        // needs a real local clone under a generated name.
+        let pullsToCache = destination != .virtualMachine
+        let localName = pullsToCache
+            ? image.imageRef
+            : rvm.generatedLocalName(osVersion: osVersion, existing: vmStore.vms.map(\.name))
 
         appState.registryDownloads[image.imageRef] = 0.0
+        pullLocalNames[image.imageRef] = localName
         defer {
             appState.registryDownloads.removeValue(forKey: image.imageRef)
             pullTasks.removeValue(forKey: image.imageRef)
@@ -435,7 +441,7 @@ struct RegistryView: View {
         }
 
         let stream = await svc.pull(imageRef: image.imageRef, localName: localName,
-                                    asBase: asBaseVM, credentials: rvm.credentials)
+                                    asBase: pullsToCache, credentials: rvm.credentials)
 
         let pullResult = await StreamConsumer.consume(stream, onStdout: { line in
             if line.contains("%") {
@@ -450,93 +456,102 @@ struct RegistryView: View {
         // Task was cancelled by the user — don't update state
         guard !Task.isCancelled else { return }
 
-        if pullResult.succeeded {
-            if let idx = rvm.images.firstIndex(where: { $0.id == image.id }) {
-                rvm.images[idx].isPulled  = true
-                rvm.images[idx].localName = localName
-                rvm.images[idx].pulledAt  = Date.now
-            }
-            rvm.saveImages()
-            await vmStore.sync()
-            await NotificationService.shared.notifyImagePullCompleted(imageRef: image.imageRef)
-            if let idx = rvm.images.firstIndex(where: { $0.id == image.id }) {
-                await routePulledImage(rvm.images[idx], asBaseVM: asBaseVM)
-            }
-        } else {
+        guard pullResult.succeeded else {
             let raw = pullResult.combinedOutput
             AppLogger.shared.error("Pull failed (exit \(pullResult.exitCode)): \(raw)", source: "RegistryView")
             rvm.errorMessage = parseTartError(raw) ?? "Pull failed for \(image.imageRef)"
-        }
-    }
-
-    /// Route a pulled image to either BaseVMStore (as a base VM) or VMStore (as a regular VM)
-    @MainActor private func routePulledImage(_ image: RegistryImage, asBaseVM: Bool) async {
-        guard let localName = image.localName else { return }
-        let username = rvm.pendingPullUsername
-        let password = rvm.pendingPullPassword
-        if asBaseVM {
-            let macOS = rvm.inferOSFromRef(image.imageRef)
-            var namedBaseVM = VirtualMachine(name: localName)
-            namedBaseVM.isBaseVM = true
-            namedBaseVM.registryImageRef = image.imageRef
-            namedBaseVM.osName      = macOS.0
-            namedBaseVM.macOSVersion = "macOS \(macOS.0.rawValue) \(macOS.1)"
-            namedBaseVM.sshUsername  = username.isEmpty ? "admin" : username
-            namedBaseVM.cpuCount     = 4
-            namedBaseVM.memoryGB     = 8
-            namedBaseVM.diskGB       = 80
-            namedBaseVM.buildStatus  = VirtualMachine.BuildStatus.ready
-            namedBaseVM.vmSource     = VirtualMachine.VMSource.registry
-            namedBaseVM.builtAt      = Date.now
-            if !password.isEmpty { namedBaseVM.sshPassword = password }
-            baseVMStore.add(namedBaseVM)
-            AppLogger.shared.success(
-                "Registered '\(localName)' as Base VM", source: "RegistryView")
-        } else {
-            await createVMFromImage(image, username: username, password: password)
-        }
-        rvm.pendingPullUsername = ""
-        rvm.pendingPullPassword = ""
-    }
-
-    @MainActor private func createVMFromImage(_ image: RegistryImage, username: String = "", password: String = "") async {
-        guard image.isPulled else {
-            await pullImage(image)
             return
         }
-        let tartBinary = AppSettings.defaultLocalStorageRoot
-            .appendingPathComponent("deps/tart.app/Contents/MacOS/tart").path
-        guard FileManager.default.fileExists(atPath: tartBinary) else { return }
-        let tartSvc = TartService(runner: ProcessRunner(), tartPath: tartBinary)
 
-        let tag = image.imageRef.components(separatedBy: ":").last ?? "latest"
-        let repoSlug = image.imageRef
-            .components(separatedBy: "/").last?
-            .components(separatedBy: ":").first ?? "vm"
-        let baseName = "\(repoSlug)-\(tag)"
-
-        var newName = baseName
-        var counter = 2
-        let existingNames = Set(vmStore.vms.map { $0.name })
-        while existingNames.contains(newName) {
-            newName = "\(baseName)-\(counter)"
-            counter += 1
+        if let idx = rvm.images.firstIndex(where: { $0.id == image.id }) {
+            rvm.images[idx].isPulled  = true
+            rvm.images[idx].localName = localName
+            rvm.images[idx].pulledAt  = Date.now
         }
+        rvm.saveImages()
+        await vmStore.sync()
+        // Re-derive isPulled/localName straight from tart, the same way the manual
+        // "Sync from Tart" button does — without this, the list can keep showing
+        // "Not pulled" until the view is torn down and rebuilt.
+        await rvm.syncFromTart(tartPath: registryTartPath)
+        await NotificationService.shared.notifyImagePullCompleted(imageRef: image.imageRef)
 
-        appState.registryDownloads[image.imageRef] = 0.0
-        defer { appState.registryDownloads.removeValue(forKey: image.imageRef) }
+        switch destination {
+        case .baseVM:
+            registerBaseVM(name: localName, image: image, osVersion: osVersion, displayName: displayName)
+        case .virtualMachine:
+            applyPulledVMMetadata(name: localName, image: image, osVersion: osVersion, displayName: displayName)
+        case .justPull:
+            break  // Nothing further — the pulled image is already usable as a Base VM.
+        }
+    }
 
-        let cloneStream = await tartSvc.clone(imageRef: image.imageRef, to: newName)
-        let cloneResult = await StreamConsumer.logged(cloneStream, source: "RegistryView")
-        appState.registryDownloads.removeValue(forKey: image.imageRef)
-        if cloneResult.succeeded {
-            vmStore.recordRegistryClone(sourceImageRef: image.imageRef)
-            await vmStore.sync()
+    /// Registers a freshly OCI-cached image as a Base VM with the OS version and
+    /// display name the user provided (falling back to inference/the generated name).
+    @MainActor private func registerBaseVM(name: String, image: RegistryImage,
+                                           osVersion: String, displayName: String) {
+        let inferred = rvm.inferOSFromRef(image.imageRef)
+        var namedBaseVM = VirtualMachine(name: name)
+        namedBaseVM.isBaseVM = true
+        namedBaseVM.registryImageRef = image.imageRef
+        namedBaseVM.osName       = inferred.0
+        namedBaseVM.osVersion    = osVersion.isEmpty ? inferred.1 : osVersion
+        namedBaseVM.macOSVersion = "macOS \(namedBaseVM.osName.rawValue) \(namedBaseVM.osVersion)"
+        namedBaseVM.displayName  = displayName.isEmpty
+            ? rvm.generatedLocalName(osVersion: namedBaseVM.osVersion)
+            : displayName
+        namedBaseVM.sshUsername  = "admin"
+        namedBaseVM.cpuCount     = 4
+        namedBaseVM.memoryGB     = 8
+        namedBaseVM.diskGB       = 80
+        namedBaseVM.buildStatus  = VirtualMachine.BuildStatus.ready
+        namedBaseVM.vmSource     = VirtualMachine.VMSource.registry
+        namedBaseVM.builtAt      = Date.now
+        namedBaseVM.provenance   = "Pulled from \(image.imageRef)"
+        baseVMStore.add(namedBaseVM)
+        AppLogger.shared.success("Registered '\(name)' as Base VM", source: "RegistryView")
+    }
+
+    /// Fills in OS version, display name, and provenance on a Working VM that was
+    /// just cloned directly from an OCI image (bypassing the usual Base VM step).
+    @MainActor private func applyPulledVMMetadata(name: String, image: RegistryImage,
+                                                  osVersion: String, displayName: String) {
+        guard let vm = vmStore.vms.first(where: { $0.name == name }) else { return }
+        let inferred = rvm.inferOSFromRef(image.imageRef)
+        vmStore.updateMetadata(id: vm.id) { v in
+            v.osName       = inferred.0
+            v.osVersion    = osVersion.isEmpty ? inferred.1 : osVersion
+            v.macOSVersion = "macOS \(v.osName.rawValue) \(v.osVersion)"
+            v.displayName  = displayName.isEmpty ? name : displayName
+            v.provenance   = "Pulled from \(image.imageRef)"
+        }
+    }
+
+    /// "Create VM" on an already-pulled image row. Rather than cloning directly
+    /// (which had no way to collect a display name and skipped the credential/
+    /// hardware inheritance NewVMSheet already handles), this ensures the image
+    /// is registered as a Base VM — the pulled image already amounts to one —
+    /// then hands off to Base VMs' "New VM from Base" sheet, matching the normal
+    /// Base VM → Working VM flow everywhere else in the app.
+    @MainActor private func requestCreateVM(from image: RegistryImage) async {
+        guard image.isPulled else { return }  // defensive — the button only shows once pulled
+        // Match by name, the authoritative tart identifier — an OCI-sourced VM is
+        // always named after its full reference (both here and via BaseVMStore's
+        // auto-discovery in syncOCI()), so this reliably finds a record from
+        // either path regardless of registryImageRef's exact value.
+        func matchingBaseVM() -> VirtualMachine? {
+            vmStore.vms.first { $0.name == image.imageRef && $0.effectivelyBase }
+        }
+        let baseVM: VirtualMachine
+        if let existing = matchingBaseVM() {
+            baseVM = existing
         } else {
-            let raw = cloneResult.combinedOutput
-            rvm.errorMessage = parseTartError(raw) ?? "Clone failed (exit \(cloneResult.exitCode))"
-            AppLogger.shared.error("Clone failed: \(raw)", source: "RegistryView")
+            let inferred = rvm.inferOSFromRef(image.imageRef)
+            registerBaseVM(name: image.imageRef, image: image, osVersion: inferred.1, displayName: "")
+            guard let created = matchingBaseVM() else { return }
+            baseVM = created
         }
+        appState.pendingCreateVMFromBaseVMID = baseVM.id
     }
 
     // MARK: Cancel cleanup

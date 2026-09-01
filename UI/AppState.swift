@@ -26,6 +26,11 @@ final class AppState {
     var isPresentingNewVM = false
     var isPresentingNewBaseVM = false
 
+    // Cross-view navigation request: set by RegistryView's "Create VM" action on an
+    // already-pulled image; consumed by ContentView, which switches to Base VMs and
+    // opens the "New VM from Base" sheet for this VM, then clears the field.
+    var pendingCreateVMFromBaseVMID: VirtualMachine.ID?
+
     // Active operations (for progress display)
     var activeOperations: [OperationRecord] = []
 

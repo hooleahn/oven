@@ -27,6 +27,7 @@
 		3B0AC036841A488882339733 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5941035FD84540C199255E2F /* AppLogger.swift */; };
 		4099E881D0A14D4E800362A1 /* MDMServersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B136032C71C41DF8BF12D0F /* MDMServersView.swift */; };
 		43CBAFEB428D4276994B436F /* NotificationPrefsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D7CC6B8851E454A81E5D6C7 /* NotificationPrefsTab.swift */; };
+		4453211373170A16244E10F5 /* AppleDBService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCBB05B7E296BE54A2043A22 /* AppleDBService.swift */; };
 		4643B10B3B364CC2A34AE103 /* CloneVMSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E1BC9BB8234124A332E6FA /* CloneVMSheet.swift */; };
 		4D0FCA38B8D74F2ABAD31CFD /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2776315DE2B144E597C5281F /* KeychainService.swift */; };
 		4E609391533F4F59A312D26B /* TagStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11223344556677889900AA /* TagStore.swift */; };
@@ -270,6 +271,7 @@
 		F1C8AB4946FD4DF48587C72F /* MDMProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMProfileView.swift; sourceTree = "<group>"; };
 		F7152AABA91042BBB43617E2 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		F9FD5DCF622846F4B6B67581 /* CirrusLabsCatalogueRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirrusLabsCatalogueRow.swift; sourceTree = "<group>"; };
+		FCBB05B7E296BE54A2043A22 /* AppleDBService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleDBService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -444,6 +446,7 @@
 				B9ADE8BF2F7DE64D00B30458 /* SOFAService.swift */,
 				C3540F44515C4D7194D7AF9A /* BaseVMStore.swift */,
 				75F5248C443B43BDB968B56D /* IPSWService.swift */,
+				FCBB05B7E296BE54A2043A22 /* AppleDBService.swift */,
 				54FC456F7F38464BB4CA4BF1 /* JamfService.swift */,
 				2AF0A6F3427D423A9C61A8FF /* MistService.swift */,
 				2C78BA20892E40C1B9DA4E8E /* PackerService.swift */,
@@ -636,6 +639,7 @@
 				8A76F26E9669B5589A03E929 /* VarsFileDetailPane.swift in Sources */,
 				D106B83FBF5548850499ACB6 /* NewPackerObjectSheet.swift in Sources */,
 				542CCC4E31BEF50B1A871918 /* Services/PackerTemplateStore.swift in Sources */,
+				4453211373170A16244E10F5 /* AppleDBService.swift in Sources */,
 				AAC69E7A339449BD9EAB580E /* RegistryCredential.swift in Sources */,
 				EA6F4FE3BD644AC686E0F328 /* RegistryImageRow.swift in Sources */,
 				B91426C92F99704900F13968 /* BootCommandBlock+Seeds.swift in Sources */,
@@ -691,7 +695,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10000;
+				CURRENT_PROJECT_VERSION = 100;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = V4RT59UVJJ;
 				ENABLE_APP_SANDBOX = NO;
@@ -701,7 +705,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Oven - macOS VM Manager powered by Tart";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hooleahn.oven;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -816,7 +820,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Oven.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10000;
+				CURRENT_PROJECT_VERSION = 100;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -825,7 +829,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Oven - macOS VM Manager powered by Tart";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hooleahn.oven;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;

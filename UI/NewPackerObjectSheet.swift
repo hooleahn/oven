@@ -284,8 +284,7 @@ private struct FullTemplateCreationForm: View {
         guard FileManager.default.fileExists(atPath: mistPath) else { return }
         isFetchingVersions = true
         let svc = MistService(runner: ProcessRunner(), mistPath: mistPath,
-                              ipswRoot: AppSettings.load().ipswStorageRoot,
-                              includeBetas: AppSettings.load().mistIncludeBetas)
+                              ipswRoot: AppSettings.load().ipswStorageRoot)
         if let results = try? await svc.listFirmware() { liveFirmwares = results }
         isFetchingVersions = false
     }

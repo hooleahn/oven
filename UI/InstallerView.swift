@@ -118,6 +118,7 @@ struct InstallerView: View {
                     }
                     Button { Task {
                         await IPSWService.shared.invalidateCache()
+                        await AppleDBService.shared.invalidateCache()
                         // Also clear mist cache
                         let mistCache = AppSettings.defaultLocalStorageRoot
                             .appendingPathComponent("mist-firmware-cache.json")
@@ -263,28 +264,63 @@ struct InstallerView: View {
 
     private func loadFirmwares() async {
         isLoading = true; errorMessage = nil
-        do {
-            let ipswRoot = AppSettings.load().ipswStorageRoot
-            // Check cache freshness before fetching (works for both ipsw.me and mist-cli)
-            let wasFresh = settings.ipswDownloadMode == .mistCli
-                ? isMistCacheFresh()
-                : await IPSWService.shared.isCacheFresh
-            async let remoteFirmwares = fetchFirmwareList()
-            firmwares = try await remoteFirmwares
-            // Auto-import untracked local IPSW files
-            installerStore.importUntrackedFiles(in: ipswRoot, knownFirmwares: firmwares)
-            loadedFromCache = wasFresh
-            lastRefreshedAt = settings.ipswDownloadMode == .mistCli
-                ? mistCacheDate() ?? Date.now
-                : await IPSWService.shared.lastFetchDate ?? Date.now
-            let source = loadedFromCache ? "cache" : (settings.ipswDownloadMode == .mistCli ? "mist-cli" : "ipsw.me")
-            AppLogger.shared.success(
-                "Loaded \(firmwares.count) firmwares from \(source)",
-                source: "InstallerView")
-        } catch {
-            errorMessage = error.localizedDescription
+        let ipswRoot = AppSettings.load().ipswStorageRoot
+        // Check cache freshness before fetching (works for both ipsw.me and mist-cli)
+        let wasFresh = settings.ipswDownloadMode == .mistCli
+            ? isMistCacheFresh()
+            : await IPSWService.shared.isCacheFresh
+
+        // Fetch the primary source and AppleDB's beta supplement independently
+        // and in parallel. Neither should block the other: a primary-source
+        // outage (ipsw.me down, mist-cli missing) shouldn't hide betas AppleDB
+        // successfully returned, and an AppleDB hiccup shouldn't take down the
+        // primary list.
+        async let primaryTask = fetchPrimaryFirmwareResult()
+        async let betaTask: [IPSWFirmware] = settings.includeAppleDBBetas
+            ? ((try? await AppleDBService.shared.listBetaFirmware()) ?? [])
+            : []
+        let primary = await primaryTask
+        let betas = await betaTask
+
+        var loaded: [IPSWFirmware]
+        switch primary {
+        case .success(let list):
+            loaded = list
+        case .failure(let error):
+            AppLogger.shared.error(
+                "Primary IPSW source failed: \(error.localizedDescription)", source: "InstallerView")
+            guard !betas.isEmpty else {
+                // Nothing to show at all — surface the failure as before.
+                errorMessage = error.localizedDescription
+                isLoading = false
+                return
+            }
+            loaded = []
         }
+
+        let knownBuilds = Set(loaded.map(\.buildid))
+        loaded += betas.filter { !knownBuilds.contains($0.buildid) }
+        firmwares = loaded
+
+        // Auto-import untracked local IPSW files
+        installerStore.importUntrackedFiles(in: ipswRoot, knownFirmwares: firmwares)
+        loadedFromCache = wasFresh
+        lastRefreshedAt = settings.ipswDownloadMode == .mistCli
+            ? mistCacheDate() ?? Date.now
+            : await IPSWService.shared.lastFetchDate ?? Date.now
+        let source = loadedFromCache ? "cache" : (settings.ipswDownloadMode == .mistCli ? "mist-cli" : "ipsw.me")
+        AppLogger.shared.success(
+            "Loaded \(firmwares.count) firmwares from \(source)\(betas.isEmpty ? "" : " + appledb.dev")",
+            source: "InstallerView")
         isLoading = false
+    }
+
+    private func fetchPrimaryFirmwareResult() async -> Result<[IPSWFirmware], Error> {
+        do {
+            return .success(try await fetchFirmwareList())
+        } catch {
+            return .failure(error)
+        }
     }
 
     /// Check if the mist-cli disk cache is still fresh (< 24h old).
@@ -328,8 +364,7 @@ struct InstallerView: View {
                     "mist-cli is not installed. Switch to ipsw.me in Preferences → Build, or install mist-cli."])
         }
         let svc = MistService(runner: ProcessRunner(), mistPath: path,
-                              ipswRoot: AppSettings.load().ipswStorageRoot,
-                              includeBetas: settings.mistIncludeBetas)
+                              ipswRoot: AppSettings.load().ipswStorageRoot)
         let results = try await svc.listFirmware()
         // Convert MistFirmwareInfo → IPSWFirmware for uniform display
         return results.map { mist in
@@ -358,7 +393,11 @@ struct InstallerView: View {
         let ipswRoot = AppSettings.load().ipswStorageRoot
         appState.activeIPSWDownloads[fw.buildid] = 0.0
 
-        if settings.ipswDownloadMode == .mistCli {
+        // AppleDB entries carry their own direct download URL — mist-cli has no
+        // idea these builds exist, so they always go through the same
+        // URLSession downloader ipsw.me firmwares use, regardless of which
+        // primary source is selected.
+        if fw.source != .appleDB && settings.ipswDownloadMode == .mistCli {
             await downloadWithMistCLI(fw: fw, to: ipswRoot)
         } else {
             await downloadWithIPSWService(fw: fw, to: ipswRoot)
@@ -395,8 +434,7 @@ struct InstallerView: View {
             errorMessage = "mist-cli not found. Switch to ipsw.me in Preferences → Build."
             return
         }
-        let svc = MistService(runner: ProcessRunner(), mistPath: path, ipswRoot: directory,
-                              includeBetas: settings.mistIncludeBetas)
+        let svc = MistService(runner: ProcessRunner(), mistPath: path, ipswRoot: directory)
         let stream = await svc.downloadFirmware(version: fw.version, build: fw.buildid)
         for await event in stream {
             switch event {
@@ -493,6 +531,12 @@ struct IPSWFirmwareRow: View {
                         .foregroundStyle(.green)
                 }
 
+                if firmware.source == .appleDB {
+                    Label("Beta build — discovered via appledb.dev, downloaded directly from Apple", systemImage: "flask.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+
                 if isDownloaded, let onCreateBaseVM {
                     Button(action: onCreateBaseVM) {
                         Label("Create Base VM", systemImage: "plus.circle.fill")
@@ -515,6 +559,11 @@ struct IPSWFirmwareRow: View {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.caption)
                             .foregroundStyle(.white, .green)
+                            .offset(x: 4, y: 4)
+                    } else if firmware.isBeta {
+                        Image(systemName: "flask.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.white, .orange)
                             .offset(x: 4, y: 4)
                     }
                 }

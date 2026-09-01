@@ -106,10 +106,16 @@ struct CloneVMSheet: View {
                 betaLabel: vm.betaLabel,
                 customOSMajorVersion: vm.customOSMajorVersion,
                 customOSReleaseName: vm.customOSReleaseName,
+                baseVMID: vm.effectivelyBase ? vm.id : vm.baseVMID,
+                mdmProfileID: vm.mdmProfileID,
                 cpuCount: vm.cpuCount,
                 memoryGB: vm.memoryGB,
                 diskGB: vm.diskGB,
+                mdmServerID: vm.mdmServerID,
                 sshUsername: vm.sshUsername,
+                sshPassword: vm.sshPassword,
+                sharedFolders: vm.sharedFolders,
+                provenance: "Cloned from \(vm.displayName.isEmpty ? vm.name : vm.displayName)",
                 osMetadata: vm.osMetadata
             )
             dismiss()

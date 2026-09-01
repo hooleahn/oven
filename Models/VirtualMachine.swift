@@ -25,6 +25,13 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
     var registryImageRef: String?  // origin ref if pulled from a registry
     var isBaseVM: Bool = false          // true = Base VM (can clone, cannot start)
 
+    /// Purely informational snapshot of where this VM came from, e.g.
+    /// "Cloned from Sequoia CI Base" or "Pulled from ghcr.io/org/image:tag".
+    /// Distinct from registryImageRef/baseVMID, which drive actual behavior
+    /// (effectivelyBase, cloning) — this field only ever feeds display, so it's
+    /// safe to set on any VM without affecting classification.
+    var provenance: String? = nil
+
     // Build metadata (only relevant when isBaseVM == true)
     var osName: MacOSRelease.Name = .unknown
     var osVersion: String = ""          // e.g. "15.3.2"
@@ -213,9 +220,11 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         self.createdAt        = Date.now
         self.lastStartedAt    = nil
         // Only set registryImageRef if the VM name itself is an OCI ref (contains "/").
-        // info.source for local clones is the OCI origin — useful for provenance
-        // but does not make this VM an OCI image (isOCIBased must stay false for local VMs).
-        self.registryImageRef = info.name.contains("/") ? info.source : nil
+        // `info.source` is NOT the origin ref — tart's `list --format json` puts the
+        // literal category "local"/"OCI" there (see tart's List.swift), never the
+        // actual reference. For an OCI-sourced VM, tart names it after the ref
+        // itself, so `info.name` is the real origin.
+        self.registryImageRef = info.name.contains("/") ? info.name : nil
     }
 
     // MARK: - Codable migration
@@ -230,7 +239,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id, name, displayName, description, tags, status, baseVMID, mdmProfileID
         case cpuCount, memoryGB, diskGB, macOSVersion, serialNumber, ipAddress
-        case createdAt, lastStartedAt, lastClonedAt, registryImageRef, isBaseVM
+        case createdAt, lastStartedAt, lastClonedAt, registryImageRef, isBaseVM, provenance
         case osName, osVersion, isBetaOS, betaLabel, customOSMajorVersion, customOSReleaseName
         case ipswLocalPath, ipswRemoteURL, installRosetta, installHomebrew, enableSSHDaemon
         case enableAutoLogin, enablePasswordlessSudo, xcodeVersion, builtAt, buildLog
@@ -263,6 +272,7 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         lastClonedAt     = try c.decodeIfPresent(Date.self,           forKey: .lastClonedAt)
         registryImageRef = try c.decodeIfPresent(String.self,        forKey: .registryImageRef)
         isBaseVM         = try c.decodeIfPresent(Bool.self,           forKey: .isBaseVM) ?? false
+        provenance       = try c.decodeIfPresent(String.self,         forKey: .provenance)
         osName                = try c.decodeIfPresent(MacOSRelease.Name.self, forKey: .osName) ?? .unknown
         osVersion             = try c.decodeIfPresent(String.self,           forKey: .osVersion) ?? ""
         isBetaOS              = try c.decodeIfPresent(Bool.self,             forKey: .isBetaOS) ?? false

@@ -313,6 +313,11 @@ struct VMDetailPane: View {
                     Text(vm.createdAt.formatted(date: .numeric, time: .omitted))
                         .foregroundStyle(.secondary)
                 }
+                if let provenance = vm.provenance {
+                    LabeledContent("Origin") {
+                        Text(provenance).foregroundStyle(.secondary)
+                    }
+                }
                 LabeledContent("Last started") {
                     Text(vm.lastStartedAt.map {
                         $0.formatted(date: .numeric, time: .shortened)

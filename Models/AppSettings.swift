@@ -7,7 +7,11 @@ struct AppSettings: Codable {
     var depsRoot: URL
     var tartHome: String?   // nil = use TART_HOME env var or ~/.tart default
     var ipswDownloadMode: IPSWDownloadMode = .ipswMe
-    var mistIncludeBetas: Bool = false
+    // Supplements whichever primary IPSW source is selected with current beta/RC
+    // firmware from appledb.dev — neither ipsw.me nor mist-cli list Apple betas
+    // (mist-cli's own --include-betas flag only applies to `list/download
+    // installer`, not the `firmware` subcommand Oven actually uses).
+    var includeAppleDBBetas: Bool = false
 
     // Per-dependency install configuration (replaces legacy dependencyMode/customPaths)
     var dependencySettings: [String: DependencyInstallSetting] = [:]
@@ -145,7 +149,7 @@ struct AppSettings: Codable {
     init(vmStorageRoot: URL, ipswStorageRoot: URL, packerTemplatesRoot: URL,
          depsRoot: URL, tartHome: String? = nil,
          ipswDownloadMode: IPSWDownloadMode = .ipswMe,
-         mistIncludeBetas: Bool = false,
+         includeAppleDBBetas: Bool = false,
          dependencySettings: [String: DependencyInstallSetting] = [:],
          dependencyMode: DependencyMode = .managed,
          customPaths: CustomBinaryPaths = CustomBinaryPaths()) {
@@ -155,7 +159,7 @@ struct AppSettings: Codable {
         self.depsRoot            = depsRoot
         self.tartHome            = tartHome
         self.ipswDownloadMode    = ipswDownloadMode
-        self.mistIncludeBetas    = mistIncludeBetas
+        self.includeAppleDBBetas = includeAppleDBBetas
         self.dependencySettings  = dependencySettings
         self.dependencyMode      = dependencyMode
         self.customPaths         = customPaths
@@ -165,7 +169,7 @@ struct AppSettings: Codable {
 
     enum CodingKeys: String, CodingKey {
         case vmStorageRoot, ipswStorageRoot, packerTemplatesRoot, depsRoot, tartHome, ipswDownloadMode
-        case mistIncludeBetas
+        case includeAppleDBBetas
         case dependencySettings
         // Legacy keys — decoded for migration only
         case dependencyMode, customPaths
@@ -180,7 +184,7 @@ struct AppSettings: Codable {
         depsRoot            = (try? c.decodeIfPresent(URL.self, forKey: .depsRoot))            ?? root.appendingPathComponent("deps")
         tartHome            = try? c.decodeIfPresent(String.self, forKey: .tartHome)
         ipswDownloadMode    = (try? c.decodeIfPresent(IPSWDownloadMode.self, forKey: .ipswDownloadMode)) ?? .ipswMe
-        mistIncludeBetas    = (try? c.decodeIfPresent(Bool.self, forKey: .mistIncludeBetas)) ?? false
+        includeAppleDBBetas = (try? c.decodeIfPresent(Bool.self, forKey: .includeAppleDBBetas)) ?? false
         dependencyMode      = (try? c.decodeIfPresent(DependencyMode.self, forKey: .dependencyMode)) ?? .managed
         customPaths         = (try? c.decodeIfPresent(CustomBinaryPaths.self, forKey: .customPaths)) ?? CustomBinaryPaths()
 

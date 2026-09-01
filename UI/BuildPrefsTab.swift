@@ -141,23 +141,20 @@ struct BuildPrefsTab: View {
                 .onChange(of: settings.ipswDownloadMode) { _, _ in try? settings.save() }
                 .help("ipsw.me queries Apple servers directly. mist-cli is a third-party tool that offers more control.")
 
+                Toggle(isOn: $settings.includeAppleDBBetas) {
+                    Label("Include Apple Betas (appledb.dev)", systemImage: "flask")
+                }
+                .help("Neither ipsw.me nor mist-cli list Apple's developer/public betas. This supplements whichever method is selected above with currently-signed beta/RC builds from appledb.dev — downloads still come directly from Apple's own servers.")
+                .onChange(of: settings.includeAppleDBBetas) { _, _ in
+                    try? settings.save()
+                    Task { await AppleDBService.shared.invalidateCache() }
+                }
+
                 if settings.ipswDownloadMode == .mistCli {
                     HStack(spacing: 6) {
                         Image(systemName: "info.circle").foregroundStyle(.secondary)
                         Text("mist-cli will be found automatically from your PATH or Oven's managed copy.")
                             .font(.caption).foregroundStyle(.secondary)
-                    }
-
-                    Toggle(isOn: $settings.mistIncludeBetas) {
-                        Label("Include Betas", systemImage: "flask")
-                    }
-                    .help("Include beta macOS releases in the firmware list when using mist-cli.")
-                    .onChange(of: settings.mistIncludeBetas) { _, _ in
-                        try? settings.save()
-                        // Clear disk cache so the next firmware load reflects the new setting
-                        let mistCache = AppSettings.defaultLocalStorageRoot
-                            .appendingPathComponent("mist-firmware-cache.json")
-                        try? FileManager.default.removeItem(at: mistCache)
                     }
                 }
             } header: { Text("IPSW download") }
@@ -196,7 +193,7 @@ struct BuildPrefsTab: View {
                 theme.showUnlockHintOverlay   = true
                 theme.buildCompletionAction   = "nothing"
                 settings.ipswDownloadMode     = .ipswMe
-                settings.mistIncludeBetas     = false
+                settings.includeAppleDBBetas  = false
                 try? settings.save()
             }
             Button("Cancel", role: .cancel) {}

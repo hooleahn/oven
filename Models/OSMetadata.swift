@@ -37,6 +37,8 @@ struct OSMetadata: Codable, Hashable, Sendable {
         default: osName = .unknown
         }
         osVersion = firmware.version
+        isBeta = firmware.isBeta
+        betaLabel = firmware.betaLabel
     }
 
     /// Try to detect OS from an IPSW filename/stem, e.g. "UniversalMac_15.6.1_24H1_Restore".

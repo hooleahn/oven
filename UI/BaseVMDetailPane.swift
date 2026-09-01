@@ -91,6 +91,21 @@ struct BaseVMDetailPane: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    LabeledContent("Created") {
+                        Text(baseVM.createdAt.formatted(date: .numeric, time: .omitted))
+                            .foregroundStyle(.secondary)
+                    }
+                    if baseVM.vmSource == .registry, let pulled = baseVM.builtAt {
+                        LabeledContent("Pulled") {
+                            Text(pulled.formatted(date: .numeric, time: .shortened))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if let provenance = baseVM.provenance {
+                        LabeledContent("Origin") {
+                            Text(provenance).foregroundStyle(.secondary)
+                        }
+                    }
                 } header: {
                     HStack {
                         Text("Configuration")

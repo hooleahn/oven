@@ -12,9 +12,6 @@ final class RegistryViewModel {
     var errorMessage: String?
     var credentials: [RegistryCredential] = []
     var pendingPull: RegistryImage?
-    var pendingPullIsBase: Bool?
-    var pendingPullUsername: String = ""   // set by PullDestinationSheet
-    var pendingPullPassword: String = ""   // stored in Keychain after pull
     var showCirrusCatalogue = false
 
     // MARK: - Persistence URLs
@@ -133,6 +130,23 @@ final class RegistryViewModel {
         let tag = ref.components(separatedBy: ":").last ?? "latest"
         let version = tag == "latest" ? "" : tag
         return (osName, version)
+    }
+
+    // MARK: - Naming
+
+    /// Generates a tart-safe local name for a VM materialised from a pulled OCI
+    /// image: "oci-macos-<version>-<yyMMddHHmm>", disambiguated against `existing`.
+    func generatedLocalName(osVersion: String, existing: [String] = []) -> String {
+        let ver = osVersion.trimmingCharacters(in: .whitespaces)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyMMddHHmm"
+        let base = "oci-macos-\(ver.isEmpty ? "unknown" : ver)-\(formatter.string(from: .now))"
+        guard existing.contains(base) else { return base }
+        for counter in 2...99 {
+            let candidate = "\(base)-\(counter)"
+            if !existing.contains(candidate) { return candidate }
+        }
+        return base + "-" + String(UUID().uuidString.prefix(4).lowercased())
     }
 
     // MARK: - Registry service

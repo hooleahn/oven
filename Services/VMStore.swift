@@ -214,6 +214,9 @@ final class VMStore {
         registryImageRef: String? = nil,
         mdmServerID: UUID? = nil,
         sshUsername: String = "baker",
+        sshPassword: String? = nil,
+        sharedFolders: [VirtualMachine.SharedFolder] = [],
+        provenance: String? = nil,
         osMetadata: OSMetadata = OSMetadata()
     ) async throws {
         guard !vms.contains(where: { $0.name == newName }) else {
@@ -235,9 +238,12 @@ final class VMStore {
             macOSVersion: macOSVersion,
             registryImageRef: registryImageRef,
             mdmServerID: mdmServerID,
+            sharedFolders: sharedFolders,
             sshUsername: sshUsername
         )
         placeholder.applyOSMetadata(osMetadata)
+        placeholder.provenance = provenance
+        if let sshPassword, !sshPassword.isEmpty { placeholder.sshPassword = sshPassword }
         vms.append(placeholder)
         saveToDisk()
 
@@ -300,8 +306,18 @@ final class VMStore {
             $0.ipAddressError = nil
         }
         saveToDisk()
-        notifyIfStopped(previous: previousStatus, current: .stopped, vm: vm)
+        // Explicit user-initiated stop — tart already confirmed it synchronously,
+        // so there's no blip risk and no reason to wait for a second sync().
+        notifyIfStopped(previous: previousStatus, current: .stopped, vm: vm, requireConfirmation: false)
     }
+
+    /// VM IDs currently sitting on a single unconfirmed "just went stopped"
+    /// observation from sync(). Passive detection (mergeWithTart) holds off on
+    /// notifying the first time a VM is seen stopped, and only fires once the
+    /// SAME VM is seen stopped again on the next sync() — a one-off `tart list`
+    /// blip (bad process exit, empty listing, a VM briefly missing from the
+    /// output) won't repeat two syncs in a row, but a genuine stop will.
+    private var pendingStopConfirmation: Set<UUID> = []
 
     /// Fire a "VM stopped" notification when a VM moves from a live state
     /// (running / suspended) to stopped. Centralised here so every stop path —
@@ -309,12 +325,40 @@ final class VMStore {
     /// in-guest shutdown, or an external `tart stop` picked up by `sync()` —
     /// is covered exactly once. Base VMs are excluded: their many boot/stop
     /// cycles during a Packer build are noise, and build events cover them.
+    ///
+    /// - Parameter requireConfirmation: true for passive sync()-driven detection
+    ///   (default) — see `pendingStopConfirmation`. false for an explicit,
+    ///   already-confirmed stop (the Stop button, scheduler, etc.), which should
+    ///   notify immediately.
     private func notifyIfStopped(previous: VirtualMachine.Status,
                                  current: VirtualMachine.Status,
-                                 vm: VirtualMachine) {
-        guard current == .stopped,
-              previous == .running || previous == .suspended,
-              !vm.effectivelyBase else { return }
+                                 vm: VirtualMachine,
+                                 requireConfirmation: Bool = true) {
+        guard !vm.effectivelyBase else { return }
+
+        guard current == .stopped else {
+            // Running/suspended again — clear any stale pending confirmation.
+            pendingStopConfirmation.remove(vm.id)
+            return
+        }
+
+        let isNewTransition = (previous == .running || previous == .suspended)
+
+        guard requireConfirmation else {
+            guard isNewTransition else { return }
+            notify(vm)
+            return
+        }
+
+        if isNewTransition {
+            pendingStopConfirmation.insert(vm.id)
+        } else if pendingStopConfirmation.remove(vm.id) != nil {
+            // Second consecutive sync() agrees it's stopped — confirmed.
+            notify(vm)
+        }
+    }
+
+    private func notify(_ vm: VirtualMachine) {
         let label = vm.displayName.isEmpty ? vm.name : vm.displayName
         Task { await NotificationService.shared.notifyVMStopped(vmName: label) }
     }
@@ -444,8 +488,16 @@ final class VMStore {
     private func mergeWithTart(_ tartVMs: [TartVMInfo]) {
         // Keep base-* VMs in VMStore but mark them as base.
         // They will show in Base VM view via effectivelyBase.
-        // Remove only OCI-sourced VMs (managed by BaseVMStore).
-        vms.removeAll { $0.name.hasPrefix("base-") && !$0.isBaseVM }
+        //
+        // NOTE: previously this purged any record whose name happened to start
+        // with "base-" but had isBaseVM == false, on the theory that it was a
+        // stale OCI duplicate. In practice `tartVMs` here always comes from
+        // `listLocal()` (source=local), which never includes OCI-sourced VMs,
+        // so that condition only ever matched VMs the user had converted from
+        // Base to Working (name kept its "base-" prefix). Removing them here
+        // meant every sync() after a Base→Working conversion deleted the
+        // record outright — reappearing as a brand-new Base VM (metadata lost)
+        // if tart still had it, or vanishing permanently if it didn't.
 
         // All local VMs are included; effectivelyBase drives which view shows them.
         let filteredVMs = tartVMs
@@ -499,14 +551,20 @@ final class VMStore {
             }
         }
 
-        // Remove VMs from our list that tart no longer knows about
-        // (only remove non-base VMs we added, not ones still building)
-        let tartNames = Set(filteredVMs.map(\.name))
-
-        for idx in vms.indices {
-            if !tartNames.contains(vms[idx].name) && vms[idx].status == .running {
-                vms[idx].status = .stopped
-                notifyIfStopped(previous: .running, current: .stopped, vm: vms[idx])
+        // Mark VMs stopped that tart no longer lists as running.
+        // Skipped entirely when tart returned zero VMs — same reasoning as
+        // detectGhostVMs(): an empty listing is far more likely a transient
+        // `tart list` failure (TartService already maps a bad exit code to an
+        // empty array rather than throwing) than every VM having vanished, and
+        // treating it as truth would mark — and notify — every currently
+        // "running" VM as stopped from a single bad listing.
+        if !filteredVMs.isEmpty {
+            let tartNames = Set(filteredVMs.map(\.name))
+            for idx in vms.indices {
+                if !tartNames.contains(vms[idx].name) && vms[idx].status == .running {
+                    vms[idx].status = .stopped
+                    notifyIfStopped(previous: .running, current: .stopped, vm: vms[idx])
+                }
             }
         }
     }

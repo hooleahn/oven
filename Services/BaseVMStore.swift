@@ -54,7 +54,10 @@ final class BaseVMStore {
                 guard !baseVMs.contains(where: { $0.name == info.name }) else { continue }
                 var vm = VirtualMachine(name: info.name)
                 vm.isBaseVM = true
-                vm.registryImageRef = info.source
+                // `info.source` is just the category tart reports ("OCI"), never the
+                // actual reference — for an OCI-sourced VM, tart names it after the
+                // ref itself, so `info.name` is the real origin.
+                vm.registryImageRef = info.name
                 vm.osName = inferOSName(from: info.name)
                 vm.vmSource = VirtualMachine.VMSource.registry
                 vm.buildStatus = VirtualMachine.BuildStatus.ready
@@ -752,8 +755,7 @@ extension BaseVMStore {
             return
         }
 
-        let svc = MistService(runner: ProcessRunner(), mistPath: mistPath, ipswRoot: ipswRoot,
-                              includeBetas: AppSettings.load().mistIncludeBetas)
+        let svc = MistService(runner: ProcessRunner(), mistPath: mistPath, ipswRoot: ipswRoot)
         let (dlStream, expectedURL) = await svc.downloadFirmwareByVersion(baseVM.osVersion)
         let dlResult = await StreamConsumer.buildLog(dlStream, source: "mist") { [self] line in
             update(id: baseVM.id) { $0.buildLog.append(line) }

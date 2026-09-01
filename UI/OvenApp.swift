@@ -17,85 +17,77 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard !SharedStores.skipQuitGuard else { return .terminateNow }
 
-        // Check running VMs
-        if let vmStore = SharedStores.vmStore {
-            let running = vmStore.vms.filter { $0.status == .running || $0.status == .suspended }
-            if !running.isEmpty {
-                let names = running.map { $0.displayName.isEmpty ? $0.name : $0.displayName }
-                let list = names.prefix(3).joined(separator: ", ") + (names.count > 3 ? "…" : "")
-                let alert = NSAlert()
-                alert.messageText = "\(running.count) VM\(running.count == 1 ? "" : "s") still running"
-                alert.informativeText = "\(list) \(running.count == 1 ? "is" : "are") still running. Stop them before quitting to avoid data loss."
-                alert.alertStyle = .warning
-                alert.addButton(withTitle: "Quit Anyway")
+        // Gather every active background operation into one list so the user sees
+        // the full picture in a single dialog — quitting with a VM running but an
+        // installer download or registry pull also in flight shouldn't silently
+        // drop the download while only warning about the VM.
+        let runningVMs = SharedStores.vmStore?.vms.filter {
+            $0.status == .running || $0.status == .suspended
+        } ?? []
+        let buildingBaseVMs = SharedStores.baseVMStore?.isBuilding == true ? 1 : 0
+        let ipswCount = SharedStores.appState?.activeIPSWDownloads.count ?? 0
+        let pullCount = SharedStores.appState?.registryDownloads.count ?? 0
+        let pushCount = SharedStores.pushManager?.active.count ?? 0
+
+        var lines: [String] = []
+        if !runningVMs.isEmpty {
+            let names = runningVMs.map { $0.displayName.isEmpty ? $0.name : $0.displayName }
+            let list = names.prefix(3).joined(separator: ", ") + (names.count > 3 ? "…" : "")
+            lines.append("• \(runningVMs.count) VM\(runningVMs.count == 1 ? "" : "s") running (\(list))")
+        }
+        if buildingBaseVMs > 0 {
+            lines.append("• \(buildingBaseVMs) Base VM build\(buildingBaseVMs == 1 ? "" : "s") in progress")
+        }
+        if ipswCount > 0 {
+            lines.append("• \(ipswCount) IPSW download\(ipswCount == 1 ? "" : "s")")
+        }
+        if pullCount > 0 {
+            lines.append("• \(pullCount) registry pull\(pullCount == 1 ? "" : "s")")
+        }
+        if pushCount > 0 {
+            lines.append("• \(pushCount) registry push\(pushCount == 1 ? "" : "es")")
+        }
+
+        if !lines.isEmpty {
+            let alert = NSAlert()
+            alert.messageText = lines.count == 1
+                ? "1 operation in progress"
+                : "\(lines.count) operations in progress"
+            alert.informativeText = "Quitting now will interrupt:\n\n\(lines.joined(separator: "\n"))\n\nRunning VMs will keep their disk state, but downloads, pulls, pushes, and builds will be cancelled."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Quit Anyway")
+            if !runningVMs.isEmpty {
                 alert.addButton(withTitle: "Stop VMs and Quit")
-                alert.addButton(withTitle: "Cancel")
-                switch alert.runModal() {
-                case .alertFirstButtonReturn:   // Quit Anyway — fall through
-                    break
-                case .alertSecondButtonReturn:  // Stop VMs and Quit
-                    Task { @MainActor in
+            }
+            alert.addButton(withTitle: "Cancel")
+
+            switch alert.runModal() {
+            case .alertFirstButtonReturn:   // Quit Anyway — fall through
+                break
+            case .alertSecondButtonReturn where !runningVMs.isEmpty:  // Stop VMs and Quit
+                Task { @MainActor in
+                    if let vmStore = SharedStores.vmStore {
                         await withTaskGroup(of: Void.self) { group in
-                            for vm in running {
+                            for vm in runningVMs {
                                 group.addTask { try? await vmStore.stop(vm: vm) }
                             }
                         }
-                        NSApp.reply(toApplicationShouldTerminate: true)
                     }
-                    return .terminateLater
-                default:                        // Cancel
-                    return .terminateCancel
+                    NSApp.reply(toApplicationShouldTerminate: true)
                 }
+                return .terminateLater
+            default:                        // Cancel
+                return .terminateCancel
             }
         }
 
-        // Check active Base VM builds
-        if let baseVMStore = SharedStores.baseVMStore, baseVMStore.isBuilding {
-            let alert = NSAlert()
-            alert.messageText = "Base VM build in progress"
-            alert.informativeText = "A Base VM is currently being built. Quitting now will cancel the build and may leave a partial VM."
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "Quit Anyway")
-            alert.addButton(withTitle: "Cancel")
-            if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
-        }
-
-        // Check unsaved recipe edits (templates, vars files, building blocks)
+        // Check unsaved recipe edits (templates, vars files, building blocks) —
+        // a data-loss warning about unsaved edits, not a background operation,
+        // so it stays a separate dialog.
         if let rvm = SharedStores.recipesViewModel, rvm.hasUnsavedChanges {
             let alert = NSAlert()
             alert.messageText = "Unsaved changes in Recipes"
             alert.informativeText = "You have unsaved edits in one or more templates, variables files, or building blocks. They will be lost if you quit."
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "Quit Anyway")
-            alert.addButton(withTitle: "Cancel")
-            if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
-        }
-
-        // Check active downloads (IPSW + registry pulls)
-        if let appState = SharedStores.appState {
-            let ipswCount = appState.activeIPSWDownloads.count
-            let pullCount = appState.registryDownloads.count
-            let total = ipswCount + pullCount
-            if total > 0 {
-                var items: [String] = []
-                if ipswCount > 0 { items.append("\(ipswCount) IPSW download\(ipswCount == 1 ? "" : "s")") }
-                if pullCount > 0 { items.append("\(pullCount) registry pull\(pullCount == 1 ? "" : "s")") }
-                let alert = NSAlert()
-                alert.messageText = "Downloads in progress"
-                alert.informativeText = "\(items.joined(separator: " and ")) will be cancelled if you quit."
-                alert.alertStyle = .warning
-                alert.addButton(withTitle: "Quit Anyway")
-                alert.addButton(withTitle: "Cancel")
-                if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
-            }
-        }
-
-        // Check active registry pushes
-        if let pushManager = SharedStores.pushManager, !pushManager.active.isEmpty {
-            let count = pushManager.active.count
-            let alert = NSAlert()
-            alert.messageText = "\(count) registry push\(count == 1 ? "" : "es") in progress"
-            alert.informativeText = "Quitting now will cancel the upload\(count == 1 ? "" : "s")."
             alert.alertStyle = .warning
             alert.addButton(withTitle: "Quit Anyway")
             alert.addButton(withTitle: "Cancel")

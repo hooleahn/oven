@@ -26,12 +26,9 @@ struct NewVMSheet: View {
     @AppStorage("defaultCPUCount")       private var defaultCPU: Int = 4
     @AppStorage("defaultMemoryGB")       private var defaultMemory: Int = 8
     @AppStorage("defaultDiskGB")         private var defaultDisk: Int = 80
-    @AppStorage("defaultPackerUsername") private var defaultPackerUsername: String = "baker"
     @State private var cpuCount = 4
     @State private var memoryGB = 8
     @State private var diskGB = 80
-    @State private var sshUsername: String = "baker"
-    @State private var sshPassword: String = ""
     @State private var isCreating = false
     @State private var errorMessage: String?
 
@@ -40,6 +37,12 @@ struct NewVMSheet: View {
     private let diskOptions = [40, 60, 80, 100, 120, 150, 200, 250, 500]
 
     var readyBaseVMs: [VirtualMachine] { baseVMStore.baseVMs.filter { $0.buildStatus == .ready } }
+
+    // Main user credentials are whatever Setup Assistant/Packer configured inside
+    // the base VM's guest OS — read-only here since editing them wouldn't change
+    // anything on the actual clone. Change them by editing the base VM instead.
+    private var inheritedUsername: String { selectedBaseVM?.sshUsername ?? "" }
+    private var inheritedPasswordIsSet: Bool { !(selectedBaseVM?.sshPassword ?? "").isEmpty }
 
     var selectedMDMServer: MDMServer? {
         guard let pid = selectedMDMProfileID,
@@ -156,21 +159,20 @@ struct NewVMSheet: View {
                     } header: { Text("Identity") }
                       footer: { Text("The VM name is generated from OS, version, MDM server, and a short unique ID.") }
 
-                    // Hardware override
-                    Section("SSH credentials") {
-                    LabeledContent("Username") {
-                        TextField("", text: $sshUsername,
-                                  prompt: Text("e.g. baker").foregroundStyle(.secondary))
-                            .multilineTextAlignment(.trailing)
-                    }
-                    LabeledContent("Password") {
-                        SecureField("", text: $sshPassword,
-                                    prompt: Text("optional, stored in Keychain").foregroundStyle(.secondary))
-                            .multilineTextAlignment(.trailing)
-                    }
-                }
+                    // Read-only — inherited from the base VM's actual guest OS account.
+                    Section {
+                        LabeledContent("Username") {
+                            Text(inheritedUsername.isEmpty ? "—" : inheritedUsername)
+                                .foregroundStyle(.secondary)
+                        }
+                        LabeledContent("Password") {
+                            Text(inheritedPasswordIsSet ? "••••••••" : "Not set")
+                                .foregroundStyle(.secondary)
+                        }
+                    } header: { Text("Main User Credentials") }
+                      footer: { Text("Set when the base VM was built. To use different credentials, edit the base VM and rebuild it.") }
 
-                Section("Hardware") {
+                    Section("Hardware") {
                         Picker("CPU cores", selection: $cpuCount) {
                             ForEach(cpuOptions, id: \.self) { Text("\($0) cores").tag($0) }
                         }
@@ -224,10 +226,11 @@ struct NewVMSheet: View {
             cpuCount = defaultCPU
             memoryGB = defaultMemory
             diskGB   = defaultDisk
-            sshUsername = defaultPackerUsername
-            sshPassword = KeychainService.retrieve(key: "defaults.packer.password") ?? ""
             await baseVMStore.syncOCI()
             initHardware()
+        }
+        .onChange(of: selectedBaseVM) { _, newBase in
+            if let newBase { applyHardwareDefaults(from: newBase) }
         }
     }
 
@@ -260,15 +263,12 @@ struct NewVMSheet: View {
                 memoryGB: memoryGB,
                 diskGB: diskGB,
                 mdmServerID: selectedMDMServer?.id,
-                sshUsername: sshUsername.isEmpty ? base.sshUsername : sshUsername,
+                sshUsername: base.sshUsername,
+                sshPassword: base.sshPassword,
+                sharedFolders: base.sharedFolders,
+                provenance: "Cloned from \(base.displayName.isEmpty ? base.name : base.displayName)",
                 osMetadata: base.osMetadata
             )
-            // Store password in Keychain on the newly created VM
-            if let vm = vmStore.vms.first(where: { $0.name == name }) {
-                vmStore.update(id: vm.id) { v in
-                    v.sshPassword = sshPassword.isEmpty ? nil : sshPassword
-                }
-            }
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
@@ -280,14 +280,20 @@ struct NewVMSheet: View {
         let base = preselectedBase ?? readyBaseVMs.first
         if let base {
             selectedBaseVM = base
-            // For OCI base VMs, defaults are generic (4/8/80) — keep form defaults
-            // For locally built base VMs, mirror the base hardware
-            if base.vmSource == .local {
-                cpuCount = base.cpuCount
-                memoryGB = base.memoryGB
-                diskGB = base.diskGB
-            }
+            applyHardwareDefaults(from: base)
         }
+    }
+
+    /// Mirrors the selected base VM's hardware profile into the form defaults.
+    /// Called on initial selection and whenever the user changes the Base VM
+    /// picker, so switching sources doesn't leave stale CPU/RAM/disk values.
+    private func applyHardwareDefaults(from base: VirtualMachine) {
+        // For OCI base VMs, defaults are generic (4/8/80) — keep form defaults.
+        // For locally built base VMs, mirror the base hardware.
+        guard base.vmSource == .local else { return }
+        cpuCount = base.cpuCount
+        memoryGB = base.memoryGB
+        diskGB = base.diskGB
     }
 
     private func loadMDMData() {

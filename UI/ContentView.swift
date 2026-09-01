@@ -205,6 +205,13 @@ struct ContentView: View {
             default: break
             }
         }
+        .onChange(of: appState.pendingCreateVMFromBaseVMID) { _, id in
+            guard let id, let baseVM = vmStore.vm(id: id) else { return }
+            appState.pendingCreateVMFromBaseVMID = nil
+            storedSelection = SidebarItem.baseVMs.rawValue
+            baseVMModel.selectedBaseVMID = id
+            baseVMModel.createVMFromBase = baseVM
+        }
     }
 
     // ── 3-column layout: Sidebar | Content list | Detail pane ────────────────
@@ -540,8 +547,16 @@ struct SidebarView: View {
         vmStore.vms.filter { $0.status == .running || $0.status == .suspended }.count
     }
 
-    private var activeDownloadCount: Int {
-        appState.activeIPSWDownloads.count + appState.registryDownloads.count
+    private var buildingBaseVMCount: Int {
+        vmStore.vms.filter { $0.effectivelyBase && $0.buildStatus == .building }.count
+    }
+
+    private var activeIPSWDownloadCount: Int {
+        appState.activeIPSWDownloads.count
+    }
+
+    private var activeRegistryPullCount: Int {
+        appState.registryDownloads.count
     }
 
     private var activePushCount: Int {
@@ -556,10 +571,12 @@ struct SidebarView: View {
             Section("Library") {
                 libraryRow(.virtualMachines, shortcut: "1",
                            badge: runningVMCount > 0 ? "\(runningVMCount)" : nil)
-                libraryRow(.baseVMs,         shortcut: "2")
+                libraryRow(.baseVMs,         shortcut: "2",
+                           badge: buildingBaseVMCount > 0 ? "\(buildingBaseVMCount)" : nil)
                 libraryRow(.installers,      shortcut: "3",
-                           badge: activeDownloadCount > 0 ? "\(activeDownloadCount)" : nil)
-                libraryRow(.registry,        shortcut: "4")
+                           badge: activeIPSWDownloadCount > 0 ? "\(activeIPSWDownloadCount)" : nil)
+                libraryRow(.registry,        shortcut: "4",
+                           badge: activeRegistryPullCount > 0 ? "\(activeRegistryPullCount)" : nil)
             }
 
             // MARK: Build
