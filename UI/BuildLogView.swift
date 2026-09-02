@@ -4,6 +4,7 @@ import SwiftUI
 struct BuildLogView: View {
     let baseVM: VirtualMachine
     var monitor = BuildMonitor.shared
+    @State private var showingTemplate = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -23,6 +24,18 @@ struct BuildLogView: View {
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
+                }
+                if baseVM.lastBuildTemplateContent != nil {
+                    Button {
+                        showingTemplate = true
+                    } label: {
+                        Image(systemName: "doc.text")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .help("Show the packer template used for this build")
+                    .accessibilityLabel("Show packer template")
                 }
                 Button {
                     NSPasteboard.general.clearContents()
@@ -71,6 +84,9 @@ struct BuildLogView: View {
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 8)
+        }
+        .sheet(isPresented: $showingTemplate) {
+            PackerTemplateSheet(baseVM: baseVM)
         }
     }
 

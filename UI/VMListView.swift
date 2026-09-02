@@ -713,6 +713,35 @@ private struct VMListSheets: ViewModifier {
     private var deleteTitle: String {
         model.confirmDelete.map { "Delete \"\($0.displayName.isEmpty ? $0.name : $0.displayName)\"?" } ?? "Delete VM?"
     }
+
+    /// Explains, in the delete dialog, what happens to the VM's MDM enrollment —
+    /// so a VM with no MDM link doesn't just show a bare "Delete from Tart Only"
+    /// with no hint that Oven can also remove enrolled VMs from an MDM server.
+    private var deleteMessage: String {
+        let base = "This permanently removes the VM image from disk. This cannot be undone."
+        guard let vm = model.confirmDelete else { return base }
+
+        // Oven can remove this VM from its MDM server as part of the delete.
+        if jamfServer(for: vm) != nil { return base }
+
+        // The VM is linked to a known MDM server, but Oven can't remove it automatically.
+        if let serverID = vm.mdmServerID,
+           let server = serverStore.servers.first(where: { $0.id == serverID }) {
+            if !server.featureDeleteFromJamf {
+                return base + "\n\n“\(server.friendlyName)” has Jamf/MDM removal turned off, so this VM stays enrolled there. Turn it on in the server's settings to delete from both."
+            }
+            if vm.serialNumber.isEmpty {
+                return base + "\n\nThis VM has no recorded serial number, so Oven can't match it in “\(server.friendlyName)”. Remove it from the MDM server manually."
+            }
+            return base + "\n\nThis VM stays enrolled in “\(server.friendlyName)” — remove it there separately."
+        }
+
+        // The VM isn't linked to any MDM server.
+        if serverStore.servers.isEmpty {
+            return base + "\n\nThis VM isn't linked to an MDM server. Add one in Settings and Oven can also remove enrolled VMs from it when you delete them."
+        }
+        return base + "\n\nThis VM isn't linked to an MDM server, so it's only removed from tart. Link it to a server on the VM's detail pane to have Oven remove it from the MDM too."
+    }
     private var stopAllTitle: String {
         let count = vmStore.vms.filter { $0.status == .running || $0.status == .suspended }.count
         return "Stop \(count) Running VM\(count == 1 ? "" : "s")?"
@@ -795,14 +824,14 @@ private struct VMListSheets: ViewModifier {
                         }
                     }
                 }
-                Button("Delete from Tart Only", role: .destructive) {
+                Button(model.confirmDelete?.mdmServerID == nil ? "Delete" : "Delete from Tart Only", role: .destructive) {
                     guard let vmToDelete = model.confirmDelete else { return }
                     model.confirmDelete = nil
                     Task { try? await vmStore.delete(vm: vmToDelete) }
                 }
                 Button("Cancel", role: .cancel) { model.confirmDelete = nil }
             } message: {
-                Text("This permanently removes the VM image from disk. This cannot be undone.")
+                Text(deleteMessage)
             }
             .alert(
                 "Jamf/MDM Removal Failed",

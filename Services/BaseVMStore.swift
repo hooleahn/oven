@@ -110,10 +110,13 @@ final class BaseVMStore {
             do {
                 try await tartService.delete(name: vm.name)
             } catch {
-                AppLogger.shared.error(
-                    "Failed to delete base VM '\(vm.name)': \(error.localizedDescription)",
+                // VM may never have been created (e.g. a build that failed before
+                // packer-tart-plugin ran `tart create`), or may have been removed
+                // externally. Either way, still clean up the metadata record so it
+                // doesn't get stuck forever.
+                AppLogger.shared.warning(
+                    "tart delete failed for base VM '\(vm.name)': \(error.localizedDescription)",
                     source: "BaseVMStore")
-                return
             }
         }
         KeychainService.delete(key: vm.keychainKey)
@@ -297,9 +300,21 @@ final class BaseVMStore {
                     return varsName
                 }()
 
+                // Snapshot the actual template/vars content now, at the path that will be
+                // used for this build. The defaults/<name>.pkr.hcl file gets regenerated
+                // (and overwritten) on every subsequent build attempt, so without this the
+                // template that caused a failure is unrecoverable once the user tries again.
+                let templatesRoot = AppSettings.load().packerTemplatesRoot
+                let templateContent = try? String(
+                    contentsOf: templatesRoot.appendingPathComponent(templateName), encoding: .utf8)
+                let varsContent = try? String(
+                    contentsOf: templatesRoot.appendingPathComponent(resolvedVarsName), encoding: .utf8)
+
                 update(id: baseVM.id) {
                     $0.packerTemplateName = templateName
                     $0.packerVarsName = resolvedVarsName
+                    $0.lastBuildTemplateContent = templateContent
+                    $0.lastBuildVarsContent = varsContent
                 }
 
                 AppLogger.shared.log("Starting build: \(baseVM.name)", source: "BaseVMStore")
@@ -592,6 +607,10 @@ extension BaseVMStore {
                     update(id: baseVM.id) {
                         $0.packerTemplateName = hclURL.lastPathComponent
                         $0.packerVarsName = ""
+                        // Snapshot now — the generated HCL lives only in a temp file that's
+                        // deleted right after this build attempt finishes.
+                        $0.lastBuildTemplateContent = hclContent
+                        $0.lastBuildVarsContent = nil
                     }
 
                     AppLogger.shared.debug("Generated HCL: \(hclURL.path)", source: "BaseVMStore")

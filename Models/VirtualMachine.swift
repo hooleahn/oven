@@ -51,6 +51,12 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
     var buildLog: [String] = []
     var packerTemplateName: String = ""
     var packerVarsName: String = ""
+    /// Snapshot of the .pkr.hcl / .pkrvars.hcl content actually used for the most
+    /// recent build attempt. Captured at build time because the underlying files
+    /// (defaults/<name>.pkr.hcl, temp HCL for manual builds) can be overwritten or
+    /// deleted before a failed build is ever inspected.
+    var lastBuildTemplateContent: String?
+    var lastBuildVarsContent: String?
     var customTemplatePath: String?   // legacy — kept for migration from v4
     var customTemplateID: UUID?       // v5+: references PackerTemplate by metadata ID
     var customVarsFileID: UUID?       // v5+: references a .pkrvars.hcl by metadata ID
@@ -243,7 +249,8 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         case osName, osVersion, isBetaOS, betaLabel, customOSMajorVersion, customOSReleaseName
         case ipswLocalPath, ipswRemoteURL, installRosetta, installHomebrew, enableSSHDaemon
         case enableAutoLogin, enablePasswordlessSudo, xcodeVersion, builtAt, buildLog
-        case packerTemplateName, packerVarsName, customTemplatePath, customTemplateID
+        case packerTemplateName, packerVarsName, lastBuildTemplateContent, lastBuildVarsContent
+        case customTemplatePath, customTemplateID
         case customVarsFileID, manualBuildConfig, vmSource, buildStatus, mdmServerID
         case cachedEnrollmentStatus, enrollmentStatusFetchedAt, sharedFolders, sshUsername
         case isPinned, actualDiskGB, supportsGuestAgent
@@ -291,6 +298,8 @@ struct VirtualMachine: Identifiable, Codable, Hashable, Sendable {
         buildLog            = try c.decodeIfPresent([String].self, forKey: .buildLog) ?? []
         packerTemplateName  = try c.decodeIfPresent(String.self,   forKey: .packerTemplateName) ?? ""
         packerVarsName      = try c.decodeIfPresent(String.self,   forKey: .packerVarsName) ?? ""
+        lastBuildTemplateContent = try c.decodeIfPresent(String.self, forKey: .lastBuildTemplateContent)
+        lastBuildVarsContent     = try c.decodeIfPresent(String.self, forKey: .lastBuildVarsContent)
         customTemplatePath  = try c.decodeIfPresent(String.self,   forKey: .customTemplatePath)
         customTemplateID    = try c.decodeIfPresent(UUID.self,     forKey: .customTemplateID)
         customVarsFileID    = try c.decodeIfPresent(UUID.self,     forKey: .customVarsFileID)

@@ -46,6 +46,7 @@
 		73A7179818F144EAB63ADCC8 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0099363BD2F349B5A8DD4E45 /* AppTheme.swift */; };
 		77B09001EC3B4AF380070C2D /* VMCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33398081AC9A43628033879D /* VMCard.swift */; };
 		788E2C888D194CFD896B87C7 /* PushToRegistrySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12E1FEC4AC884CDBAF8045A9 /* PushToRegistrySheet.swift */; };
+		7A3F1C9E5D2B4F80A1C6E9B3 /* PackerTemplateSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3F1C9E5D2B4F80A1C6E9B2 /* PackerTemplateSheet.swift */; };
 		7A8E5E70450B4D78B28BC128 /* NewBaseVMSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 919695014D01453AA43FE234 /* NewBaseVMSheet.swift */; };
 		7B23F5DD1EE24C788EBAEC5B /* CirrusLabsCatalogueRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9FD5DCF622846F4B6B67581 /* CirrusLabsCatalogueRow.swift */; };
 		7C35CBA641854707ABDC0925 /* Dependency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35B0ADA56AD34F0CA89DE256 /* Dependency.swift */; };
@@ -183,6 +184,7 @@
 		75F5248C443B43BDB968B56D /* IPSWService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPSWService.swift; sourceTree = "<group>"; };
 		762A2D3AF1264A06AB0F863E /* VMEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMEditSheet.swift; sourceTree = "<group>"; };
 		78338E0B4F0D412AA2F4C5AE /* InstallerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallerView.swift; sourceTree = "<group>"; };
+		7A3F1C9E5D2B4F80A1C6E9B2 /* PackerTemplateSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackerTemplateSheet.swift; sourceTree = "<group>"; };
 		7B2E2C823C90407BA57A9B8D /* VMDetailPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMDetailPane.swift; sourceTree = "<group>"; };
 		7EA45C60E26A450B868B730C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		8242771449DF49E5A9F2564B /* BaseVMViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseVMViewModel.swift; sourceTree = "<group>"; };
@@ -332,6 +334,7 @@
 				307C3835BF934401833B9115 /* BaseVMRow.swift */,
 				E58A4CB788DF4483853B4BF8 /* BaseVMView.swift */,
 				63883F142B084732896F41DB /* BuildLogView.swift */,
+				7A3F1C9E5D2B4F80A1C6E9B2 /* PackerTemplateSheet.swift */,
 				C8B127936D1F4DD7AF1E24E8 /* CirrusCatalogueSheet.swift */,
 				F9FD5DCF622846F4B6B67581 /* CirrusLabsCatalogueRow.swift */,
 				A8E1BC9BB8234124A332E6FA /* CloneVMSheet.swift */,
@@ -570,6 +573,7 @@
 				B91426D92F9F2B4500F13968 /* EmptyStateVMList.swift in Sources */,
 				1D8FC871ABAC420F8C4D5815 /* BaseVMView.swift in Sources */,
 				50ACC8882A244C0CA52598C0 /* BuildLogView.swift in Sources */,
+				7A3F1C9E5D2B4F80A1C6E9B3 /* PackerTemplateSheet.swift in Sources */,
 				80969823F20249C08B1638DB /* BuildMonitor.swift in Sources */,
 				956EFBA268334D67BB2C88C9 /* BuildSessionManager.swift in Sources */,
 				D52FB5DDC895499D911FA20A /* CirrusCatalogueSheet.swift in Sources */,
@@ -705,7 +709,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Oven - macOS VM Manager powered by Tart";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hooleahn.oven;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -829,7 +833,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Oven - macOS VM Manager powered by Tart";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hooleahn.oven;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
